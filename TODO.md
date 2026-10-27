@@ -84,3 +84,10 @@ The isolated bead-state candidate passes 80,000 simulated shots with ordered ele
 - **Rune Bead Bow** is a separate arrowless BF-AR16A-inspired weapon with a narrow central visible bead rail and middle loading layout. The latest request adds a shoulder stock and gun-style trigger without replacing that silhouette or importing Runewinder's side-window reload.
 - [x] Deliver the recessed-arrow upgrade concept and the bead bow's stock/trigger hybrid concept; preserve earlier studies.
 - [ ] Author/test the actual actuation, necklace return paths, string clearance, loading, resource costs and native behavior for each separately. [Archergun contract](https://github.com/Herbertofury/Advent-of-Ascension/wiki/Rune-Necklace-Archergun-Proposal) · [Bead bow contract](https://github.com/Herbertofury/Advent-of-Ascension/wiki/Rune-Bead-Bow-Proposal).
+
+### Rejected bow orientation and next melee pass · owner direction, 21:09 UTC
+
+- [ ] Correct Rune Bead Bow v2: its viewing orientation and stock placement were rejected. The long reference rail extends rearward toward the shooter. Five actual manufacturer views are now collected, including shooter-side and feed/release close-ups; enclosed internals remain unverified. A corrected image request produced no image, so the bow is NOT fixed.
+- [ ] After the bow correction, audit ALL mace/maul and large melee concepts for unintended bending and create a new, more faithful premium sci-fi concept for each. Preserve original identity, proportions, material cues and earlier art as alternates.
+- For EVERY new weapon, gather multiple actual reference angles, establish shooting/striking direction and handling, and review documented visible internals BEFORE generation. Do not label unknown internals as researched facts.
+- Never bend, curve, shorten or warp a weapon simply to fit the picture. Change canvas, framing, camera or uniform whole-object scale instead. Preserve intended natural curves, such as bow limbs, while rejecting accidental distortion of straight shafts, rails, barrels, handles and mauls.

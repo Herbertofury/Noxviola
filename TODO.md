@@ -7,7 +7,7 @@ Updated 2026-10-27 UTC. This is a continuation index, not a replacement for proj
 [Repository](https://github.com/Herbertofury/Advent-of-Ascension) · [Weapon concepts](https://herbertofury.github.io/Advent-of-Ascension/weapon-concepts.html) · [Wiki](https://github.com/Herbertofury/Advent-of-Ascension/wiki)
 
 - [ ] Reconcile the complete native weapon registry with concept coverage, requested revisions and implementation gates. Do not call image coverage native gameplay completion.
-- [ ] Continue outstanding weapon concepts, building on existing assets rather than duplicating completed concepts. Baron SSR's cosmetic study is now published; next review covers Golder Bomber's remaining customization.
+- [ ] Continue outstanding weapon concepts, building on existing assets rather than duplicating completed concepts. Baron SSR's cosmetic study is published; the new owner-requested Runewinder now takes priority over the pending Golder Bomber review.
 - [x] Keep Blast Cannon's new design separate from Blast Barrel. Published concept checkpoint: [f069d88](https://github.com/Herbertofury/Advent-of-Ascension/commit/f069d882223b23c0de3b689f48b1d9c0d6af1a3e).
 - [x] Blast Barrel concept: one upper and two lower side-by-side barrels; earlier versions retained at the same checkpoint.
 - [ ] For every AoA weapon: outstanding visual finish plus functioning, animated game internals at a strong TaCZ-pack standard. Reuse a suitable licensed similar weapon or rough mesh where advantageous, then refine rather than automatically starting from zero. Completion requires coherent internal part motion, resource/firing synchronization, interruption recovery, hand clearance and native evidence, not concept art alone.
@@ -36,8 +36,23 @@ Updated 2026-10-27 UTC. This is a continuation index, not a replacement for proj
 - Atlas receipt-gate repair: 26 exact remote blobs, 67 Python and 73 Node tests, Linux/Windows CI and Pages passed. [Wiki evidence](https://github.com/Herbertofury/Engineering-Atlas/wiki/Experiment-Evidence).
 - Baron SSR cosmetic study: [561f469](https://github.com/Herbertofury/Advent-of-Ascension/commit/561f4699841c41accce53f1db5ad9215eeac847f), three finishes and three detached charm designs. Wiki saved; Pages deployment passed and served catalogue matched exactly. The gallery’s original hero and new study link were checked. All 434 registry identities and native acceptance flags preserved.
 
-- Complete AoA wiki task reconciliation: [740816a](https://github.com/Herbertofury/Advent-of-Ascension/commit/740816adc69e1b9719e9c2a1058f61643a59cda4), 496 pages / 1,298 source tasks. Eight maintenance tests and the local drift check passed; remote CI pending. Source checkmarks are not native completion.
+- Complete AoA wiki task reconciliation: [740816a](https://github.com/Herbertofury/Advent-of-Ascension/commit/740816adc69e1b9719e9c2a1058f61643a59cda4), 496 pages / 1,298 source tasks. Eight maintenance tests and the local drift check passed; remote checklist CI passed. Source checkmarks are not native completion.
 
 ## Completion standard
 
 Every active item should have a concrete next step, evidence link and honest status. Reconcile this index with project-local work before starting, avoid overlapping active passes, and update it when verified milestones or blockers change. Do not infer permission to resume paused work or modify unrelated deployments.
+
+## Runewinder · new weapon
+
+[Proposal](https://github.com/Herbertofury/Advent-of-Ascension/wiki/Runewinder-New-Weapon-Proposal) · [Concept presentation](https://herbertofury.github.io/Advent-of-Ascension/runewinder-concept.html)
+
+- [x] Create standard rune-bead and purple Soulflame concept candidates with player-facing glass and flame sight; separate from the 434 released identities.
+- [x] Create a separate mana-reload storyboard with a transparent side shutter that rolls up/down, not a hinged door.
+- [x] Create cyan cold/Soulfire variant and mixed-element necklace/optional-cosmetic sheet. Art remains unaccepted for native use.
+- [ ] Publish and verify the latest reload/variant sheets and owner-approved functional rules in AoA, then synchronize the complete wiki checklist.
+- [ ] Implement capacity from customizable bead count and projectile sequence from ordered bead types, including alternating ice/fire and poison/fire arrangements.
+- [ ] Keep every bead on the necklace: firing darkens it, mana recharge relights it. Preserve individual charge, identity, order and next-shot index through partial reloads and saves.
+- [ ] Implement one-object necklace extraction, in-hand charging and fast side reinsertion without duplication/loss; verify the rolling shutter and actual camera visibility.
+- [ ] Evaluate requested Ars Nouveau, Iron's Spells/IronsArms and Botania mana adapters separately, with explicit costs, cancellation and optional-dependency tests. None is yet claimed compatible.
+- [ ] Finish the authored shared rig, native motion, glass/sight fit, accessibility, networking and performance. Existing confirmed-shot sequencer is reused unchanged in a passing offline pose-target prototype; this does not complete native implementation.
+- [ ] Keep dimension skins cosmetic unless a functional bead/attachment definition explicitly changes gameplay. Ask for donor permission where required.

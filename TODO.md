@@ -77,3 +77,10 @@ The isolated bead-state candidate passes 80,000 simulated shots with ordered ele
 - [ ] Correct Runewinder's unresolved striker/actuation and reset presentation. Existing sidearm/rifle art remains unapproved for mechanical completeness.
 - [x] Create and deliver a separate BF-AR16A-inspired necklace archergun study in standard and purple Soulflame finishes, revised to show both necklace rows and a staged arrow.
 - [ ] Resolve and implement the archergun's fictional release/reset, arrow and bead-resource contract, shared-necklace interoperability, authored rig and native tests. [Proposal](https://github.com/Herbertofury/Advent-of-Ascension/wiki/Rune-Necklace-Archergun-Proposal) · [Research and gaps](https://github.com/Herbertofury/Advent-of-Ascension/blob/main/docs/Necklace-Weapon-Mechanism-Review.md).
+
+### Latest necklace weapon distinction · owner clarification, 20:50 UTC
+
+- **Runewinder Archergun** is the named arrow weapon. Base: only an arrow through the barrel, propelled by bowstring and fictional rune-striker/bead impulse. Upgrade: recessed TOP arrow channel plus a separate free BARREL projectile, firing simultaneously on one accepted event. Not either/or and not a delayed second shot. Existing top-channel artwork represents the upgrade; a matching base concept remains open.
+- **Rune Bead Bow** is a separate arrowless BF-AR16A-inspired weapon with a narrow central visible bead rail and middle loading layout. The latest request adds a shoulder stock and gun-style trigger without replacing that silhouette or importing Runewinder's side-window reload.
+- [x] Deliver the recessed-arrow upgrade concept and the bead bow's stock/trigger hybrid concept; preserve earlier studies.
+- [ ] Author/test the actual actuation, necklace return paths, string clearance, loading, resource costs and native behavior for each separately. [Archergun contract](https://github.com/Herbertofury/Advent-of-Ascension/wiki/Rune-Necklace-Archergun-Proposal) · [Bead bow contract](https://github.com/Herbertofury/Advent-of-Ascension/wiki/Rune-Bead-Bow-Proposal).

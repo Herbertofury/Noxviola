@@ -70,3 +70,10 @@ The isolated bead-state candidate passes 80,000 simulated shots with ordered ele
 
 - [x] Create and deliver standard/Soulflame rifle-conversion concept art, retained alongside the sidearm concepts in AoA.
 - [ ] Implement the functional rifle-conversion attachment with upgraded gameplay stats, using the Guycot rifle as a visual reference. Preserve necklace identity, bead count/order, charge and next-shot state; no free refill on conversion. Exact upgrades require balance/native tests. [Design and artwork](https://github.com/Herbertofury/Advent-of-Ascension/blob/main/docs/Runewinder-New-Weapon-Proposal.md#rifle-conversion-attachment--owner-direction-2026-10-27).
+
+### Mechanism-first correction and necklace archergun · 2026-10-27
+
+- [ ] Before generating future weapon concepts, research the reference's high-level actuation/release, indexing, reset and resource roles. Separate verified source facts from fictional game components; no decorative substitute for missing internals.
+- [ ] Correct Runewinder's unresolved striker/actuation and reset presentation. Existing sidearm/rifle art remains unapproved for mechanical completeness.
+- [x] Create and deliver a separate BF-AR16A-inspired necklace archergun study in standard and purple Soulflame finishes, revised to show both necklace rows and a staged arrow.
+- [ ] Resolve and implement the archergun's fictional release/reset, arrow and bead-resource contract, shared-necklace interoperability, authored rig and native tests. [Proposal](https://github.com/Herbertofury/Advent-of-Ascension/wiki/Rune-Necklace-Archergun-Proposal) · [Research and gaps](https://github.com/Herbertofury/Advent-of-Ascension/blob/main/docs/Necklace-Weapon-Mechanism-Review.md).

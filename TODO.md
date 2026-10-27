@@ -49,7 +49,7 @@ Every active item should have a concrete next step, evidence link and honest sta
 - [x] Create standard rune-bead and purple Soulflame concept candidates with player-facing glass and flame sight; separate from the 434 released identities.
 - [ ] Replace the rejected segmented-shutter reload storyboard. The confirmed cover is ONE smooth transparent sleeve rotating around the chamber like a bank pneumatic-tube carrier, not a hinged door, slats or a coiling blind. Corrected illustration remains unavailable; do not present the old sheet as current.
 - [x] Create cyan cold/Soulfire variant and mixed-element necklace/optional-cosmetic sheet. Art remains unaccepted for native use.
-- [ ] Publish and verify the latest reload/variant sheets and owner-approved functional rules in AoA, then synchronize the complete wiki checklist.
+- [x] Publish and verify the cyan variant, owner-approved functional rules and tested source packages in AoA; synchronize the complete wiki checklist. The corrected reload image is still separately open.
 - [ ] Implement capacity from customizable bead count and projectile sequence from ordered bead types, including alternating ice/fire and poison/fire arrangements.
 - [ ] Keep every bead on the necklace: firing darkens it, mana recharge relights it. Preserve individual charge, identity, order and next-shot index through partial reloads and saves.
 - [ ] Implement one-object necklace extraction, in-hand charging and fast side reinsertion without duplication/loss; verify the smooth rotating sleeve and actual camera visibility.
@@ -60,3 +60,8 @@ Every active item should have a concrete next step, evidence link and honest sta
 ### Runewinder implementation checkpoint
 
 The isolated bead-state candidate passes 80,000 simulated shots with ordered elements, persistent bead identities, dark/relit charge, replay guards and immutable in-memory snapshots. It reuses the existing confirmed-shot sequencer. Mana charging is simulated only; no external mana debit, native save system, rig or compatibility acceptance is claimed. The cyan attachment sheet is corrected; the reload illustration still requires the approved smooth rotating-cover design.
+
+### Verified continuation · 2026-10-27
+
+- Runewinder source commit [6e3eeb4](https://github.com/Herbertofury/Advent-of-Ascension/commit/6e3eeb44e205f823de12047bf1c6aa2d084f87cd): six exact source files. Checklist commit [2423471](https://github.com/Herbertofury/Advent-of-Ascension/commit/2423471d1736a4182f05ee3a89ac30fac744c3ef): exact snapshot, living-checklist CI and Pages passed. Served HTML and both displayed images checked; the rejected reload art is absent.
+- Atlas [ff4dc67](https://github.com/Herbertofury/Engineering-Atlas/commit/ff4dc67779565f43983633fd21b0e387603f5ad8): repaired provider-detail overwrite of media event identity, 16 exact remote files, 78 JavaScript / 67 Python checks locally. Remote CI and live-player regression pending. No performance or other-project promotion claim.

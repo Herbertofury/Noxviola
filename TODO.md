@@ -34,7 +34,9 @@ Updated 2026-10-27 UTC. This is a continuation index, not a replacement for proj
 ## Latest verified checkpoints
 
 - Atlas receipt-gate repair: 26 exact remote blobs, 67 Python and 73 Node tests, Linux/Windows CI and Pages passed. [Wiki evidence](https://github.com/Herbertofury/Engineering-Atlas/wiki/Experiment-Evidence).
-- Baron SSR cosmetic study: [561f469](https://github.com/Herbertofury/Advent-of-Ascension/commit/561f4699841c41accce53f1db5ad9215eeac847f), three finishes and three detached charm designs. Wiki saved; Pages deployment and served-image verification still pending. All 434 registry identities and native acceptance flags preserved.
+- Baron SSR cosmetic study: [561f469](https://github.com/Herbertofury/Advent-of-Ascension/commit/561f4699841c41accce53f1db5ad9215eeac847f), three finishes and three detached charm designs. Wiki saved; Pages deployment passed and served catalogue matched exactly. The gallery’s original hero and new study link were checked. All 434 registry identities and native acceptance flags preserved.
+
+- Complete AoA wiki task reconciliation: [740816a](https://github.com/Herbertofury/Advent-of-Ascension/commit/740816adc69e1b9719e9c2a1058f61643a59cda4), 496 pages / 1,298 source tasks. Eight maintenance tests and the local drift check passed; remote CI pending. Source checkmarks are not native completion.
 
 ## Completion standard
 

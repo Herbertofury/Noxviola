@@ -47,12 +47,16 @@ Every active item should have a concrete next step, evidence link and honest sta
 [Proposal](https://github.com/Herbertofury/Advent-of-Ascension/wiki/Runewinder-New-Weapon-Proposal) · [Concept presentation](https://herbertofury.github.io/Advent-of-Ascension/runewinder-concept.html)
 
 - [x] Create standard rune-bead and purple Soulflame concept candidates with player-facing glass and flame sight; separate from the 434 released identities.
-- [x] Create a separate mana-reload storyboard with a transparent side shutter that rolls up/down, not a hinged door.
+- [ ] Replace the rejected segmented-shutter reload storyboard. The confirmed cover is ONE smooth transparent sleeve rotating around the chamber like a bank pneumatic-tube carrier, not a hinged door, slats or a coiling blind. Corrected illustration remains unavailable; do not present the old sheet as current.
 - [x] Create cyan cold/Soulfire variant and mixed-element necklace/optional-cosmetic sheet. Art remains unaccepted for native use.
 - [ ] Publish and verify the latest reload/variant sheets and owner-approved functional rules in AoA, then synchronize the complete wiki checklist.
 - [ ] Implement capacity from customizable bead count and projectile sequence from ordered bead types, including alternating ice/fire and poison/fire arrangements.
 - [ ] Keep every bead on the necklace: firing darkens it, mana recharge relights it. Preserve individual charge, identity, order and next-shot index through partial reloads and saves.
-- [ ] Implement one-object necklace extraction, in-hand charging and fast side reinsertion without duplication/loss; verify the rolling shutter and actual camera visibility.
+- [ ] Implement one-object necklace extraction, in-hand charging and fast side reinsertion without duplication/loss; verify the smooth rotating sleeve and actual camera visibility.
 - [ ] Evaluate requested Ars Nouveau, Iron's Spells/IronsArms and Botania mana adapters separately, with explicit costs, cancellation and optional-dependency tests. None is yet claimed compatible.
 - [ ] Finish the authored shared rig, native motion, glass/sight fit, accessibility, networking and performance. Existing confirmed-shot sequencer is reused unchanged in a passing offline pose-target prototype; this does not complete native implementation.
 - [ ] Keep dimension skins cosmetic unless a functional bead/attachment definition explicitly changes gameplay. Ask for donor permission where required.
+
+### Runewinder implementation checkpoint
+
+The isolated bead-state candidate passes 80,000 simulated shots with ordered elements, persistent bead identities, dark/relit charge, replay guards and immutable in-memory snapshots. It reuses the existing confirmed-shot sequencer. Mana charging is simulated only; no external mana debit, native save system, rig or compatibility acceptance is claimed. The cyan attachment sheet is corrected; the reload illustration still requires the approved smooth rotating-cover design.

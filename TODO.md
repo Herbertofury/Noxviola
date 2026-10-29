@@ -1,6 +1,6 @@
 # Active project work
 
-Updated 2026-10-27 UTC. This is a continuation index, not a replacement for project-local plans.
+Updated 2026-10-29 UTC. This is a continuation index, not a replacement for project-local plans.
 
 ## Advent of Ascension
 
@@ -91,3 +91,10 @@ The isolated bead-state candidate passes 80,000 simulated shots with ordered ele
 - [ ] After the bow correction, audit ALL mace/maul and large melee concepts for unintended bending and create a new, more faithful premium sci-fi concept for each. Preserve original identity, proportions, material cues and earlier art as alternates.
 - For EVERY new weapon, gather multiple actual reference angles, establish shooting/striking direction and handling, and review documented visible internals BEFORE generation. Do not label unknown internals as researched facts.
 - Never bend, curve, shorten or warp a weapon simply to fit the picture. Change canvas, framing, camera or uniform whole-object scale instead. Preserve intended natural curves, such as bow limbs, while rejecting accidental distortion of straight shafts, rails, barrels, handles and mauls.
+
+
+### Verified continuation · 2026-10-29
+
+- [x] Publish five revised straight-shaft science-fiction maul concept candidates: Coralstone, Crystal, Electron, Horizon and Vulcammer. [AoA source checkpoint](https://github.com/Herbertofury/Advent-of-Ascension/commit/05687c7ae545bcc2b9f2744eda3880f62bcf1e4e). Earlier artwork remains available; 429 other registry entries are unchanged. Pages passed and all 11 changed served files match the committed bytes. Art/native acceptance remains open.
+- [ ] Continue the remaining large-melee review and original mesh/animation work within approved scope. The five-maul art pass does not fix the rejected bow orientation or reload illustration and does not complete the broader melee program.
+- Atlas [security evidence checkpoint](https://github.com/Herbertofury/Engineering-Atlas/commit/0f03be4d33c4aaf10e2131096e3c6776fb74e1f2): five new RustSec advisories reviewed; three exact Atlas lockfiles audited against database revision ee1a49a2769a24a596afc1c20cb33748d2769586, with zero known matches and no warnings. CI and Pages passed. Scope excludes other projects and any general security guarantee.

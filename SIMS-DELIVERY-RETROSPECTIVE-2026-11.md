@@ -37,3 +37,13 @@ Apex, external CAS, and the standalone Foundry game controller were not delivere
 - [Foundry game test runbook](https://github.com/Herbertofury/Sims4Foundry/wiki/Sims-4-End%E2%80%90to%E2%80%90End-Game-Test-Runbook) records the concrete launch, CAS, Live, Build, exit and repeat workflow, including remaining gaps. A guide is not a completed test.
 
 Keep this public index free of credentials, account details, private saves, raw transcripts and private assets. Implementation and evidence stay in the respective project repositories.
+
+
+## Additional research and measurable follow-through
+
+- [DORA delivery metrics](https://dora.dev/guides/dora-metrics/) describes small changes as easier to understand and recover from. Apply this as a hypothesis: choose one complete user-visible game flow, retain its baseline, implement and verify it before expanding scope. Measure elapsed time to a working flow, not only number of commits or tests. This is not proof a smaller batch has improved these projects yet.
+- [Google SRE canarying](https://sre.google/workbook/canarying-releases/) compares a candidate with a control and preserves rollback. For Apex, compare the same game/build/scenario and one change at a time. Retain the previous working artifact; reject a performance result if the capture is incomplete or behavior regresses. This is a controlled test approach, not a claim of measured improvement.
+- [OpenAI agent evaluation guidance](https://developers.openai.com/api/docs/guides/agent-evals) describes evaluating workflow traces and repeatable cases. Translate the failures here into concrete future checks: did the assistant reuse the known method before inventing a replacement; distinguish current-session testing from old restoration; check task status before reporting; reach a real game outcome; and preserve/publish an approved checkpoint? Record evidence and exceptions. This document does not claim an automated evaluation is configured or that these checks have passed.
+- [GitHub Actions artifacts](https://docs.github.com/en/actions/concepts/workflows-and-actions/workflow-artifacts) distinguishes retained run outputs from caches. For each candidate, keep relevant test results, hashes and failure logs as authorized artifacts or project evidence. Verify the exact remote commit and CI; do not treat a cache or source-only checkpoint as a usable release.
+
+These are research references and evaluation ideas. Compare against the actual project workflow and measure outcomes before claiming they improve speed, reliability or cost.

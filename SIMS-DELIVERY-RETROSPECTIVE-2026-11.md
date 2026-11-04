@@ -47,3 +47,12 @@ Keep this public index free of credentials, account details, private saves, raw 
 - [GitHub Actions artifacts](https://docs.github.com/en/actions/concepts/workflows-and-actions/workflow-artifacts) distinguishes retained run outputs from caches. For each candidate, keep relevant test results, hashes and failure logs as authorized artifacts or project evidence. Verify the exact remote commit and CI; do not treat a cache or source-only checkpoint as a usable release.
 
 These are research references and evaluation ideas. Compare against the actual project workflow and measure outcomes before claiming they improve speed, reliability or cost.
+
+
+## Research on skills and long-running work
+
+- [SWE-Skills-Bench](https://arxiv.org/abs/2603.15401) is a 2026 preprint evaluating paired software tasks with and without selected skills. Its authors report that skill benefit varies and that some skills add substantial token overhead or conflict with project context. Those are benchmark results, not a measurement of the newly installed skills on this user's projects. Evaluate each skill against the actual task rather than assuming installation fixes performance.
+- [AgentRewind](https://arxiv.org/abs/2608.14380) is a 2026 preprint studying recovery using aligned execution and environment checkpoints. Its reported benchmark gains do not establish that its framework is installed or suitable here. The directly applicable question is whether each project checkpoint contains enough current source, test evidence and recovery context to resume without rebuilding; test that on the next authorized task.
+- [SWE-Bench+](https://arxiv.org/abs/2410.06992) studied weaknesses in benchmark issue/test quality. It reinforces checking whether tests actually cover the requested outcome, rather than relying on a pass count alone. Its numbers concern that study, not Apex or Foundry.
+
+Proposed paired evaluation: select a bounded representative task with a known last-good checkpoint and a specific observable game or artifact outcome; run the normal workflow and the skill-assisted workflow under comparable conditions only when authorized and practical. Record completion, regressions, human interventions, elapsed time and available usage evidence. Report both successes and failures; do not spend scarce usage on artificial tests when it would displace the user's priority work.

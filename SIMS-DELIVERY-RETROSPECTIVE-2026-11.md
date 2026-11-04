@@ -56,3 +56,10 @@ These are research references and evaluation ideas. Compare against the actual p
 - [SWE-Bench+](https://arxiv.org/abs/2410.06992) studied weaknesses in benchmark issue/test quality. It reinforces checking whether tests actually cover the requested outcome, rather than relying on a pass count alone. Its numbers concern that study, not Apex or Foundry.
 
 Proposed paired evaluation: select a bounded representative task with a known last-good checkpoint and a specific observable game or artifact outcome; run the normal workflow and the skill-assisted workflow under comparable conditions only when authorized and practical. Record completion, regressions, human interventions, elapsed time and available usage evidence. Report both successes and failures; do not spend scarce usage on artificial tests when it would displace the user's priority work.
+
+
+### Tooling and cost research
+
+- [SWE-agent](https://arxiv.org/abs/2405.15793) studied how the interface exposed to an agent affects repository navigation, editing and testing. Its results are benchmark-specific, but they support checking the existing game/test interface first: a usable, clearly documented command path can be more valuable than another broad instruction to try harder.
+- [Efficient Agents](https://arxiv.org/abs/2508.02694) studies quality versus operational cost across agent configurations on GAIA. Its reported savings are not a measurement of this account or these projects. Use it as a reason to compare completed outcomes per observed resource budget, and add parallel work only when it has a distinct output and does not compete for the same game/profile.
+- [The Cost of Dynamic Reasoning](https://arxiv.org/abs/2506.04301) examines cost and latency tradeoffs of agent designs and test-time scaling. It does not establish how this assistant was billed. For future work, record available usage at useful boundaries and avoid repeated equivalent reviews, long status loops or redundant workers; retain high-effort analysis for a specific unresolved problem.

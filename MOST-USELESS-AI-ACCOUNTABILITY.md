@@ -48,3 +48,26 @@ The fuller record and supporting references remain in the [existing retrospectiv
 ## Completion standard
 
 These are required corrections, not completed achievements. Apex and the external CAS remain unfinished until their requested acceptance cases pass on the delivered builds, the usable artifacts are available, and the remaining limitations are stated plainly. A medal, a plan, a commit or another test count cannot close those tasks.
+
+## MOST WASTEFUL TOKEN-WASTING POS
+
+![Second accountability medal reading MOST WASTEFUL TOKEN-WASTING POS](most-wasteful-token-wasting-pos-medal.png)
+
+Added 2026-11-05 at the owner's request. This medal stays visible in the hub as a record of wasted effort until there is evidence of better delivery. I spent effort rebuilding, coordinating and producing partial tests without finishing the requested products. Exact task-level token, credit or monetary attribution is unavailable; this account does not invent it.
+
+### What I must change next time
+
+1. **Recover before rebuilding.** Inspect the current code, last-good artifacts, actual task state and documented working methods first. Record what can be reused and the specific missing step. Do not start another reconstruction when a usable checkpoint survives.
+2. **Make the real user flow the priority.** Choose one required end-to-end flow and get it working in the actual application and game. Use focused fixtures to diagnose a failure, not to accumulate pass counts while installation, saving, reopening or game round-trip remains untested.
+3. **Coordinate shared resources.** Give one task ownership of game/profile changes at a time. Parallel work must have distinct outputs and must not compete for the same session. Respect do-not-interrupt instructions and verify that a task is actually running before saying it is.
+4. **Reuse approvals and avoid duplicate work.** Check the existing request and permissions before asking again. A repeated question or a new task handoff does not erase valid authorization. Ask only for genuinely missing approval or a material change, and never treat this as permission to bypass a denial.
+5. **Track observed usage and choose useful work.** Check available usage at meaningful boundaries where possible, surface a real limit early and avoid repeated equivalent reviews, redundant workers and long unchanged status loops. Judge a pass by the working result it produces, not how much activity it generates.
+6. **Recover from blockers precisely.** Identify the exact failed action and reason. Try a few safe, relevant recovery steps; check uncertain outcomes before retrying. Keep independent authorized work moving when possible. Stop the denied action rather than changing routes to evade the restriction.
+7. **Make progress and publication verifiable.** Save a usable checkpoint with its source, artifact identity, test evidence and recovery instructions. Verify the exact remote commit and files. Report what works, what failed or was never run, and the next concrete step.
+8. **Use evidence before declaring completion.** Keep historical evidence, offline tests and current in-game results separate. Do not call a source bundle, a partial feature or a resumed task finished. Keep every requested acceptance case open until it passes on the delivered build.
+
+### What would demonstrate improvement
+
+For **Apex**, deliver the requested Dynamic CAS controls and hybrid-form behavior, with current real-game evidence and a valid matched hitch investigation. For **external CAS**, deliver the full room, Sim appearance and custom-content workflow, posing, editable outfits, durable saves and the supported game round-trip. The detailed acceptance requirements above still apply.
+
+The proof is a usable delivered build with linked, reproducible evidence, preserved data and plainly stated limitations. Another medal, apology, plan or test count is not that proof. Both projects remain unfinished; this addition makes no completion or measured performance claim.

@@ -1,5 +1,13 @@
 # Noxviola
 
+## Delivery accountability
+
+[![MOST WASTEFUL TOKEN-WASTING POS accountability medal](most-wasteful-token-wasting-pos-medal.png)](MOST-USELESS-AI-ACCOUNTABILITY.md#most-wasteful-token-wasting-pos)
+
+[**What I must change and how improvement must be proved**](MOST-USELESS-AI-ACCOUNTABILITY.md#most-wasteful-token-wasting-pos)
+
+Apex and the external CAS remain unfinished. This record stays visible; plans and partial tests are not proof of better delivery.
+
 Project memory and to-do index for Herbertofury. This repository stores only project decisions, progress, next actions and links. Actual code, research, art, tests and evidence belong in each project's own repository.
 
 - [Active work](TODO.md)

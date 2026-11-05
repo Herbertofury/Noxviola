@@ -5,6 +5,7 @@ Project memory and to-do index for Herbertofury. This repository stores only pro
 - [Active work](TODO.md)
 - [Project decisions](DECISIONS.md)
 - [Sims delivery retrospective and corrective checks](SIMS-DELIVERY-RETROSPECTIVE-2026-11.md)
+- [MOST USELESS AI medal and delivery accountability](MOST-USELESS-AI-ACCOUNTABILITY.md)
 
 Before concluding an active work session, review unfinished authorized tasks and choose the next useful step. A completed checkpoint is not completion of the whole backlog. Respect explicit pauses and approval requirements; record blockers honestly. This checklist is not an always-running service and does not guarantee uninterrupted execution.
 

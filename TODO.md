@@ -15,7 +15,7 @@ Updated 2026-11-07 UTC. This is the maintained Noxviola continuation index. Proj
 
 ### Requested Windows app review
 
-- [ ] **Download and assess the Windows Twitch Drops Miner app.** Inspect the exact release/artifact, source and build provenance, dependencies, permissions, credential handling and network behavior for [SimpliAj/twitchdropsminer](https://github.com/SimpliAj/twitchdropsminer). Report verified findings and residual risks. The requested review has no completed safety verdict recorded here; do not claim universal safety or treat inspection/download as proof that execution or account access is safe.
+- [x] **Complete the Windows Twitch Drops Miner audit and deliver the official ZIP.** Completed November 7 for the reviewed [SimpliAj/twitchdropsminer](https://github.com/SimpliAj/twitchdropsminer) release. The downloaded artifact matched the published release hash, and the limited malware scan reported no detections. The Windows executable is unsigned, the app was not run, and the detailed security findings and residual risks were disclosed privately with the delivered ZIP. This closes the requested audit/download, not a guarantee that the app is fully safe, a runtime qualification, or permission to expose its dashboard or give it account access. Keep the dashboard local-only if choosing to use it; the private assessment's cautions still apply.
 
 ### AoA: finish the arsenal and restoration
 

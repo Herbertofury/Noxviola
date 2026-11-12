@@ -18,3 +18,7 @@ Project memory and to-do index for Herbertofury. This repository stores only pro
 Before concluding an active work session, review unfinished authorized tasks and choose the next useful step. A completed checkpoint is not completion of the whole backlog. Respect explicit pauses and approval requirements; record blockers honestly. This checklist is not an always-running service and does not guarantee uninterrupted execution.
 
 Do not store credentials, sessions, private account details, raw conversations or confidential material here. Completed items require linked verification, not merely an attempted action.
+
+## Competitive landscape and related approaches
+
+See the [source-led comparison and evaluation plan](docs/competitive-landscape.md). Documented capabilities, research proposals and measured results are kept separate.

@@ -128,6 +128,21 @@ async function verifyPackagedApplication(directory, { root = path.resolve(__dirn
   return { ...packaged, executable, archive, entry: entry.main };
 }
 
+function removeEmptyDependencyScopes(directory) {
+  const removed = [];
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    // npm 10 retains empty scopes for omitted development dependencies. Remove
+    // only these top-level directory shells in our disposable staging tree;
+    // preserve every file and every directory inside an installed package.
+    if (!entry.isDirectory() || !entry.name.startsWith('@')) continue;
+    const scope = path.join(directory, entry.name);
+    if (fs.readdirSync(scope).length !== 0) continue;
+    fs.rmdirSync(scope);
+    removed.push(entry.name);
+  }
+  return removed.sort();
+}
+
 function stageDependencies(root, destination, temporary) {
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   if (!Object.keys(pkg.dependencies || {}).length) return [];
@@ -150,7 +165,9 @@ function stageDependencies(root, destination, temporary) {
   const packages = Object.entries(installed.packages).map(([location, value]) => ({
     path: location, version: value.version, integrity: value.integrity,
   })).sort((a, b) => a.path.localeCompare(b.path));
-  fs.cpSync(modules, path.join(destination, 'node_modules'), { recursive: true, dereference: false });
+  const stagedModules = path.join(destination, 'node_modules');
+  fs.cpSync(modules, stagedModules, { recursive: true, dereference: false });
+  removeEmptyDependencyScopes(stagedModules);
   return packages;
 }
 
@@ -227,4 +244,4 @@ async function main(argv = process.argv.slice(2)) {
   } finally { fs.rmSync(temporary, { recursive: true, force: true }); }
 }
 if (require.main === module) main().catch(error => { console.error(error); process.exitCode = 1; });
-module.exports = { APP_FILES, stageApp, stageDependencies, manifest, packageTarget, verifyPackageFiles, verifyPackagedApplication };
+module.exports = { APP_FILES, stageApp, stageDependencies, removeEmptyDependencyScopes, manifest, packageTarget, verifyPackageFiles, verifyPackagedApplication };

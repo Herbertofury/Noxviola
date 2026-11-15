@@ -7,6 +7,7 @@ const path = require('node:path');
 const { performance } = require('node:perf_hooks');
 const { app, BrowserWindow, dialog, session, webContents } = require('electron');
 const { readContext, preflight } = require('../../scripts/native-smoke.cjs');
+const { createIdentitySessionResolver, identityStoragePaths } = require('../../browser/session-path.cjs');
 const { DOWNLOAD } = require('./fixture-server.cjs');
 const context = readContext(process.argv[2]);
 const phase = Number(process.argv[3]);
@@ -79,9 +80,15 @@ let lastState = null;
 const partitionIdentities = new Map();
 const observedPartitions = new WeakSet();
 const lifecyclePartitions = new WeakMap();
+let resolveIdentitySession;
 result.extensionLifecycle = [];
 function partitionFor(identity) {
-  const partition = session.fromPartition(`persist:noxviola-identity-${identity}`);
+  // Use the production resolver's exact factory and path. Calling fromPartition
+  // alongside a fromPath alias would open a second context on the same databases.
+  resolveIdentitySession ||= createIdentitySessionResolver({ session, root: app.getPath('sessionData') });
+  const partition = resolveIdentitySession(identity);
+  const knownIdentity = partitionIdentities.get(partition);
+  assert.ok(!knownIdentity || knownIdentity === identity, 'Different identities must not share one Electron Session');
   partitionIdentities.set(partition, identity);
   for (const event of result.extensionLifecycle) if (lifecyclePartitions.get(event) === partition) event.identity = identity;
   observePartition(partition);
@@ -156,8 +163,40 @@ function expectedCachePathLengths(root) {
     indexDirectory: path.join(cache, 'index-dir').length,
     indexFile: path.join(cache, 'index-dir', 'the-real-index').length,
     entryFile: path.join(cache, 'a'.repeat(16) + '_0').length,
+    initialDoomedEntryFile: path.join(cache, 'todelete_' + 'a'.repeat(16) + '_0_1').length,
+    largestDoomedEntryFile: path.join(cache, 'todelete_' + 'a'.repeat(16) + '_0_18446744073709551615').length,
     units: 'characters in the ordinary path spelling, without a Windows extended-path prefix or trailing NUL',
   };
+}
+function assertIdentityStorageLocations() {
+  const records = [];
+  result.identitySessionPaths = records;
+  for (const [partition, identity] of partitionIdentities) {
+    const expected = identityStoragePaths(app.getPath('sessionData'), identity);
+    const original = identityStoragePaths(originalSessionData, identity).original;
+    const configured = partition.getStoragePath();
+    const resolved = fs.realpathSync.native(configured);
+    const originalResolved = fs.realpathSync.native(original);
+    const record = { identity, configured, resolved, original, originalResolved, allowedAlias: expected.alias };
+    records.push(record);
+    const sameSpelling = value => comparablePath(configured) === comparablePath(value);
+    assert.ok(sameSpelling(expected.original) || (process.platform === 'win32' && sameSpelling(expected.alias)), 'The live Session must use its original partition or the canonical production alias');
+    const configuredStat = fs.statSync(configured, { bigint: true });
+    const originalStat = fs.statSync(original, { bigint: true });
+    record.configuredFileId = { device: String(configuredStat.dev), inode: String(configuredStat.ino) };
+    record.originalFileId = { device: String(originalStat.dev), inode: String(originalStat.ino) };
+    const hasFileId = value => typeof value.dev === 'bigint' && typeof value.ino === 'bigint' && value.dev !== 0n && value.ino !== 0n;
+    if (hasFileId(configuredStat) && hasFileId(originalStat)) {
+      record.physicalVerification = 'equal nonzero device and inode identifiers';
+      assert.equal(configuredStat.dev, originalStat.dev, 'The live Session must retain the original identity device');
+      assert.equal(configuredStat.ino, originalStat.ino, 'The live Session must retain the original identity directory');
+    } else {
+      record.physicalVerification = 'exact canonical path equality; reliable file identifiers unavailable';
+      assert.equal(resolved, originalResolved, 'The live Session must retain the exact original identity directory');
+    }
+    record.factory = sameSpelling(expected.alias) ? 'fromPath' : 'fromPartition';
+    record.physicalDirectoryPreserved = true;
+  }
 }
 function fixtureStorageLayout() {
   const profile = fs.realpathSync.native(context.profile);
@@ -175,6 +214,7 @@ function fixtureStorageLayout() {
       diagnostic.realStoragePathLength = root.length;
       diagnostic.ordinaryStoragePathLength = ordinaryPath(diagnostic.storagePath).length;
       diagnostic.ordinaryRealStoragePathLength = ordinaryPath(root).length;
+      diagnostic.expectedConfiguredCachePathLengths = expectedCachePathLengths(diagnostic.storagePath);
       diagnostic.expectedCachePathLengths = expectedCachePathLengths(root);
       function walk(directory) {
         let entries;
@@ -420,6 +460,7 @@ async function firstLaunch() {
     assert.equal(empty.serviceWorkers, 0);
     assertIdentity(await writeIdentity(second, 'second'), 'second');
     assertIdentity(await identityData(await activate(expected.personalTab)), 'personal');
+    assertIdentityStorageLocations();
     result.storageLayouts = fixtureStorageLayout();
   });
   await check('site geolocation request is denied through production permission handling', async () => {
@@ -514,7 +555,7 @@ async function firstLaunch() {
     await captureMetrics('both-extension-fixtures-enabled');
   });
   await check('actual library IPC edits, previews, cancels, merges and exports complete synthetic metadata', async () => {
-    await window.webContents.executeJavaScript('window.__noxviolaNativeVault = null; window.browser.onVault(value => { window.__noxviolaNativeVault = value; });');
+    await window.webContents.executeJavaScript('window.__noxviolaNativeVault = null; void window.browser.onVault(value => { window.__noxviolaNativeVault = value; });');
     const libraryState = () => window.webContents.executeJavaScript('window.__noxviolaNativeVault');
     await command('vault');
     await command('vault-save', { title: 'Synthetic saved reference', url: `${context.origin}/page?library=original`, kind: 'website', group: 'Synthetic research', notes: 'Generated acceptance fixture only' });
@@ -571,6 +612,7 @@ async function secondLaunch() {
     assert.equal(restored.activeId, expected.activeId);
     assertIdentity(await identityData(await activate(expected.personalTab)), 'personal');
     assertIdentity(await identityData(await activate(expected.secondTab)), 'second');
+    assertIdentityStorageLocations();
     result.storageLayouts = fixtureStorageLayout();
   });
   await check('extension identity, storage and background execution survive a real process restart', async () => {
@@ -588,7 +630,7 @@ async function secondLaunch() {
     assert.equal(data.fixtureSeed, 'second-extension');
   });
   await check('library edits and merged metadata survive a real process restart', async () => {
-    await window.webContents.executeJavaScript('window.__noxviolaNativeVault = null; window.browser.onVault(value => { window.__noxviolaNativeVault = value; });');
+    await window.webContents.executeJavaScript('window.__noxviolaNativeVault = null; void window.browser.onVault(value => { window.__noxviolaNativeVault = value; });');
     await command('vault');
     const restored = await until(() => window.webContents.executeJavaScript('window.__noxviolaNativeVault'), 'restored library state');
     assert.deepEqual(restored.items, expected.vault);
@@ -625,7 +667,6 @@ app.whenReady().then(async () => {
     const resolved = fs.realpathSync.native(configured);
     result.sessionDataPath = { original: originalSessionData, originalResolved: originalResolvedSessionData, configured, resolved };
     assert.equal(comparablePath(resolved), comparablePath(originalResolvedSessionData), 'The production path configuration must preserve the physical fixture directory');
-    if (process.platform === 'win32') assert.ok(configured.startsWith('\\\\?\\'), 'Production must configure the extended Windows path before creating identity sessions');
   });
   window = await until(() => BrowserWindow.getAllWindows().find(value => !value.isDestroyed()), 'production BrowserWindow');
   await until(() => !window.webContents.isLoading() && window.webContents.getURL().startsWith('file:'), 'trusted shell document');

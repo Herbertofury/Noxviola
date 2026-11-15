@@ -9,12 +9,11 @@ const {SessionWriter} = require('./session-writer.cjs');
 const {DownloadManager} = require('./downloads.cjs');
 const {ExtensionManager} = require('./extensions.cjs');
 const {createExtensionLoader} = require('./extension-runtime.cjs');
-const {configureSessionDataPath} = require('./session-path.cjs');
+const {createIdentitySessionResolver} = require('./session-path.cjs');
 const {PermissionManager} = require('./permissions.cjs');
 const accountStore = require('./accounts.cjs');
 const vaultStore = require('./vault.cjs');
 app.enableSandbox();
-configureSessionDataPath(app);
 
 let win, tabs = [], profiles = [{id:'personal', name:'Personal'}], activeId, currentIdentity = 'personal';
 let originalSession = cleanState({}), preferences = originalSession.preferences;
@@ -23,11 +22,19 @@ let writer, saveError = '', sessionFile, dataDirectory, downloads, permissions, 
 let vaultFile, vaultDocument = {version:1, items:[]}, vaultError = '', vaultRecovery = null, vaultImport = null;
 let accountFile, accounts = [], accountError = '', accountRecovery = null;
 let permissionOpening = null, extensionBusy = false;
+let resolveIdentitySession;
 const configuredSessions = new Set(), identityInitializations = new Map(), extensionWindows = new Map(), pendingOperations = new Set();
 const HEIGHT = 112, SIDEBAR = 210;
 const active = () => tabs.find(tab => tab.id === activeId);
 const send = (channel, value) => { if (win && !win.isDestroyed()) win.webContents.send(channel, value); };
 const notice = message => send('notice', String(message));
+function eventAction(action) {
+  try { return action(); }
+  catch (error) {
+    notice(`Browser action could not finish: ${error.message}`);
+    layout(); publish(false);
+  }
+}
 function savedTab(tab) { return {...tab.saved, id:tab.id, url:tab.url, title:tab.title, identity:tab.identity}; }
 function snapshot() { return {...originalSession, version:1, profiles, preferences, activeId, tabs:tabs.map(savedTab)}; }
 function tabFromSaved(saved) { return {saved, id:saved.id, url:saved.url, title:saved.title, identity:saved.identity, view:null, loading:false, initializing:false}; }
@@ -73,7 +80,7 @@ function setPanel(value) {
 function showPage() { if (panel) { panel = null; layout(); publish(false); publishVault(); publishAccounts(); publishExtensions(); publishPermissions(); } }
 function identitySession(identity) {
   if (!profiles.some(profile => profile.id === identity)) throw new Error('Select an existing browser identity.');
-  const partition = `persist:noxviola-identity-${identity}`, target = session.fromPartition(partition);
+  const partition = `persist:noxviola-identity-${identity}`, target = resolveIdentitySession(identity);
   if (!configuredSessions.has(partition)) {
     target.setPermissionCheckHandler(() => false); target.setPermissionRequestHandler((_wc,_permission,callback) => callback(false));
     permissions?.attach(target, identity); downloads?.attach(target, identity); configuredSessions.add(partition);
@@ -93,7 +100,7 @@ function ensureView(tab) {
   const view = new WebContentsView({webPreferences:{session:identitySession(tab.identity),nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true,allowRunningInsecureContent:false,spellcheck:true}});
   tab.view = view; tab.initializing = true; win.contentView.addChildView(view);
   const wc = view.webContents;
-  wc.setWindowOpenHandler(({url}) => { if (httpUrl(url) && !closing) newTab(url,tab.identity); return {action:'deny'}; });
+  wc.setWindowOpenHandler(({url}) => { if (httpUrl(url) && !closing) eventAction(() => newTab(url,tab.identity)); return {action:'deny'}; });
   wc.on('will-navigate', (event,url) => { if (!httpUrl(url)) event.preventDefault(); });
   wc.on('will-redirect', (event,url) => { if (!httpUrl(url)) event.preventDefault(); });
   wc.on('page-title-updated', (_event,title) => { if (!closing && tab.title !== title) { tab.title = title; publish(); } });
@@ -106,7 +113,7 @@ function ensureView(tab) {
   wc.on('context-menu', (_event,params) => Menu.buildFromTemplate([
     {role:'copy',enabled:!!params.selectionText},{role:'paste',enabled:params.isEditable},
     {label:'Reload',click:()=>wc.reload()},
-    {label:'Open link in new tab',enabled:!!httpUrl(params.linkURL),click:()=>newTab(params.linkURL,tab.identity)}
+    {label:'Open link in new tab',enabled:!!httpUrl(params.linkURL),click:()=>eventAction(() => newTab(params.linkURL,tab.identity))}
   ]).popup({window:win}));
   layout();
   identityReady(tab.identity).then(() => {
@@ -165,8 +172,16 @@ function extensionPage(id, identity, kind) {
   const popup = new BrowserWindow({parent:win,title:'Noxviola extension',width:kind === 'popup' ? 460 : 900,height:kind === 'popup' ? 600 : 700,
     webPreferences:{session:identitySession(identity),nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true}});
   extensionWindows.set(popup,{id,identity}); popup.once('closed',()=>extensionWindows.delete(popup));
-  popup.webContents.setWindowOpenHandler(({url:target}) => { if (httpUrl(target)) newTab(target,identity); return {action:'deny'}; });
-  const stayInExtension = (event,target) => { const parsed = new URL(target); if (parsed.protocol !== 'chrome-extension:' || parsed.hostname !== allowed.hostname || parsed.port || parsed.username || parsed.password) {event.preventDefault();if(httpUrl(target))newTab(target,identity);} };
+  popup.webContents.setWindowOpenHandler(({url:target}) => { if (httpUrl(target)) eventAction(() => newTab(target,identity)); return {action:'deny'}; });
+  const stayInExtension = (event,target) => {
+    let parsed;
+    try { parsed = new URL(target); }
+    catch { event.preventDefault(); notice('The extension requested an invalid address.'); return; }
+    if (parsed.protocol !== 'chrome-extension:' || parsed.hostname !== allowed.hostname || parsed.port || parsed.username || parsed.password) {
+      event.preventDefault();
+      if (httpUrl(target)) eventAction(() => newTab(target,identity));
+    }
+  };
   popup.webContents.on('will-navigate',stayInExtension); popup.webContents.on('will-redirect',stayInExtension);
   popup.loadURL(url).catch(error=>notice(`Extension page failed: ${error.message}`));
 }
@@ -339,6 +354,7 @@ async function start() {
     restored = {value:recoverState(sessionFile,restored.preview).value};
   }
   originalSession = restored.value; profiles = originalSession.profiles; preferences = originalSession.preferences;
+  resolveIdentitySession = createIdentitySessionResolver({session,root:app.getPath('sessionData')});
   tabs = originalSession.tabs.map(tabFromSaved); activeId = originalSession.activeId;
   currentIdentity = active()?.identity || 'personal';
   vaultFile = path.join(dataDirectory,'private-vault.json'); accountFile = path.join(dataDirectory,'private-accounts.json');
@@ -362,11 +378,14 @@ async function start() {
   win.webContents.setWindowOpenHandler(() => ({action:'deny'})); win.webContents.on('will-navigate',event => event.preventDefault());
   ipcMain.handle('command',command); win.on('resize',layout);
   win.on('close',event => {if (!allowClose) {event.preventDefault();requestClose().catch(error => resumeAfterCloseError(error.message));}});
-  win.webContents.on('did-finish-load',() => {if (tabs.length) {ensureView(active() || tabs[0]);layout();publish(false);} else newTab();publishVault();publishAccounts();publishExtensions();publishPermissions();});
-  const invoke = name => {if (!closing) Promise.resolve(perform(name)).catch(error => notice(error.message));};
+  win.webContents.on('did-finish-load',() => {
+    eventAction(() => {if (tabs.length) {ensureView(active() || tabs[0]);layout();publish(false);} else newTab();});
+    publishVault();publishAccounts();publishExtensions();publishPermissions();
+  });
+  const invoke = (name,value) => {if (!closing) perform(name,value).catch(error => {notice(error.message);layout();publish(false);});};
   Menu.setApplicationMenu(Menu.buildFromTemplate([{label:'Browser',submenu:[
     {label:'New tab',accelerator:'CmdOrCtrl+T',click:() => invoke('new')},
-    {label:'Close tab',accelerator:'CmdOrCtrl+W',click:() => panel ? invoke('panel-close') : closeTab(activeId)},
+    {label:'Close tab',accelerator:'CmdOrCtrl+W',click:() => panel ? invoke('panel-close') : invoke('close',activeId)},
     {label:'Reopen closed tab',accelerator:'CmdOrCtrl+Shift+T',click:() => invoke('restore')},
     {label:'Duplicate tab',accelerator:'CmdOrCtrl+Shift+D',click:() => invoke('duplicate')},
     {label:'Address',accelerator:'CmdOrCtrl+L',click:() => {showPage();send('focus-address');}},

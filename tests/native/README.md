@@ -59,6 +59,16 @@ Two actual Electron processes exercise:
 - Library editing, archive/restore, export, import preview/cancel/merge and
   complete metadata recovery after a real process restart.
 
+The driver and application share the same identity Session resolver. Windows
+uses its original persistent partition where the pinned cache lifecycle path
+budget permits it, or a verified compact junction to that unchanged physical
+directory. Both phases record the actual Session path and compare physical
+file IDs (or exact canonical paths when IDs are unavailable). The generated
+profile stays at its original long location. The gate exercises fresh profiles
+and restart; it does not yet qualify migration from every legacy browser
+profile, remote filesystem or arbitrarily long root. Linux keeps its original
+partition behavior.
+
 Only generated fixture sites, extensions and data are used. The test supplies
 the file-picker result for its extension folder, selects a synthetic download
 path synchronously in `will-download`, and chooses Deny for permission dialogs.

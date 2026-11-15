@@ -7,7 +7,7 @@ No real Noxviola profile, Enderloom profile, cookies, or account data was used.
 
 | Candidate | Evidence | Remaining qualification |
 | --- | --- | --- |
-| Servo 0.8.0 official servoshell | Official Windows archive and SHA-256 matched. Source build in progress. | Automatic execution review rejected launch of the downloaded executable (`blocked by policy`); navigation, compatibility, performance and native acceptance are unverified. |
+| Servo 0.8.0 official servoshell | Official Windows archive and SHA-256 matched. Its source build reached the browser engine after staging Servo's GStreamer 1.22.8 dependencies in the workspace. | The default-feature source build did not finish: pinned Rust 1.99.1 encountered two compiler access violations and a SpiderMonkey build-helper access violation. Rust 1.99.0 separately failed with an illegal instruction while compiling `crypto-bigint`. The cause is undiagnosed. Automatic execution review rejected launch of the downloaded executable (`blocked by policy`); navigation, compatibility, performance and native acceptance are unverified. |
 | Hermes at `a41f18e` | Rust/Slint shell uses Servo 0.7.0. The Noxviola candidate passed `cargo check` and linked a Windows development executable. Controller tests pass, including synthetic 100-tab restore. | Real launch and web navigation are not yet proven. Upstream documents no OS sandbox for web content, and no Windows media package, downloads, permission prompts, extensions or private profiles. Session code is new and has not had runtime acceptance. |
 | Enderloom browser | Source and local uncommitted browser modules were inventoried. They provide requirements and a source-format reference. | Electron/Chromium is excluded by the requested architecture; no runtime behavior or login migration is claimed for this Rust candidate. |
 
@@ -17,6 +17,26 @@ Sources: [Servo 0.8.0 release](https://github.com/servo/servo/releases/tag/v0.8.
 [Enderloom](https://github.com/Herbertofury/Enderloom).
 The best foundation cannot be selected on measured Windows performance or
 compatibility until both a qualifying build and runtime tests are available.
+For continuation, the v0.8.0 source checkout is at commit
+`4e136d8ef31b7c4748fbfac606ca463f3efd7537`. Its official default features
+include GStreamer; the incomplete build did not replace those features with a
+media-free configuration. The locally staged LLVM 23.1.5 archive matched the
+upstream release digest. Investigate the Windows error reports and toolchain
+health before repeatedly retrying builds; do not infer a hardware cause from
+the exception codes alone.
+
+The source comparison used `cargo +1.99.1 build --locked -p servoshell -j 1`
+with dev debug info and incremental compilation disabled and a process-local
+LLVM/GStreamer environment. Windows recorded `0xc0000005` in the Rust driver
+while building `clap_builder` and `wgpu-hal`; a subsequent build-helper crash
+after the prebuilt SpiderMonkey archive download used the same exception code.
+The first two crates progressed on retry, but that does not explain the crashes.
+The alternate `cargo +1.99.0` attempt failed in `crypto-bigint` with
+`0xc000001d` in the Rust compiler driver. Servo pins 1.99.1; the alternate was
+an investigative build, not an endorsed replacement. The relevant Windows
+error report identifiers for the latter driver crash and preceding build helper
+are `9d3f9b2a-dd12-4c92-aaee-e7d85fe8d52c` and
+`162a2948-1a71-4682-89f2-e3f3b7e72881` respectively.
 
 ## Requested feature tracking
 

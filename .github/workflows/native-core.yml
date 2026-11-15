@@ -1,0 +1,40 @@
+name: Native state and controller
+
+on:
+  push:
+    paths:
+      - 'native/core/**'
+      - 'native/import-enderloom/**'
+      - 'native/hermes/crates/talaria-core/**'
+      - 'native/hermes/Cargo.toml'
+      - 'native/hermes/Cargo.lock'
+      - '.github/workflows/native-core.yml'
+  pull_request:
+    paths:
+      - 'native/core/**'
+      - 'native/import-enderloom/**'
+      - 'native/hermes/crates/talaria-core/**'
+      - 'native/hermes/Cargo.toml'
+      - 'native/hermes/Cargo.lock'
+      - '.github/workflows/native-core.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  synthetic-tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Session recovery tests
+        run: cargo test --locked --manifest-path native/core/Cargo.toml
+      - name: Enderloom reader tests
+        run: cargo test --locked --manifest-path native/import-enderloom/Cargo.toml
+      - name: Browser controller tests
+        run: cargo test --locked --manifest-path native/hermes/Cargo.toml -p talaria-core

@@ -14,14 +14,14 @@ const vaultStore=require('./vault.cjs');let vaultFile,vault=[],vaultOpen=false;
 function publishVault(){win.webContents.send('vault',{items:vault,open:vaultOpen});}
 const snapshot=()=>({version:1,profiles,activeId,tabs:tabs.map(({id,url,title,identity})=>({id,url,title,identity}))});
 function persist(){if(sessionFile)saveState(sessionFile,snapshot());}
-function publish(){if(win&&!win.isDestroyed())win.webContents.send('state',{...snapshot(),currentIdentity,splitId,tabs:tabs.map(t=>({...snapshot().tabs.find(x=>x.id===t.id),loading:t.loading||false,live:!!t.view})),canBack:active()?.view?.webContents.navigationHistory.canGoBack()||false,canForward:active()?.view?.webContents.navigationHistory.canGoForward()||false});clearTimeout(saveTimer);saveTimer=setTimeout(persist,200);}
+function publish(){if(win&&!win.isDestroyed())win.webContents.send('state',{...snapshot(),currentIdentity,splitId,tabs:tabs.map(({id,url,title,identity,loading,view})=>({id,url,title,identity,loading:loading||false,live:!!view})),canBack:active()?.view?.webContents.navigationHistory.canGoBack()||false,canForward:active()?.view?.webContents.navigationHistory.canGoForward()||false});clearTimeout(saveTimer);saveTimer=setTimeout(persist,200);}
 function active(){return tabs.find(t=>t.id===activeId);}
 function layout(){if(!win)return;const [width,height]=win.getContentSize();const visible=[activeId,splitId].filter((id,i,a)=>id&&a.indexOf(id)===i);for(const t of tabs){if(!t.view)continue;const i=visible.indexOf(t.id);t.view.setVisible(i>=0&&!vaultOpen);if(i>=0)t.view.setBounds({x:visible.length===2?Math.floor(width/2)*i:0,y:HEIGHT,width:visible.length===2?Math.floor(width/2):width,height:Math.max(0,height-HEIGHT)});}}
 function ensureView(t){
  if(t.view)return t.view;
  const view=new WebContentsView({webPreferences:{session:identitySession(t.identity),nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true,allowRunningInsecureContent:false,spellcheck:true}});t.view=view;win.contentView.addChildView(view);
  const wc=view.webContents;
- wc.setWindowOpenHandler(({url})=>{if(httpUrl(url))newTab(url);return {action:'deny'};});
+ wc.setWindowOpenHandler(({url})=>{if(httpUrl(url))newTab(url,t.identity);return {action:'deny'};});
  wc.on('will-navigate',(event,url)=>{if(!httpUrl(url))event.preventDefault();});
  wc.on('will-redirect',(event,url)=>{if(!httpUrl(url))event.preventDefault();});
  wc.on('page-title-updated',(_,title)=>{t.title=title;publish();});
@@ -30,11 +30,11 @@ function ensureView(t){
  wc.on('did-navigate',(_,url)=>{t.url=url;publish();});wc.on('did-navigate-in-page',(_,url)=>{t.url=url;publish();});
  wc.on('render-process-gone',(_,details)=>{win.webContents.send('notice',`Tab stopped (${details.reason}). Reload to recover.`);});
  wc.on('did-fail-load',(_,code,description,url,main)=>{if(main&&code!==-3)win.webContents.send('notice',`Could not load ${url}: ${description}`);});
- wc.on('context-menu',(_,params)=>{Menu.buildFromTemplate([{role:'copy',enabled:!!params.selectionText},{role:'paste',enabled:params.isEditable},{label:'Reload',click:()=>wc.reload()},{label:'Open link in new tab',enabled:!!httpUrl(params.linkURL),click:()=>newTab(params.linkURL)}]).popup({window:win});});
+ wc.on('context-menu',(_,params)=>{Menu.buildFromTemplate([{role:'copy',enabled:!!params.selectionText},{role:'paste',enabled:params.isEditable},{label:'Reload',click:()=>wc.reload()},{label:'Open link in new tab',enabled:!!httpUrl(params.linkURL),click:()=>newTab(params.linkURL,t.identity)}]).popup({window:win});});
  layout();wc.loadURL(t.url).catch(()=>{});return view;
 }
 function activate(id){const t=tabs.find(t=>t.id===id);if(!t)return;activeId=id;currentIdentity=t.identity;if(splitId===id)splitId=null;ensureView(t);layout();publish();}
-function newTab(url='https://www.google.com/'){const target=address(url);if(!target)return;const t={id:crypto.randomUUID(),url:target,title:'New tab',identity:currentIdentity};tabs.push(t);activate(t.id);}
+function newTab(url='https://www.google.com/',identity=currentIdentity){const target=address(url);if(!target)return;const t={id:crypto.randomUUID(),url:target,title:'New tab',identity};tabs.push(t);activate(t.id);}
 function closeTab(id){const i=tabs.findIndex(t=>t.id===id);if(i<0)return;const [t]=tabs.splice(i,1);closed.push({url:t.url,title:t.title,identity:t.identity});if(t.view){win.contentView.removeChildView(t.view);t.view.webContents.close();}if(splitId===id)splitId=null;if(!tabs.length)newTab();else if(activeId===id)activate(tabs[Math.min(i,tabs.length-1)].id);else{layout();publish();}}
 function trusted(event){return win&&!win.isDestroyed()&&event.sender===win.webContents&&event.senderFrame===win.webContents.mainFrame;}
 async function command(event,{name,value}={}){

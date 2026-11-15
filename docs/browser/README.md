@@ -8,7 +8,7 @@ Ferrum's [requirements](https://github.com/Herbertofury/Ferrum-Browser/blob/main
 
 ## Verified here
 
-Seven Node tests: named identity persistence; address protocol filtering; complete 100-tab duplicate-preserving restore; malformed tab isolation; durable checkpoint fallback; complete private vault metadata restart; rejection/preservation of invalid vault data. JavaScript syntax checks pass. No native Electron binary exists in the available installed dependency, so native startup, web navigation, download/save dialogs, real split views and renderer integration remain unverified. No speed or disk superiority is claimed.
+Seven Node tests: named identity persistence; address protocol filtering; complete 100-tab duplicate-preserving restore; malformed tab isolation; durable checkpoint fallback; complete private vault metadata restart; rejection/preservation of invalid vault data. JavaScript syntax checks pass. The preinstalled Electron package lacked a binary. Official Electron 44.4.5 Linux x64 was downloaded and SHA-256 verified against the official release manifest (04586a0ec46c3283fbdaef85530f561f71f0b5e136ad0cb9ef63683615609780). Its version command returned v44.4.5. A sandbox-enabled headless launch failed before application acceptance: process_singleton_posix.cc socket() failed: Operation not permitted, exit133. No security bypass was attempted. Native startup, web navigation, download/save dialogs, real split views and renderer integration remain unverified. No speed or disk superiority is claimed.
 
 ## Prime feature: private media/favorites vault
 
@@ -26,3 +26,6 @@ Official engine limits: [Electron extensions](https://www.electronjs.org/docs/la
 
 ## Named profile/container baseline
 Each tab retains an identity ID. Each identity maps to its own Electron persistent session partition; switching selects an existing identity tab or opens one, without moving cookies between partitions. Split view can display different identities simultaneously. Names survive restart. This is source-level partition wiring, not a native no-leak result: cookies, localStorage, IndexedDB, service workers, cache and authenticated-account separation still need controlled real Electron tests. No passwords or profiles are imported, copied or exported. The shared private vault is explicitly app-wide.
+
+## Account manager direction
+The owner-provided offline identity atlas was inspected statically, never executed or copied into public source. It informs platform/account labels, handle-claim status, references, account-created and saved-in-password-manager status, and explicit import/export. Its plaintext metadata backups are not an encrypted credential store. Next implement identity-bound account metadata separately from secrets; evaluate supported established password-manager/OS credential integrations with origin-bound autofill and lock tests. No passwords, custom encryption, credential grants or account creation are implemented.

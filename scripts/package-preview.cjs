@@ -6,7 +6,7 @@ function stageApp(root,destination,commit){
  for(const rel of APP_FILES){const from=path.join(root,rel),to=path.join(destination,rel);if(!fs.lstatSync(from).isFile())throw new Error(`Not a regular application source: ${rel}`);fs.mkdirSync(path.dirname(to),{recursive:true});fs.copyFileSync(from,to);}
  const pkg=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
  const runtime={name:pkg.name,productName:pkg.productName,version:pkg.version,description:pkg.description,main:pkg.main,license:pkg.license};
- fs.writeFileSync(path.join(destination,'package.json'),JSON.stringify(runtime,null,2));
+ fs.writeFileSync(path.join(destination,'package.json'),JSON.stringify(runtime,null,2)+'\n');
  const provenance={project:'Noxviola',commit,electron:pkg.devDependencies.electron,packager:pkg.devDependencies['@electron/packager'],acceptance:'UNVERIFIED PREVIEW: packaged, not native-accepted or signed',source:`https://github.com/Herbertofury/Noxviola/tree/${commit}`};
  fs.writeFileSync(path.join(destination,'BUILD.json'),JSON.stringify(provenance,null,2));
  fs.writeFileSync(path.join(destination,'PREVIEW-NOTICE.txt'),'Unverified preview. No native browser/security/performance acceptance. Do not use for sensitive accounts. No auto-update, signing or release qualification. Private data is never included in this package.\n');

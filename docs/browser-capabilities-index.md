@@ -1,23 +1,23 @@
 # Browser capability index
 
-Inventory version **2026-11-15.2**; reviewed 2026-11-15. **Initial documented inventory; incomplete.** Scoped hosted-runtime evidence is retained in the JSON ledger; no complete capability or product gate is promoted by the partial runs.
+Inventory version **2026-11-15.3**; reviewed 2026-11-15. **Initial documented inventory; incomplete.** The last verified snapshot is ac3a92f6: its generated Windows/Linux seed and two production phases passed. Earlier failures remain in the JSON history; no complete capability or product gate is promoted.
 
 This checkpoint expands 183 capability records and 100 source records. These are discovered records, not a scope limit. The complete union and configuration audit remains open. Direct inspection of installed Windows browsers has not occurred.
 
-[Method and current findings](browser-capabilities.md) · [Extension-host comparison](browser-capabilities-extension-hosts.md) · [Canonical JSON](../browser/capabilities.json) · [Master goal](browser/MASTER-GOAL.md)
+[Method and current findings](browser-capabilities.md) · [Verified native fixture checkpoint](browser-capabilities.md#verified-native-fixture-checkpoint) · [Extension-host comparison](browser-capabilities-extension-hosts.md) · [Canonical JSON](../browser/capabilities.json) · [Master goal](browser/MASTER-GOAL.md)
 
 Search this document by capability ID or name. The application also exposes the same JSON in its explicitly opened Capabilities panel.
 
 | ID | Capability | Category | Current Noxviola status | Next action |
 | --- | --- | --- | --- | --- |
-| navigation-history | Address, search, back and forward | navigation | implemented-unverified | Verify active-view routing, error UI and restart history in a permitted Electron runtime. |
+| navigation-history | Address, search, back and forward | navigation | implemented-unverified | Verify forward-branch replacement, interrupted-load/error UI and per-tab navigation-history restoration; extend beyond generated loopback pages. |
 | find-in-page | Find in page | navigation | implemented-unverified | Exercise existing find bridge and add match-count/focus acceptance. |
 | multi-window | Multiple browser windows | navigation | absent | Extend canonical session state with window records and tested tab transfers. |
 | save-print-page | Save page and print/PDF | navigation | absent | Expose supported engine save/print APIs with explicit destinations and errors. |
 | default-browser-protocols | Default browser and protocol handling | navigation | absent | Define OS registration separately from safe navigation and per-origin protocol policy. |
 | startup-home-search | Startup, home and search configuration | navigation | partial | Verify selected provider persistence and address/search handling, then add validated custom templates and independent startup/home controls. |
 | web-app-installation | Installed web apps | navigation | absent | Evaluate engine-supported PWA hosting and OS integration without treating a shortcut as complete PWA support. |
-| tab-lifecycle | Create, select, close and reopen tabs | tabs | partial | Verify duplicate/reopen identity and ordering; add reorder/pin/bulk operations without dropping complete metadata or live state. |
+| tab-lifecycle | Create, select, close and reopen tabs | tabs | partial | Add reorder/pin/bulk operations and qualify late events and keyboard focus while preserving the verified duplicate/reopen and restart metadata. |
 | vertical-tabs | Vertical and horizontal tab layouts | tabs | implemented-unverified | Verify both layouts with keyboard navigation, scrolling, many long-title tabs, resize and actual WebContentsView bounds. |
 | tab-search | Search tabs across windows | tabs | absent | Add local indexed search with explicit identity scope and no truncation. |
 | tab-preview | Tab previews and resource hints | tabs | absent | Reuse throttled on-demand capture and expose an accessible text alternative. |
@@ -28,9 +28,9 @@ Search this document by capability ID or name. The application also exposes the 
 | workspaces-local | Local workspaces | tabs | absent | Add durable workspace IDs without equating workspaces to isolated cookie stores. |
 | workspaces-edge-v2 | Edge current workspace variant | tabs | absent | Implement local task sets first; keep any remote sync optional. |
 | workspaces-shared-legacy | Shared workspace collaboration (historical variant) | tabs | absent | Retain the useful historical requirement; research a separately consented collaboration adapter. |
-| split-browser | Split browsing surfaces | tabs | partial | Finish existing two-view lifecycle before adding orientation and larger splits. |
-| session-recovery | Session preservation and explicit recovery | tabs | implemented-unverified | Exercise successful and failing close flushes, missing/corrupt/future checkpoints, canceled recovery and restart in the actual desktop runtime. |
-| identity-partitions | Named isolated identities | identities | implemented-unverified | Run native partition isolation acceptance and preserve existing identity IDs. |
+| split-browser | Split browsing surfaces | tabs | partial | Qualify split keyboard/focus routing, independent pane permissions, resize/closure and restoration before adding layouts or larger splits. |
+| session-recovery | Session preservation and explicit recovery | tabs | implemented-unverified | Exercise native crash/interrupted-save recovery, corrupt/future checkpoints, canceled recovery and failed close writes; preserve the passing normal-close/restart metadata workflow. |
+| identity-partitions | Named isolated identities | identities | implemented-unverified | Qualify authenticated accounts, cross-origin frame permissions, redirected/remote roots and older engine/profile upgrades while preserving the proven same-engine store transition and original IDs. |
 | profiles-complete | Full profile preferences and data | identities | partial | Define app-wide versus identity-owned data explicitly before expanding profile UI. |
 | private-browsing | Ephemeral private browsing | identities | absent | Add a distinct ephemeral identity policy; Electron extensions cannot simply load into in-memory sessions. |
 | container-site-rules | Container site assignment rules | identities | absent | Add rule resolution over canonical identity routing; compare native containers and the Mozilla extension separately. |
@@ -50,14 +50,14 @@ Search this document by capability ID or name. The application also exposes the 
 | enhanced-security-mode | Additional engine exploit mitigations | security | absent | Research supported engine switches and their tradeoffs; never expose decorative protection toggles. |
 | telemetry-zero | Zero first-party telemetry | security | implemented-unverified | Audit code and runtime network behavior; retain security updates and user-requested traffic. |
 | browser-update-verification | Verified browser updates | security | absent | Add a supported updater and publish accurate build/engine versions before general use. |
-| favorites-library | Local favorites and reference library | library | implemented-unverified | Run the actual add/edit/archive/search/import/export/restart workflow with duplicated IDs, exact duplicates, changed preview files and failed writes. |
+| favorites-library | Local favorites and reference library | library | implemented-unverified | Qualify all item types and complete search, real import/export picker interaction, stale or changed preview files and failed-write/recovery UI; preserve the passing metadata round-trip and restart fixture. |
 | bookmark-tree | Bookmark folders and tags | library | absent | Map bookmark APIs onto a deliberate canonical store; do not pretend a flat collection is a full bookmark tree. |
 | reading-list | Read-later tracking | library | absent | Add independent reading state and supported offline capture only when requested. |
 | collections-legacy | Rich research collections (historical Edge variant) | library | partial | Improve the existing vault for rich references; record Edge Collections as retired from149. |
 | pinboards | Visual pinboards | library | absent | Provide a board view of the existing vault rather than a second store. |
 | history-manager | Searchable browsing history | library | absent | Add a local history service with retention controls and a shared extension API. |
 | account-atlas | Metadata-only account atlas | library | implemented-unverified | Preserve the existing metadata boundary and separately evaluate credential-manager integration. |
-| downloads-manager | Download lifecycle manager | productivity | partial | Run real downloads through destination cancel, interrupt/resume, completion/reveal and close; preserve in-progress content before adding retry and durable history. |
+| downloads-manager | Download lifecycle manager | productivity | partial | Exercise actual destination-picker cancellation, network interruption/terminal retry, durable history and restart of in-progress downloads. |
 | import-browser-data | User-selected browser data migration | library | absent | Inventory source formats and supported APIs without copying cookies, tokens or confidential extension state. |
 | sync-opt-in | Optional cross-device sync | library | absent | Define end-to-end data/security requirements and reuse a vetted sync protocol before adding a provider. |
 | data-cleaner | Selective local data cleanup | security | absent | Implement precise scope and preview; never use indiscriminate cache deletion as a performance claim. |
@@ -150,13 +150,13 @@ Search this document by capability ID or name. The application also exposes the 
 | history-journeys | Related-history organization | productivity | absent | Evaluate local grouping over the canonical history store without sending browsing data to a service. |
 | extension-package-inspection | Package and manifest inspection | extensions | partial | Implement qualified CRX verification and Mozilla trust evaluation as distinct adapters; test native execution of the unchanged accepted package. |
 | extension-provenance | Package provenance and signatures | extensions | partial | Qualify separate CRX and XPI trust chains; retain explicit unsigned local-import consent and source provenance. |
-| extension-lifecycle | Persistent extension lifecycle | extensions | partial | Run lifecycle fixtures in Electron44.11.3; then add verified update/rollback and explicit data-erasure semantics over the same service. |
+| extension-lifecycle | Persistent extension lifecycle | extensions | partial | Qualify representative real packages, verified updates/rollback and explicit data-erasure behavior while retaining the passing generated install/restart/disable/uninstall workflows. |
 | extension-marketplaces | Unified source discovery and acquisition | extensions | absent | Keep store adapters separate from runtime compatibility and respect documented distribution restrictions. |
 | extension-migration | User-authorized extension migration | extensions | absent | Start with manifest/ID/version discovery and explicit unsupported-settings reporting. |
-| extension-manifest-v2 | Manifest V2 compatibility | extensions | partial | Test the Electron44.11.3 MV2 runtime separately from Chrome157, where MV2 is retired; preserve source version and distribution provenance. |
+| extension-manifest-v2 | Manifest V2 compatibility | extensions | partial | Expand beyond the persistent fixture to lazy/event pages, UI contexts and pinned real MV2 packages; compare Firefox separately and retain version/distribution provenance. |
 | extension-manifest-v3 | Manifest V3 compatibility | extensions | partial | Run a real MV3 service-worker lifecycle fixture on Electron44.11.3; its pinned support document only names background ManifestV2, so neither modern Chrome support nor a load success proves MV3 lifecycle parity. |
 | extension-namespaces | Namespace and async-call adaptation | extensions | absent | Test the exact embedded runtime before adapting namespaces. Chrome148+ documentation is not evidence that Electron44.11.3 implements browser.*; a namespace alias cannot implement missing APIs. |
-| extension-messaging | Extension messaging and event routing | extensions | partial | Preserve source-browser serialization and lifecycle semantics with authenticated routing. |
+| extension-messaging | Extension messaging and event routing | extensions | partial | Qualify long-lived ports, authenticated sender boundaries, iframe navigation, worker death and source-browser serialization beyond the passing one-shot MV2 fixture. |
 | extension-content-scripts | Content scripts and execution worlds | extensions | partial | Prefer engine-supported injection; test Firefox Xray/world differences explicitly. |
 | extension-actions | Toolbar and page actions | extensions | partial | Harden the maintained adapter before binding action state and events into browser chrome; test per-tab and per-identity action isolation. |
 | extension-sidepanels | Chrome sidePanel behavior | extensions | absent | Add a panel host tied to the extension service after required API semantics are qualified. |

@@ -4,6 +4,7 @@ on:
   push:
     branches: ['browser/enderloom-baseline-20261115']
     paths:
+      - '.gitattributes'
       - 'browser/**'
       - 'tests/native/**'
       - 'tests/native-harness.test.cjs'

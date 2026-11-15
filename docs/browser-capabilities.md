@@ -1,14 +1,16 @@
 # Browser capability audit and implementation ledger
 
-**Inventory version: 2026-11-15.2. This is an initial documented inventory with scoped native evidence, not a completed four-browser audit.** The target is the complete applicable union in the [unchanged master goal](browser/MASTER-GOAL.md). There is no feature-count ceiling and no acceptance gate is closed by this inventory.
+**Inventory version: 2026-11-15.3. This is an initial documented inventory with scoped native evidence, not a completed four-browser audit.** The target is the complete applicable union in the [unchanged master goal](browser/MASTER-GOAL.md). There is no feature-count ceiling and no acceptance gate is closed by this inventory.
 
-The ledger now retains [actual Windows/Linux runtime evidence at `6fccdd2`](https://github.com/Herbertofury/Noxviola/actions/runs/43766771107), including the exact failures. Twelve affected capabilities name their scoped passing or failing workflows. The complete acceptance procedures and statuses remain open: the Linux MV2 background-start ordering and Windows second-identity cache write failures prevented restart and later workflows in that run. A synthetic fixture result does not qualify an entire extension ecosystem or the user's installed browsers.
+The last verified runtime snapshot is [`ac3a92f628519ae14f04a0499a665af8a7d89110`](https://github.com/Herbertofury/Noxviola/commit/ac3a92f628519ae14f04a0499a665af8a7d89110). Its [native run 43769631926](https://github.com/Herbertofury/Noxviola/actions/runs/43769631926) passed the legacy seed and both production processes on hosted Linux and Windows. Fifteen exercised capabilities now retain the precise passing scope, including normal session restoration and library metadata restart. Every complete capability status, acceptance procedure and master gate remains unchanged. A generated-fixture result does not qualify an entire extension ecosystem or the owner's installed browsers.
+
+The earlier failing [6fccdd2](https://github.com/Herbertofury/Noxviola/actions/runs/43766771107), [5403076](https://github.com/Herbertofury/Noxviola/actions/runs/43767668070) and [d98cdd5](https://github.com/Herbertofury/Noxviola/actions/runs/43769036713) runs remain in the ledger history and [source checkpoint](browser/CHECKPOINT-2026-11-15.md). The rejected global-namespace candidate, MV2 startup ordering failure and invalid session-cookie expectation retain their historical failed outcomes.
 
 The canonical, searchable data is [browser/capabilities.json](../browser/capabilities.json). Its [Markdown index](browser-capabilities-index.md) is a reading aid; the browser's explicitly opened Capabilities panel reads the same JSON. This checkpoint expands **183 behavior records and 100 source records**, with further discovery queues. Counts describe the work recorded so far, not the final scope.
 
 ## What was actually inspected
 
-The research used vendor feature indexes, support documentation, release notes, WebExtension API references and maintained host implementations. Noxviola source was reviewed from PR #5's `362fb016c2239c6a00ef844357f0bb1dccf282b3` baseline and the current local continuation. The declared Electron dependency is now **44.11.3**; that declaration is separate from evidence of an executed native browser.
+The research used vendor feature indexes, support documentation, release notes, WebExtension API references and maintained host implementations. Noxviola source was reviewed from PR #5's `362fb016c2239c6a00ef844357f0bb1dccf282b3` baseline through the published continuation. The verified `ac3a92f6` fixture runtime used **Electron 44.11.3, Chromium 152.0.7977.169 and Node 24.22.2**. Later source changes require their own evidence; the ledger names the exact tested snapshot.
 
 **The user's installed Windows 11 browsers were not accessed.** Their executable paths, installed versions, profiles, settings and actual feature availability remain unresolved. Documentation versions must never be presented as installed versions. The current Linux workspace does not establish access to the user's Windows desktop. No private browser profile was copied or inspected for this audit.
 
@@ -48,16 +50,33 @@ Extension variants in the registry describe target compatibility contracts. An a
 
 ## Current Noxviola checkpoint
 
-These source improvements belong to the Electron PR #5 continuation. Native verification remains a separate gate.
+These source improvements belong to the Electron PR #5 continuation. The passing fixture scope below is separate from each capability's complete acceptance contract.
 
-| Area | Source now present | Missing acceptance or capability |
+| Area | Source and scoped evidence | Missing acceptance or capability |
 | --- | --- | --- |
-| Session reliability | Validated private checkpoints, previous-data preservation, explicit recovery, coalesced session writes and close/save-failure handling. | Native crash/restart, shutdown failure and real large-tab/session workflows. |
-| Favorites vault | Edit, reversible archive, search, export, deterministic reviewed JSON import and corruption-preserving storage. | Real UI import/export/restart and failure/cancel acceptance; rich bookmark tree, media storage and sync remain additional work. |
-| Site permissions | Both Electron handlers, separate camera/microphone rules, per-identity/requesting/embedding origin decisions, document-only grants, durable allow/block, review/reset and explicit recovery. | Native frame/OS behavior; secure source/device pickers; precise effect of revocation on already-running capture. |
-| Downloads | Explicit native destination chooser, identity-tagged progress, pause/resume/cancel, completed-file reveal and close handling. | Native interrupted transfers, persistent history and terminal retry. |
-| Extensions | Owned previews, unpacked/ZIP/XPI inspection, unchanged-byte consent, persistent identity enrollment, actual engine load/unload outcomes and secure declared page routes. | Verified package signatures, updates, data erasure, full extension API semantics and real extension functionality. |
+| Session reliability | Validated private checkpoints, previous-data preservation, explicit recovery and coalesced writes. Normal close/restart restored ordered duplicate tabs, profiles and active selection on both hosted platforms. | Native crash/interrupted-save recovery, shutdown failure, corrupt/future formats and canceled recovery. |
+| Favorites vault | Edit, reversible archive, search, export, reviewed JSON import and corruption-preserving storage. Actual library IPC edit/archive/export/preview/cancel/merge and metadata restart passed. | All item types, complete search, native picker interaction, stale import sources and failed-write/recovery UI; rich bookmark tree, media storage and sync remain additional work. |
+| Site permissions | Both Electron handlers, separate camera/microphone rules, per-identity/requesting/embedding origin decisions, document grants, durable rules and recovery. A real geolocation request was denied on both platforms. | Native frame/OS allow and revocation behavior, media/notification variants, secure device pickers and already-running capture revocation. |
+| Downloads | Identity-tagged progress and close handling. Actual DownloadItem completion/bytes, pause/resume and cancellation passed using supplied synthetic destinations. | Native picker/cancel interaction, interrupted transfers, persistent history, terminal retry and in-progress restart. |
+| Extensions | Owned previews, unpacked/ZIP/XPI inspection and identity enrollment. The two generated unpacked fixtures passed actual renderer consent/Install, disable/re-enable, restart and uninstall. | Verified signatures/updates, stored-data erasure, real third-party packages, MV3 workers and full extension API semantics. |
 | Capability ledger | One versioned JSON inventory and searchable panel. | Installed-browser audit, all settings/member expansion and final union coverage. |
+
+## Verified native fixture checkpoint
+
+[Contract run 43769631902](https://github.com/Herbertofury/Noxviola/actions/runs/43769631902) passed **156 contracts and 39 JavaScript syntax checks** on both platforms for `ac3a92f6`. The native run used one generated profile and loopback origin across a legacy writer and two production processes:
+
+| Hosted platform | Legacy seed | First production process | Restart process | Retained artifact |
+| --- | --- | --- | --- | --- |
+| Ubuntu 22.04 runner | 3/3 passed | 13/13 passed | 6/6 passed | [14183636721](https://github.com/Herbertofury/Noxviola/actions/runs/43769631926/artifacts/14183636721) |
+| Windows Server 2025, build 26100 | 3/3 passed | 13/13 passed | 6/6 passed | [14183463943](https://github.com/Herbertofury/Noxviola/actions/runs/43769631926/artifacts/14183463943) |
+
+All three processes exited cleanly. Each host recorded **31 source inputs**, a clean checkout and an unchanged before/after manifest. The JSON retains full artifact digests and separate raw source manifests. Linux input bytes matched the Git LF blobs. Windows' 30 text inputs matched the verified LF-to-CRLF checkout transformation and its PNG matched exactly; its source bytes were not identical to Linux or the raw Git text blobs. This Windows runner is not the owner's Windows 11 desktop.
+
+The original `fromPartition` personal identity wrote the five generated web stores before production started. Production read those values before overwrite, verified the same physical directory and then verified normal process restart. Windows exercised the transition to an ordinary compact `fromPath` junction; Linux retained `fromPartition`. Persistent cookies survived while a separate session-only cookie expired. This establishes the recorded same-engine fixture transition, not every historical Chromium profile, remote filesystem or redirected root.
+
+The native checks also reached more than twelve live duplicate tabs, actual split bounds, DownloadItem controls, generated MV3 content-script storage, persistent MV2 messaging, background destruction/re-enable/restart, uninstall, and complete fixture library metadata restart. The renderer's real identity selectors, consent checkbox and Install handler were exercised, with the preview dismissed and installed status rows present. The MV3 fixture has no background worker. Uninstall evidence concerns future injection and background execution, not erasure of stored extension data.
+
+The harness supplies native file-picker choices and permission denial; it does not qualify OS dialog interaction, media/device pickers, keyboard/focus or complete accessibility. Real Internet sites, authenticated accounts, real third-party extension packages, marketplace trust, network/telemetry auditing and equivalent-workload performance remain open. The process metrics are milestone observations, not a speed, memory-efficiency or zero-network-traffic result. No master gate or full capability status was promoted.
 
 The site permission service currently denies opaque and non-web origins, including `chrome-extension://` popup/options pages. Installing an extension does not grant those pages camera, microphone or other site capabilities. A future extension-specific path must bind the loaded runtime ID, actual sender, identity and approved scope; it must not broaden the generic web-origin policy.
 
@@ -67,7 +86,7 @@ The permission hot path uses indexed rule lookup and event-driven invalidation. 
 
 ## Next implementation sequence
 
-1. **Finish actual P0 acceptance on a supported desktop.** Exercise the final packaged source through navigation, split focus, save/recovery, camera/microphone/notifications and download destination/cancel/resume. Use synthetic sites and identities. Retain exact runtime version, source revision, fixture digest and failure evidence. The unavailable local native route is a blocker, not a pass.
+1. **Extend native acceptance beyond the passing generated workflows.** Exercise crash/save-failure recovery, split focus, camera/microphone/notifications, native picker interaction and the final packaged application; then qualify real Internet and authenticated-account behavior with explicit consent. Retain exact runtime version, source revision, fixture digest and failure evidence. The unavailable local native route remains blocked.
 2. **Harden and reuse the maintained extension candidate.** Implement real optional-permission removal, effective API/host admission and sender authentication in the candidate before its browser APIs are enabled. Bind tab/window/action callbacks to the existing canonical browser services. Verify methods and events after revocation and across identities. Do not duplicate an entire browser or mask missing behavior with successful no-ops.
 3. **Establish a real extension compatibility corpus.** Include representative filtering, password-manager, theme, userscript, tab/workspace, media, sidebar and developer-tools extensions from each target ecosystem. Use synthetic credentials and exact package versions. Record installation separately from every intended functional workflow, update/removal, performance and trust result.
 4. **Expand high-value shared services.** A correct tab/window model, bookmark tree, history store and download service support both native browser UI and extension APIs. Reuse one implementation per domain and make permissions part of the dispatch boundary. Existing vault references can inform bookmarks without pretending a flat reference collection already implements a bookmark tree.

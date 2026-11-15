@@ -48,9 +48,11 @@ npm run check:electron
 npm run test:native
 ```
 
-See [the fixture guide](../../tests/native/README.md) for exact scope. The runner uses fresh marked temporary data, local synthetic fixtures and two actual Electron launches. It records source hashes and runtime results. Exit **0** is a pass of the recorded workflows, **1** is failure and **2** is an environment blocker. It refuses sandbox-disabling or process-mode overrides. Native file-picker interaction, the complete extension corpus, actual internet compatibility, security and whole-process performance require additional acceptance even after this fixture passes.
+See [the fixture guide](../../tests/native/README.md) for exact scope. The runner uses fresh marked temporary data, local synthetic fixtures, a separate original-factory storage seed and two actual Noxviola launches. It records source hashes and runtime results. Exit **0** is a pass of the recorded workflows, **1** is failure and **2** is an environment blocker. It refuses sandbox-disabling or process-mode overrides. Native file-picker interaction, the complete extension corpus, actual internet compatibility, security and whole-process performance require additional acceptance even after this fixture passes.
 
 The current development workspace stopped at display preflight before an engine attempt. Its blocked result does not close any native release gate and does not supersede the preserved earlier socket-denial history.
+
+The separate hosted [Windows/Linux run 43769631926](https://github.com/Herbertofury/Noxviola/actions/runs/43769631926) passed at source `ac3a92f628519ae14f04a0499a665af8a7d89110`. It qualifies the recorded generated-store transition, navigation, identity isolation, extension/library lifecycle and normal restart workflows on those runners. Detailed receipt hashes and remaining boundaries are retained in the [continuation checkpoint](CHECKPOINT-2026-11-15.md). It does not change the unsigned **UNVERIFIED** distribution label or qualify a production release.
 
 ## Required before a real release
 

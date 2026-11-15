@@ -1,0 +1,17 @@
+# Keep runtime and native-acceptance bytes identical across platform checkouts.
+# The Windows baseline otherwise converted all text inputs to CRLF. Binary
+# artwork stays byte-preserved; no repository-wide renormalization is performed.
+/.gitattributes text eol=lf
+/browser/*.cjs text eol=lf
+/browser/*.js text eol=lf
+/browser/*.json text eol=lf
+/browser/*.html text eol=lf
+/browser/*.css text eol=lf
+/browser/assets/* -text
+/package.json text eol=lf
+/package-lock.json text eol=lf
+/scripts/native-smoke.cjs text eol=lf
+/tests/native/**/*.cjs text eol=lf
+/tests/native/**/*.js text eol=lf
+/tests/native/**/*.json text eol=lf
+/tests/native/**/*.md text eol=lf

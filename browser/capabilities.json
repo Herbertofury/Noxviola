@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "inventoryVersion": "2026-11-15.2",
+  "inventoryVersion": "2026-11-15.3",
   "auditedAt": "2026-11-15",
   "title": "Noxviola browser capability union — initial documented inventory",
   "coverage": {
@@ -17,41 +17,174 @@
       "Full settings/flags/policies and regional/account/enterprise feature variants",
       "Per-member API compatibility on the exact embedded Electron/Chromium/adapter build",
       "Real third-party extension package versions and functional test receipts",
-      "Native browsing, identity isolation, network privacy and whole-workload performance",
+      "Real Internet browsing and authenticated accounts; complete identity, permission and historical-profile upgrade acceptance; network privacy and whole-workload performance",
       "Complete reconciliation of every feature-index link and retired variant"
     ],
     "currentCheckpoint": {
       "date": "2026-11-15",
       "electron": "44.11.3",
-      "scope": "Published PR5 continuation with portable contracts and scoped actual hosted runtime evidence; full product acceptance remains open",
-      "nativeAcceptance": "Actual Windows and Linux execution; both overall gates failed, with scoped passes and concrete failure diagnostics retained. Local display preflight remains blocked.",
+      "chromium": "152.0.7977.169",
+      "node": "24.22.2",
+      "scope": "Last verified runtime snapshot of the published PR5 source; passing generated-fixture workflows do not complete declared capabilities or product gates.",
+      "nativeAcceptance": "The recorded legacy seed and both production phases passed on hosted Windows and Linux. Local display preflight remains blocked. Full product acceptance remains open.",
       "installedWindowsAudit": "unresolved-no-local-access",
-      "evidenceSourceRevision": "6fccdd2382cd36bcdaefb58a41ef898c35aadb87",
+      "evidenceSourceRevision": "ac3a92f628519ae14f04a0499a665af8a7d89110",
+      "evidenceSourceTree": "a5a32f4bdddc133d9d45aebbd1a1faa6b98e5ac9",
       "portableContracts": {
-        "passed": 112,
+        "passed": 156,
         "failed": 0,
         "skipped": 0,
-        "syntaxFiles": 34,
-        "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43766771106"
+        "syntaxFiles": 39,
+        "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43769631902"
       },
-      "nativeRun": "https://github.com/Herbertofury/Noxviola/actions/runs/43766771107",
+      "nativeRun": "https://github.com/Herbertofury/Noxviola/actions/runs/43769631926",
+      "nativeStatus": "passed",
       "nativeEvidence": [
         {
           "platform": "linux",
-          "artifact": 14182666487,
-          "sha256": "ce4be6e21e7e5566f3b17e74726bb207205a58b858a826c9e2f25c8bab02fe0c",
-          "passedChecks": 8,
-          "failure": "First persistent MV2 background message had no receiver; background document and message listener were present afterward. Cold-start ordering is the current evidence-based diagnosis; no sandbox weakening."
+          "runner": "ubuntu-22.04 hosted runner",
+          "artifact": 14183636721,
+          "bytes": 1585982,
+          "sha256": "da0d293bcb6eefe445933322a678760549f4e34e811caf61f97f86593277495f",
+          "result": "passed",
+          "checks": {
+            "legacySeed": {
+              "passed": 3,
+              "failed": 0
+            },
+            "phase1": {
+              "passed": 13,
+              "failed": 0
+            },
+            "phase2": {
+              "passed": 6,
+              "failed": 0
+            }
+          },
+          "processesExitedCleanly": true,
+          "sourceInputFiles": 31,
+          "sourceDirty": false,
+          "sourceUnchangedDuringRun": true,
+          "sourceManifestSha256": "938a68b3ca4616fdd045301c92a816cf8745b44277408b285c5c75b117eb1d75",
+          "sourceByteQualification": "Raw Git LF bytes verified.",
+          "legacyStoreReadback": {
+            "passed": true,
+            "fromFactory": "fromPartition",
+            "toFactory": "fromPartition",
+            "beforeOverwrite": true,
+            "physicalDirectoryPreserved": true
+          }
         },
         {
           "platform": "win32",
-          "artifact": 14182472385,
-          "sha256": "6b68b47cf660a5957bf96bc51ee8d4172812a108393418bfaa8169d0c436fded",
-          "passedChecks": 3,
-          "failure": "Second identity cacheStorage.write failed with InvalidAccessError 15: Entry already exists. Native index-directory creation errors and long nested storage paths require causal repair; phase two not reached."
+          "runner": "windows-latest hosted Windows Server 2025 build 26100; not the owner Windows 11 desktop",
+          "artifact": 14183463943,
+          "bytes": 1379725,
+          "sha256": "db6b6d21435e0eaae686ac0699815d13022be6265eb5d91a149b0d4f1b797182",
+          "result": "passed",
+          "checks": {
+            "legacySeed": {
+              "passed": 3,
+              "failed": 0
+            },
+            "phase1": {
+              "passed": 13,
+              "failed": 0
+            },
+            "phase2": {
+              "passed": 6,
+              "failed": 0
+            }
+          },
+          "processesExitedCleanly": true,
+          "sourceInputFiles": 31,
+          "sourceDirty": false,
+          "sourceUnchangedDuringRun": true,
+          "sourceManifestSha256": "6757eb993a1a980a90eaf3e189bc9a3502185eaf05b8d693da2703ac0fa75610",
+          "sourceByteQualification": "Thirty text inputs match the deterministic Git LF-to-CRLF checkout transformation; the PNG is byte-identical. This is not raw Git-byte equality.",
+          "legacyStoreReadback": {
+            "passed": true,
+            "fromFactory": "fromPartition",
+            "toFactory": "fromPath",
+            "beforeOverwrite": true,
+            "physicalDirectoryPreserved": true
+          }
         }
+      ],
+      "sourceSnapshotQualification": "Each platform ran a clean checkout of the same logical commit, with all 31 recorded inputs unchanged during its run. Retain separate raw manifests: Linux LF matches Git blobs, while Windows 30 text files match verified CRLF conversion and its PNG matches exactly.",
+      "limitations": [
+        "Generated loopback sites, fresh synthetic profile and two generated unpacked extensions on hosted runners; no owner-installed Windows browser audit or private account/profile access.",
+        "Native OS file-picker choices and permission denial are supplied by the harness; OS dialog interaction, media/device pickers, keyboard/focus and complete accessibility remain unqualified.",
+        "The original-factory seed qualifies same-engine personal web-store readback only; arbitrary historical engines/profiles, remote or redirected roots and legacy extension migration remain unqualified.",
+        "MV3 fixture is content-only, with no service worker; general API/member semantics, real third-party packages, marketplace trust, updates/rollback and stored-data erasure remain open.",
+        "First-party/engine network audits, real Internet/account behavior and equivalent-workload whole-process performance were not established by milestone metrics or these fixture passes.",
+        "No full capability status or G001-G012 acceptance gate is promoted by these scoped receipts."
       ]
-    }
+    },
+    "checkpointHistory": [
+      {
+        "date": "2026-11-15",
+        "electron": "44.11.3",
+        "scope": "Published PR5 continuation with portable contracts and scoped actual hosted runtime evidence; full product acceptance remains open",
+        "nativeAcceptance": "Actual Windows and Linux execution; both overall gates failed, with scoped passes and concrete failure diagnostics retained. Local display preflight remains blocked.",
+        "installedWindowsAudit": "unresolved-no-local-access",
+        "evidenceSourceRevision": "6fccdd2382cd36bcdaefb58a41ef898c35aadb87",
+        "portableContracts": {
+          "passed": 112,
+          "failed": 0,
+          "skipped": 0,
+          "syntaxFiles": 34,
+          "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43766771106"
+        },
+        "nativeRun": "https://github.com/Herbertofury/Noxviola/actions/runs/43766771107",
+        "nativeEvidence": [
+          {
+            "platform": "linux",
+            "artifact": 14182666487,
+            "sha256": "ce4be6e21e7e5566f3b17e74726bb207205a58b858a826c9e2f25c8bab02fe0c",
+            "passedChecks": 8,
+            "failure": "First persistent MV2 background message had no receiver; background document and message listener were present afterward. Cold-start ordering is the current evidence-based diagnosis; no sandbox weakening."
+          },
+          {
+            "platform": "win32",
+            "artifact": 14182472385,
+            "sha256": "6b68b47cf660a5957bf96bc51ee8d4172812a108393418bfaa8169d0c436fded",
+            "passedChecks": 3,
+            "failure": "Second identity cacheStorage.write failed with InvalidAccessError 15: Entry already exists. Native index-directory creation errors and long nested storage paths require causal repair; phase two not reached."
+          }
+        ]
+      },
+      {
+        "date": "2026-11-15",
+        "evidenceSourceRevision": "5403076440f13cc11458e83f3ce72194d1b6e930",
+        "portableContracts": {
+          "passed": 134,
+          "failed": 0,
+          "skipped": 0,
+          "syntaxFiles": 38,
+          "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43767668014"
+        },
+        "nativeRun": "https://github.com/Herbertofury/Noxviola/actions/runs/43767668070",
+        "nativeStatus": "failed",
+        "retainedEvidence": "https://github.com/Herbertofury/Noxviola/blob/ac3a92f628519ae14f04a0499a665af8a7d89110/docs/browser/CHECKPOINT-2026-11-15.md",
+        "scope": "Linux passed ten checks including persistent MV2 messaging and disable/re-enable, then the library fixture returned an unclonable function. Windows passed four checks then IndexedDB failed at namespaced LevelDB /LOCK. The global namespace candidate was rejected and replaced; neither run reached phase two."
+      },
+      {
+        "date": "2026-11-15",
+        "evidenceSourceRevision": "d98cdd5502412ebec4e0867c6bce0a4338858480",
+        "portableContracts": {
+          "passed": 156,
+          "failed": 0,
+          "skipped": 0,
+          "syntaxFiles": 38,
+          "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43769036788"
+        },
+        "nativeRun": "https://github.com/Herbertofury/Noxviola/actions/runs/43769036713",
+        "nativeStatus": "failed",
+        "retainedEvidence": "https://github.com/Herbertofury/Noxviola/blob/ac3a92f628519ae14f04a0499a665af8a7d89110/docs/browser/CHECKPOINT-2026-11-15.md",
+        "scope": "All twelve first-process checks passed on both platforms, including Windows compact-path storage and library operations. Ordered tab/profile/active-ID restoration passed before an invalid session-only cookie persistence expectation failed in phase two. Historical failed gates remain failed; the following fixture adds explicit persistent and session cookie lifetimes."
+      }
+    ]
   },
   "statusDefinitions": {
     "absent": "No implementation of the complete contract found in the reviewed baseline.",
@@ -1061,21 +1194,38 @@
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
-        "nativeRuntime": "partial evidence; the complete declared capability remains unverified",
-        "workingTreeReview": "2026-11-15 published PR5 continuation; preserve exact failed hosted runs and scoped passing checks",
+        "nativeRuntime": "Recorded generated workflows passed on Windows and Linux; the complete declared capability remains unverified.",
+        "workingTreeReview": "2026-11-15 inventory.3; last verified source snapshot ac3a92f6 with prior failed receipts retained.",
         "nativeReceipts": [
           {
             "sourceRevision": "6fccdd2382cd36bcdaefb58a41ef898c35aadb87",
             "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43766771107",
             "scope": "Navigation, redirects and back/forward passed in both actual hosted runtimes. Forward-branch replacement, interrupted loads and restart history remain untested.",
             "fullGatePassed": false
+          },
+          {
+            "sourceRevision": "ac3a92f628519ae14f04a0499a665af8a7d89110",
+            "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43769631926",
+            "platforms": [
+              "linux",
+              "win32"
+            ],
+            "artifactIds": [
+              14183636721,
+              14183463943
+            ],
+            "scope": "Navigation, redirects and real Chromium back/forward passed on Windows and Linux. This covers generated loopback documents; forward-branch replacement, interrupted-load/error behavior, real Internet navigation and per-tab history restoration remain open.",
+            "scopeResult": "passed",
+            "nativeRunStatus": "passed",
+            "fullGatePassed": false,
+            "qualification": "This receipt covers the stated synthetic workflow only; the complete acceptanceTests, capability status and master product gates are unchanged."
           }
         ]
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Verify active-view routing, error UI and restart history in a permitted Electron runtime.",
+      "nextAction": "Verify forward-branch replacement, interrupted-load/error UI and per-tab navigation-history restoration; extend beyond generated loopback pages.",
       "priority": "P2",
       "updatedAt": "2026-11-15"
     },
@@ -1951,7 +2101,7 @@
         }
       ],
       "evidence": {
-        "level": "documentation-and-source-review",
+        "level": "documentation-source-and-scoped-native-evidence",
         "referenceSources": [
           "chrome-tabs",
           "firefox-vertical",
@@ -1960,13 +2110,32 @@
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
-        "nativeRuntime": "not-run",
-        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
+        "nativeRuntime": "Recorded generated workflows passed on Windows and Linux; the complete declared capability remains unverified.",
+        "workingTreeReview": "2026-11-15 inventory.3; last verified source snapshot ac3a92f6 with prior failed receipts retained.",
+        "nativeReceipts": [
+          {
+            "sourceRevision": "ac3a92f628519ae14f04a0499a665af8a7d89110",
+            "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43769631926",
+            "platforms": [
+              "linux",
+              "win32"
+            ],
+            "artifactIds": [
+              14183636721,
+              14183463943
+            ],
+            "scope": "More than twelve live duplicate tabs, close/reopen and ordered duplicate-preserving tab/identity metadata passed, including a real process restart on both platforms. Reordering, pinning, bulk selection and late-event/focus behavior remain open.",
+            "scopeResult": "passed",
+            "nativeRunStatus": "passed",
+            "fullGatePassed": false,
+            "qualification": "This receipt covers the stated synthetic workflow only; the complete acceptanceTests, capability status and master product gates are unchanged."
+          }
+        ]
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Verify duplicate/reopen identity and ordering; add reorder/pin/bulk operations without dropping complete metadata or live state.",
+      "nextAction": "Add reorder/pin/bulk operations and qualify late events and keyboard focus while preserving the verified duplicate/reopen and restart metadata.",
       "priority": "P2",
       "updatedAt": "2026-11-15"
     },
@@ -3156,21 +3325,38 @@
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
-        "nativeRuntime": "partial evidence; the complete declared capability remains unverified",
-        "workingTreeReview": "2026-11-15 published PR5 continuation; preserve exact failed hosted runs and scoped passing checks",
+        "nativeRuntime": "Recorded generated workflows passed on Windows and Linux; the complete declared capability remains unverified.",
+        "workingTreeReview": "2026-11-15 inventory.3; last verified source snapshot ac3a92f6 with prior failed receipts retained.",
         "nativeReceipts": [
           {
             "sourceRevision": "6fccdd2382cd36bcdaefb58a41ef898c35aadb87",
             "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43766771107",
             "scope": "Linux exercised 16 live duplicate tabs, close/reopen and actual non-overlapping split bounds. Full split customization, keyboard/focus and Windows workflow remain open.",
             "fullGatePassed": false
+          },
+          {
+            "sourceRevision": "ac3a92f628519ae14f04a0499a665af8a7d89110",
+            "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43769631926",
+            "platforms": [
+              "linux",
+              "win32"
+            ],
+            "artifactIds": [
+              14183636721,
+              14183463943
+            ],
+            "scope": "Both hosted runtimes exercised more than twelve live tabs and actual non-overlapping two-pane WebContentsView bounds. Pane focus/keyboard routing, independent permissions, all resize/closure combinations and split restoration remain open.",
+            "scopeResult": "passed",
+            "nativeRunStatus": "passed",
+            "fullGatePassed": false,
+            "qualification": "This receipt covers the stated synthetic workflow only; the complete acceptanceTests, capability status and master product gates are unchanged."
           }
         ]
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Finish existing two-view lifecycle before adding orientation and larger splits.",
+      "nextAction": "Qualify split keyboard/focus routing, independent pane permissions, resize/closure and restoration before adding layouts or larger splits.",
       "priority": "P2",
       "updatedAt": "2026-11-15"
     },
@@ -3259,7 +3445,7 @@
           "browser/main.cjs"
         ],
         "integrationStrategy": "Extend the canonical tab model; expose the same operations to chrome and extensions.",
-        "note": "Atomic private checkpoints, preserved previous data, explicit recovery, unknown metadata retention, save-failure reporting and serialized/coalesced session writes are integrated in source. Native startup/close/crash acceptance remains open."
+        "note": "Atomic private checkpoints, preserved previous data, explicit recovery, unknown metadata retention, save-failure reporting and serialized/coalesced writes are integrated. Normal-close/restart metadata passed the scoped hosted fixture; native crash, interrupted-write and explicit recovery acceptance remain open."
       },
       "performance": "Diff tab updates and preserve complete collections; do not silently drop tabs.",
       "privacy": "Do not expose tabs or titles across identities without an explicit permission.",
@@ -3272,26 +3458,45 @@
         }
       ],
       "evidence": {
-        "level": "documentation-and-source-review",
+        "level": "documentation-source-and-scoped-native-evidence",
         "referenceSources": [
           "master-goal"
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
-        "nativeRuntime": "not-run",
-        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established",
+        "nativeRuntime": "Recorded generated workflows passed on Windows and Linux; the complete declared capability remains unverified.",
+        "workingTreeReview": "2026-11-15 inventory.3; last verified source snapshot ac3a92f6 with prior failed receipts retained.",
         "contractTests": {
           "paths": [
             "tests/storage.test.cjs",
             "tests/state.test.cjs"
           ],
           "result": "available; separate from the unrun end-to-end acceptance contract"
-        }
+        },
+        "nativeReceipts": [
+          {
+            "sourceRevision": "ac3a92f628519ae14f04a0499a665af8a7d89110",
+            "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43769631926",
+            "platforms": [
+              "linux",
+              "win32"
+            ],
+            "artifactIds": [
+              14183636721,
+              14183463943
+            ],
+            "scope": "Normal production close and a new process restored ordered duplicate tabs, profile records and active selection on Windows and Linux. Crash/interrupted writes, corrupt/future checkpoints, canceled recovery and save-failure shutdown remain separate unrun native acceptance.",
+            "scopeResult": "passed",
+            "nativeRunStatus": "passed",
+            "fullGatePassed": false,
+            "qualification": "This receipt covers the stated synthetic workflow only; the complete acceptanceTests, capability status and master product gates are unchanged."
+          }
+        ]
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Exercise successful and failing close flushes, missing/corrupt/future checkpoints, canceled recovery and restart in the actual desktop runtime.",
+      "nextAction": "Exercise native crash/interrupted-save recovery, corrupt/future checkpoints, canceled recovery and failed close writes; preserve the passing normal-close/restart metadata workflow.",
       "priority": "P0",
       "updatedAt": "2026-11-15"
     },
@@ -3374,7 +3579,8 @@
         "codeOwner": "identity/session service",
         "paths": [
           "browser/main.cjs",
-          "browser/state.cjs"
+          "browser/state.cjs",
+          "browser/session-path.cjs"
         ],
         "integrationStrategy": "Keep identity labels separate from storage boundaries and test every storage channel.",
         "note": "Baseline routes each identity to its own persist:noxviola-identity partition; labels alone are not proof of isolation."
@@ -3398,21 +3604,38 @@
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
-        "nativeRuntime": "partial evidence; the complete declared capability remains unverified",
-        "workingTreeReview": "2026-11-15 published PR5 continuation; preserve exact failed hosted runs and scoped passing checks",
+        "nativeRuntime": "Recorded generated workflows passed on Windows and Linux; the complete declared capability remains unverified.",
+        "workingTreeReview": "2026-11-15 inventory.3; last verified source snapshot ac3a92f6 with prior failed receipts retained.",
         "nativeReceipts": [
           {
             "sourceRevision": "6fccdd2382cd36bcdaefb58a41ef898c35aadb87",
             "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43766771107",
             "scope": "Linux verified same-origin cookie, localStorage, IndexedDB, CacheStorage and service-worker separation. Windows failed at writing the second identity cache after the initial empty-store assertions. Restart and authenticated account acceptance remain open.",
             "fullGatePassed": false
+          },
+          {
+            "sourceRevision": "ac3a92f628519ae14f04a0499a665af8a7d89110",
+            "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43769631926",
+            "platforms": [
+              "linux",
+              "win32"
+            ],
+            "artifactIds": [
+              14183636721,
+              14183463943
+            ],
+            "scope": "Both runtimes retained cookies, localStorage, IndexedDB, CacheStorage and service-worker registrations in the generated personal legacy seed before production overwrite, then isolated two identities and restored their data after restart. Persistent cookies survived and session-only cookies expired. Windows verified fromPartition-to-fromPath readback with unchanged physical file IDs; Linux retained fromPartition. Authenticated accounts, broader permission variants and arbitrary historical/remote profiles remain open.",
+            "scopeResult": "passed",
+            "nativeRunStatus": "passed",
+            "fullGatePassed": false,
+            "qualification": "This receipt covers the stated synthetic workflow only; the complete acceptanceTests, capability status and master product gates are unchanged."
           }
         ]
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Run native partition isolation acceptance and preserve existing identity IDs.",
+      "nextAction": "Qualify authenticated accounts, cross-origin frame permissions, redirected/remote roots and older engine/profile upgrades while preserving the proven same-engine store transition and original IDs.",
       "priority": "P2",
       "updatedAt": "2026-11-15"
     },
@@ -3827,8 +4050,8 @@
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
-        "nativeRuntime": "partial evidence; the complete declared capability remains unverified",
-        "workingTreeReview": "2026-11-15 published PR5 continuation; preserve exact failed hosted runs and scoped passing checks",
+        "nativeRuntime": "Recorded generated workflows passed on Windows and Linux; the complete declared capability remains unverified.",
+        "workingTreeReview": "2026-11-15 inventory.3; last verified source snapshot ac3a92f6 with prior failed receipts retained.",
         "contractTests": {
           "paths": [
             "tests/permissions.test.cjs"
@@ -3841,6 +4064,23 @@
             "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43766771107",
             "scope": "Linux denied a real geolocation request through the production permission service. The harness selects Deny programmatically; OS prompt UI, allow/revoke/media and other permission variants remain open.",
             "fullGatePassed": false
+          },
+          {
+            "sourceRevision": "ac3a92f628519ae14f04a0499a665af8a7d89110",
+            "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43769631926",
+            "platforms": [
+              "linux",
+              "win32"
+            ],
+            "artifactIds": [
+              14183636721,
+              14183463943
+            ],
+            "scope": "A real geolocation request was denied through the production service on both hosted platforms. The harness supplies Deny; native OS prompt UI, allow/revoke, camera/microphone/notification and cross-origin-frame variants remain open.",
+            "scopeResult": "passed",
+            "nativeRunStatus": "passed",
+            "fullGatePassed": false,
+            "qualification": "This receipt covers the stated synthetic workflow only; the complete acceptanceTests, capability status and master product gates are unchanged."
           }
         ]
       },
@@ -5219,7 +5459,7 @@
         }
       ],
       "evidence": {
-        "level": "documentation-and-source-review",
+        "level": "documentation-source-and-scoped-native-evidence",
         "referenceSources": [
           "firefox-index",
           "gx-index",
@@ -5227,20 +5467,39 @@
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
-        "nativeRuntime": "not-run",
-        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established",
+        "nativeRuntime": "Recorded generated workflows passed on Windows and Linux; the complete declared capability remains unverified.",
+        "workingTreeReview": "2026-11-15 inventory.3; last verified source snapshot ac3a92f6 with prior failed receipts retained.",
         "contractTests": {
           "paths": [
             "tests/vault.test.cjs",
             "tests/vault-import.test.cjs"
           ],
           "result": "available; separate from the unrun end-to-end acceptance contract"
-        }
+        },
+        "nativeReceipts": [
+          {
+            "sourceRevision": "ac3a92f628519ae14f04a0499a665af8a7d89110",
+            "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43769631926",
+            "platforms": [
+              "linux",
+              "win32"
+            ],
+            "artifactIds": [
+              14183636721,
+              14183463943
+            ],
+            "scope": "Actual library IPC edits, archive/restore, JSON export, preview/cancel/merge and complete fixture metadata restoration after a new production process passed on both platforms. All item types, full search, native picker interaction, stale/changed import sources and disk-failure/recovery UI remain open.",
+            "scopeResult": "passed",
+            "nativeRunStatus": "passed",
+            "fullGatePassed": false,
+            "qualification": "This receipt covers the stated synthetic workflow only; the complete acceptanceTests, capability status and master product gates are unchanged."
+          }
+        ]
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Run the actual add/edit/archive/search/import/export/restart workflow with duplicated IDs, exact duplicates, changed preview files and failed writes.",
+      "nextAction": "Qualify all item types and complete search, real import/export picker interaction, stale or changed preview files and failed-write/recovery UI; preserve the passing metadata round-trip and restart fixture.",
       "priority": "P2",
       "updatedAt": "2026-11-15"
     },
@@ -6057,8 +6316,8 @@
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
-        "nativeRuntime": "partial evidence; the complete declared capability remains unverified",
-        "workingTreeReview": "2026-11-15 published PR5 continuation; preserve exact failed hosted runs and scoped passing checks",
+        "nativeRuntime": "Recorded generated workflows passed on Windows and Linux; the complete declared capability remains unverified.",
+        "workingTreeReview": "2026-11-15 inventory.3; last verified source snapshot ac3a92f6 with prior failed receipts retained.",
         "contractTests": {
           "paths": [
             "tests/downloads.test.cjs"
@@ -6071,13 +6330,30 @@
             "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43766771107",
             "scope": "Linux verified real DownloadItem completion and bytes, pause/resume and cancellation through browser commands. The test selects the synthetic destination synchronously; native OS picker UI, history/restart and terminal retry remain open.",
             "fullGatePassed": false
+          },
+          {
+            "sourceRevision": "ac3a92f628519ae14f04a0499a665af8a7d89110",
+            "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43769631926",
+            "platforms": [
+              "linux",
+              "win32"
+            ],
+            "artifactIds": [
+              14183636721,
+              14183463943
+            ],
+            "scope": "Both runtimes verified actual DownloadItem completion and bytes, pause/resume and cancellation through browser commands. The harness selects the synthetic destination; native OS picker/cancel interaction, network interruption, durable history, terminal retry and in-progress restart remain open.",
+            "scopeResult": "passed",
+            "nativeRunStatus": "passed",
+            "fullGatePassed": false,
+            "qualification": "This receipt covers the stated synthetic workflow only; the complete acceptanceTests, capability status and master product gates are unchanged."
           }
         ]
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Run real downloads through destination cancel, interrupt/resume, completion/reveal and close; preserve in-progress content before adding retry and durable history.",
+      "nextAction": "Exercise actual destination-picker cancellation, network interruption/terminal retry, durable history and restart of in-progress downloads.",
       "priority": "P0",
       "updatedAt": "2026-11-15"
     },
@@ -13876,8 +14152,8 @@
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
-        "nativeRuntime": "partial evidence; the complete declared capability remains unverified",
-        "workingTreeReview": "2026-11-15 published PR5 continuation; preserve exact failed hosted runs and scoped passing checks",
+        "nativeRuntime": "Recorded generated workflows passed on Windows and Linux; the complete declared capability remains unverified.",
+        "workingTreeReview": "2026-11-15 inventory.3; last verified source snapshot ac3a92f6 with prior failed receipts retained.",
         "contractTests": {
           "paths": [
             "tests/extensions.test.cjs"
@@ -13890,6 +14166,23 @@
             "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43766771107",
             "scope": "Linux inspected and explicitly installed the two generated unpacked fixtures through production trusted IPC. ZIP/XPI/CRX safety and consent have portable contracts, not native format/store acceptance.",
             "fullGatePassed": false
+          },
+          {
+            "sourceRevision": "ac3a92f628519ae14f04a0499a665af8a7d89110",
+            "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43769631926",
+            "platforms": [
+              "linux",
+              "win32"
+            ],
+            "artifactIds": [
+              14183636721,
+              14183463943
+            ],
+            "scope": "Both platforms inspected two generated unpacked packages and used the real renderer identity choices, consent checkbox and Install button; the preview cleared and installed status rows rendered. Archive/store/signature formats and real third-party package acceptance remain open.",
+            "scopeResult": "passed",
+            "nativeRunStatus": "passed",
+            "fullGatePassed": false,
+            "qualification": "This receipt covers the stated synthetic workflow only; the complete acceptanceTests, capability status and master product gates are unchanged."
           }
         ]
       },
@@ -14160,8 +14453,8 @@
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
-        "nativeRuntime": "partial evidence; the complete declared capability remains unverified",
-        "workingTreeReview": "2026-11-15 published PR5 continuation; preserve exact failed hosted runs and scoped passing checks",
+        "nativeRuntime": "Recorded generated workflows passed on Windows and Linux; the complete declared capability remains unverified.",
+        "workingTreeReview": "2026-11-15 inventory.3; last verified source snapshot ac3a92f6 with prior failed receipts retained.",
         "contractTests": {
           "paths": [
             "tests/extensions.test.cjs",
@@ -14175,13 +14468,30 @@
             "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43766771107",
             "scope": "Linux verified the MV3 content-only fixture across two identities, disable and re-enable. Persistent MV2 first-message ordering failed; background disable, process restart and uninstall were not reached.",
             "fullGatePassed": false
+          },
+          {
+            "sourceRevision": "ac3a92f628519ae14f04a0499a665af8a7d89110",
+            "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43769631926",
+            "platforms": [
+              "linux",
+              "win32"
+            ],
+            "artifactIds": [
+              14183636721,
+              14183463943
+            ],
+            "scope": "The generated MV3 content-only and persistent MV2 fixtures passed installation, identity enrollment, disable/re-enable, process restart and uninstall on both platforms. Uninstall stopped later injection and removed the background runtime; stored extension data erasure, updates/rollback and general real-package behavior remain open.",
+            "scopeResult": "passed",
+            "nativeRunStatus": "passed",
+            "fullGatePassed": false,
+            "qualification": "This receipt covers the stated synthetic workflow only; the complete acceptanceTests, capability status and master product gates are unchanged."
           }
         ]
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Run lifecycle fixtures in Electron44.11.3; then add verified update/rollback and explicit data-erasure semantics over the same service.",
+      "nextAction": "Qualify representative real packages, verified updates/rollback and explicit data-erasure behavior while retaining the passing generated install/restart/disable/uninstall workflows.",
       "priority": "P1",
       "updatedAt": "2026-11-15"
     },
@@ -14561,21 +14871,38 @@
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
-        "nativeRuntime": "partial evidence; the complete declared capability remains unverified",
-        "workingTreeReview": "2026-11-15 published PR5 continuation; preserve exact failed hosted runs and scoped passing checks",
+        "nativeRuntime": "Recorded generated workflows passed on Windows and Linux; the complete declared capability remains unverified.",
+        "workingTreeReview": "2026-11-15 inventory.3; last verified source snapshot ac3a92f6 with prior failed receipts retained.",
         "nativeReceipts": [
           {
             "sourceRevision": "6fccdd2382cd36bcdaefb58a41ef898c35aadb87",
             "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43766771107",
             "scope": "The generated persistent background loaded under forced sandboxing, but its first content-script message failed before a receiver was available. The later committed document had its runtime listener. Native lifecycle gate remains failed pending the causal ordering repair.",
             "fullGatePassed": false
+          },
+          {
+            "sourceRevision": "ac3a92f628519ae14f04a0499a665af8a7d89110",
+            "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43769631926",
+            "platforms": [
+              "linux",
+              "win32"
+            ],
+            "artifactIds": [
+              14183636721,
+              14183463943
+            ],
+            "scope": "A generated persistent MV2 background received and answered one-shot content-script messages; disable destroyed the native background context, re-enable restored it, and restart/uninstall passed on both platforms. Lazy/event pages, other APIs, popup behavior, real packages and Firefox comparison remain open.",
+            "scopeResult": "passed",
+            "nativeRunStatus": "passed",
+            "fullGatePassed": false,
+            "qualification": "This receipt covers the stated synthetic workflow only; the complete acceptanceTests, capability status and master product gates are unchanged."
           }
         ]
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Test the Electron44.11.3 MV2 runtime separately from Chrome157, where MV2 is retired; preserve source version and distribution provenance.",
+      "nextAction": "Expand beyond the persistent fixture to lazy/event pages, UI contexts and pinned real MV2 packages; compare Firefox separately and retain version/distribution provenance.",
       "priority": "P1",
       "updatedAt": "2026-11-15"
     },
@@ -14694,14 +15021,31 @@
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
-        "nativeRuntime": "partial evidence; the complete declared capability remains unverified",
-        "workingTreeReview": "2026-11-15 published PR5 continuation; preserve exact failed hosted runs and scoped passing checks",
+        "nativeRuntime": "Recorded generated workflows passed on Windows and Linux; the complete declared capability remains unverified.",
+        "workingTreeReview": "2026-11-15 inventory.3; last verified source snapshot ac3a92f6 with prior failed receipts retained.",
         "nativeReceipts": [
           {
             "sourceRevision": "6fccdd2382cd36bcdaefb58a41ef898c35aadb87",
             "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43766771107",
             "scope": "The generated MV3 content-only fixture injected and used identity-separated persistent storage on Linux. This fixture has no background service worker and establishes no worker compatibility.",
             "fullGatePassed": false
+          },
+          {
+            "sourceRevision": "ac3a92f628519ae14f04a0499a665af8a7d89110",
+            "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43769631926",
+            "platforms": [
+              "linux",
+              "win32"
+            ],
+            "artifactIds": [
+              14183636721,
+              14183463943
+            ],
+            "scope": "The generated MV3 content-only fixture injected, used per-identity chrome.storage.local, survived process restart and stopped after disable/uninstall on both platforms. It has no background service worker and proves no worker lifecycle compatibility.",
+            "scopeResult": "passed",
+            "nativeRunStatus": "passed",
+            "fullGatePassed": false,
+            "qualification": "This receipt covers the stated synthetic workflow only; the complete acceptanceTests, capability status and master product gates are unchanged."
           }
         ]
       },
@@ -14951,21 +15295,38 @@
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
-        "nativeRuntime": "partial evidence; the complete declared capability remains unverified",
-        "workingTreeReview": "2026-11-15 published PR5 continuation; preserve exact failed hosted runs and scoped passing checks",
+        "nativeRuntime": "Recorded generated workflows passed on Windows and Linux; the complete declared capability remains unverified.",
+        "workingTreeReview": "2026-11-15 inventory.3; last verified source snapshot ac3a92f6 with prior failed receipts retained.",
         "nativeReceipts": [
           {
             "sourceRevision": "6fccdd2382cd36bcdaefb58a41ef898c35aadb87",
             "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43766771107",
             "scope": "Persistent MV2 first sendMessage failed with no receiving end; later background inspection found runtime.onMessage and a registered listener. Complete messaging and cold-start behavior remain unresolved.",
             "fullGatePassed": false
+          },
+          {
+            "sourceRevision": "ac3a92f628519ae14f04a0499a665af8a7d89110",
+            "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43769631926",
+            "platforms": [
+              "linux",
+              "win32"
+            ],
+            "artifactIds": [
+              14183636721,
+              14183463943
+            ],
+            "scope": "One-shot runtime.sendMessage/runtime.onMessage between the generated content script and persistent MV2 background passed through first load, re-enable and process restart on both platforms. Long-lived ports, forged senders, iframe navigation, worker death and general serialization remain open.",
+            "scopeResult": "passed",
+            "nativeRunStatus": "passed",
+            "fullGatePassed": false,
+            "qualification": "This receipt covers the stated synthetic workflow only; the complete acceptanceTests, capability status and master product gates are unchanged."
           }
         ]
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Preserve source-browser serialization and lifecycle semantics with authenticated routing.",
+      "nextAction": "Qualify long-lived ports, authenticated sender boundaries, iframe navigation, worker death and source-browser serialization beyond the passing one-shot MV2 fixture.",
       "priority": "P1",
       "updatedAt": "2026-11-15"
     },
@@ -15089,14 +15450,31 @@
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
-        "nativeRuntime": "partial evidence; the complete declared capability remains unverified",
-        "workingTreeReview": "2026-11-15 published PR5 continuation; preserve exact failed hosted runs and scoped passing checks",
+        "nativeRuntime": "Recorded generated workflows passed on Windows and Linux; the complete declared capability remains unverified.",
+        "workingTreeReview": "2026-11-15 inventory.3; last verified source snapshot ac3a92f6 with prior failed receipts retained.",
         "nativeReceipts": [
           {
             "sourceRevision": "6fccdd2382cd36bcdaefb58a41ef898c35aadb87",
             "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43766771107",
             "scope": "The MV3 generated script actually injected on Linux only in granted identities; disable prevented injection after fresh navigation and re-enable restored it. General match patterns, frames, isolated worlds and other packages remain open.",
             "fullGatePassed": false
+          },
+          {
+            "sourceRevision": "ac3a92f628519ae14f04a0499a665af8a7d89110",
+            "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43769631926",
+            "platforms": [
+              "linux",
+              "win32"
+            ],
+            "artifactIds": [
+              14183636721,
+              14183463943
+            ],
+            "scope": "Generated scripts injected only in enabled identities on both platforms; fresh navigation after disable/uninstall had no injection, and re-enable/restart restored expected behavior. General match patterns, subframes, execution worlds, BFCache and hostile-page cases remain open.",
+            "scopeResult": "passed",
+            "nativeRunStatus": "passed",
+            "fullGatePassed": false,
+            "qualification": "This receipt covers the stated synthetic workflow only; the complete acceptanceTests, capability status and master product gates are unchanged."
           }
         ]
       },
@@ -16370,14 +16748,31 @@
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
-        "nativeRuntime": "partial evidence; the complete declared capability remains unverified",
-        "workingTreeReview": "2026-11-15 published PR5 continuation; preserve exact failed hosted runs and scoped passing checks",
+        "nativeRuntime": "Recorded generated workflows passed on Windows and Linux; the complete declared capability remains unverified.",
+        "workingTreeReview": "2026-11-15 inventory.3; last verified source snapshot ac3a92f6 with prior failed receipts retained.",
         "nativeReceipts": [
           {
             "sourceRevision": "6fccdd2382cd36bcdaefb58a41ef898c35aadb87",
             "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43766771107",
             "scope": "The MV3 generated script used chrome.storage.local with distinct values in two Linux identities and retained its value across disable/re-enable. Process restart, quotas/events and sync/managed behavior remain open.",
             "fullGatePassed": false
+          },
+          {
+            "sourceRevision": "ac3a92f628519ae14f04a0499a665af8a7d89110",
+            "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43769631926",
+            "platforms": [
+              "linux",
+              "win32"
+            ],
+            "artifactIds": [
+              14183636721,
+              14183463943
+            ],
+            "scope": "The generated MV3 content script used distinct chrome.storage.local values in two identities, retained them over disable/re-enable and a real process restart, and preserved visit counters. Quotas/events and other storage areas remain open; local data is not sync, and the pinned Electron documentation does not support sync/managed.",
+            "scopeResult": "passed",
+            "nativeRunStatus": "passed",
+            "fullGatePassed": false,
+            "qualification": "This receipt covers the stated synthetic workflow only; the complete acceptanceTests, capability status and master product gates are unchanged."
           }
         ]
       },

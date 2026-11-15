@@ -1,0 +1,253 @@
+'use strict';
+
+// Execute the production HTML and renderer, substituting only the preload IPC
+// boundary. These regressions establish DOM behavior, not Electron isolation,
+// native menu execution, native rendering, or packaged-runtime qualification.
+const {test} = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const {JSDOM, VirtualConsole} = require('jsdom');
+const html = fs.readFileSync(path.join(__dirname, '../browser/index.html'), 'utf8');
+const source = fs.readFileSync(path.join(__dirname, '../browser/renderer.js'), 'utf8');
+const subscriptions = ['onState','onVault','onVaultDraft','onAccounts','onExtensions','onExtensionPreview',
+  'onDownloads','onPermissions','onCapabilities','onNotice','onAddress','onFind','onHistory','onBookmarks',
+  'onWorkspaces','onResources','onSettingsPreview','onFindResult','onExtensionActions'];
+const profiles = [{id:'personal',name:'Personal'},{id:'work',name:'Work'}];
+const copy = value => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
+const tick = () => new Promise(resolve => setImmediate(resolve));
+const field = (form, name) => form.elements.namedItem(name);
+
+function state(overrides = {}) {
+  return {profiles:copy(profiles),preferences:{searchEngine:'duckduckgo',tabLayout:'horizontal'},
+    activeId:'tab-personal',activeWorkspaceId:'default',currentIdentity:'personal',panel:null,closing:false,
+    canBack:false,canForward:false,canRestore:false,saveError:'',engine:{electron:'44.11.3',chromium:'fixture'},
+    tabs:profiles.map(profile => ({id:'tab-'+profile.id,identity:profile.id,workspaceId:'default',
+      title:profile.name+' page',url:'https://'+profile.id+'.example/',live:true,loading:false})),...overrides};
+}
+
+function bookmarkView(identity) {
+  const name = profiles.find(profile => profile.id === identity).name;
+  return {identity,status:'ready',error:'',recoveryAvailable:false,tree:[{
+    id:'root:'+identity,identity,title:name,type:'folder',protected:true,children:[{
+      id:'bar:'+identity,identity,parentId:'root:'+identity,title:'Bookmarks bar',type:'folder',
+      protected:true,folderType:'bookmarks-bar',children:[{
+        id:'folder:'+identity,identity,parentId:'bar:'+identity,title:name+' folder',type:'folder',children:[],
+      },{
+        id:'saved:'+identity,identity,parentId:'bar:'+identity,title:name+' saved page',type:'bookmark',
+        url:'https://'+identity+'.example/saved',tags:[],
+      }],
+    },{
+      id:'other:'+identity,identity,parentId:'root:'+identity,title:'Other bookmarks',type:'folder',
+      protected:true,folderType:'other',children:[],
+    }],
+  }]};
+}
+
+async function harness(t, {initial = state(), command = async () => undefined} = {}) {
+  const calls = [], listeners = new Map(), errors = [], virtualConsole = new VirtualConsole();
+  virtualConsole.on('jsdomError', error => errors.push(error.message));
+  const dom = new JSDOM(html, {url:'https://noxviola.invalid/',runScripts:'outside-only',pretendToBeVisual:true,virtualConsole});
+  const {window} = dom;
+  window.addEventListener('error', event => { errors.push(event.error?.message || event.message); event.preventDefault(); });
+  const api = {command:async (name, value) => {
+    calls.push({name,value:copy(value)});
+    return copy(name === 'state' ? initial : await command(name,copy(value)));
+  }};
+  for (const name of subscriptions) api[name] = listener => { listeners.set(name,listener); return () => listeners.delete(name); };
+  window.browser = Object.freeze(api); window.eval(source); await tick();
+  t.after(() => { window.close(); assert.deepEqual(errors,[],'production renderer must not throw DOM errors'); });
+  let current = initial;
+  function emit(name, value) {
+    assert.ok(listeners.has(name),'renderer subscribes to '+name);
+    listeners.get(name)(copy(value));
+  }
+  return {window,document:window.document,calls,emit,$:id => window.document.getElementById(id),
+    update(partial) { current = {...current,...partial}; emit('onState',current); },
+    input(control, value) { control.value=value; control.dispatchEvent(new window.Event('input',{bubbles:true})); },
+    select(control, value) { control.value=value; control.dispatchEvent(new window.Event('change',{bubbles:true})); },
+    check(control, checked) { control.checked=checked; control.dispatchEvent(new window.Event('change',{bubbles:true})); },
+    submit(form) { form.dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true})); },
+  };
+}
+
+async function painted(h, id) {
+  const target = h.$(id);
+  if (target.getAttribute('aria-busy') !== 'true') return;
+  await new Promise((resolve,reject) => {
+    const timeout = setTimeout(() => { observer.disconnect(); reject(new Error(id+' did not finish painting')); },3000);
+    const observer = new h.window.MutationObserver(() => {
+      if (target.getAttribute('aria-busy') !== 'true') { clearTimeout(timeout); observer.disconnect(); resolve(); }
+    });
+    observer.observe(target,{attributes:true});
+  });
+}
+
+test('extension action badges render their actual background color and retain authenticated action selection',async t=>{
+  const h=await harness(t);
+  h.emit('onExtensionActions',[{id:'one',runtimeId:'runtime-one',name:'Extension name',title:'Action title',badgeText:'12',color:[255,255,255,255],enabled:true}]);
+  const control=h.$('extension-actions').querySelector('button'),badge=control.querySelector('.extension-badge');
+  assert.equal(badge.textContent,'12');assert.equal(badge.style.backgroundColor,'rgb(255, 255, 255)');assert.equal(badge.style.color,'rgb(0, 0, 0)');
+  assert.equal(control.getAttribute('aria-label'),'Action title, 12');control.click();await tick();
+  assert.deepEqual(h.calls.at(-1),{name:'extension-action',value:{runtimeId:'runtime-one'}});
+  h.emit('onExtensionActions',[{runtimeId:'runtime-one',name:'Extension name',badgeText:'!',color:[0,0,0,255],enabled:false}]);
+  assert.equal(h.$('extension-actions').querySelector('.extension-badge').style.color,'rgb(255, 255, 255)');assert.equal(h.$('extension-actions').querySelector('button').disabled,true);
+});
+
+function recordButton(h, title, label) {
+  const card = [...h.$('bookmark-items').querySelectorAll('article')].find(item => item.querySelector('h2')?.textContent === title);
+  assert.ok(card,'bookmark card '+title+' exists');
+  const button = [...card.querySelectorAll('button')].find(item => item.textContent === label);
+  assert.ok(button,label+' action exists'); return button;
+}
+
+function switchIdentity(h, identity) {
+  h.update({currentIdentity:identity,activeId:'tab-'+identity});
+}
+
+test('DOM product: a new bookmark draft keeps its identity and folder across profile changes and a failed save', async t => {
+  let rejectSave = true;
+  const h = await harness(t,{initial:state({panel:'bookmarks'}),command:async name => {
+    if (name === 'bookmark-save' && rejectSave) throw new Error('Synthetic bookmark disk failure');
+  }});
+  h.emit('onBookmarks',bookmarkView('personal')); h.$('bookmark-add').click();
+  const form = h.$('bookmark-form');
+  h.input(field(form,'title'),'Private unfinished title');
+  h.input(field(form,'url'),'https://personal.example/unfinished');
+  h.select(field(form,'parentId'),'folder:personal');
+  switchIdentity(h,'work'); h.emit('onBookmarks',bookmarkView('work'));
+  assert.equal(field(form,'title').value,'Private unfinished title');
+  assert.equal(field(form,'url').value,'https://personal.example/unfinished');
+  assert.equal(field(form,'parentId').value,'folder:personal');
+  assert.ok([...field(form,'parentId').options].every(option => option.value.endsWith(':personal')));
+  assert.match(h.$('bookmark-identity').textContent,/Work/);
+  assert.match(h.$('bookmark-draft-identity').textContent,/Personal.*another identity/);
+  h.submit(form); await tick();
+  const expected = {title:'Private unfinished title',identity:'personal',url:'https://personal.example/unfinished',type:'bookmark',parentId:'folder:personal'};
+  assert.deepEqual(h.calls.find(call => call.name === 'bookmark-save').value,expected);
+  assert.match(h.$('notice').textContent,/Synthetic bookmark disk failure/);
+  assert.equal(field(form,'title').value,expected.title);
+  assert.equal(field(form,'parentId').value,expected.parentId);
+  assert.equal(h.$('bookmark-editor').open,true);
+  assert.equal(form.querySelector('button.primary').disabled,false);
+  rejectSave = false; h.submit(form); await tick();
+  assert.deepEqual(h.calls.filter(call => call.name === 'bookmark-save').map(call => call.value),[expected,expected]);
+  assert.equal(field(form,'title').value,'');
+  assert.equal(h.$('bookmark-editor').open,false);
+  assert.match(h.$('bookmark-draft-identity').textContent,/Work/);
+  assert.ok([...field(form,'parentId').options].every(option => option.value.endsWith(':work')));
+});
+
+test('DOM product: editing an existing bookmark stays bound to its original record and identity', async t => {
+  const h = await harness(t,{initial:state({panel:'bookmarks'})});
+  h.emit('onBookmarks',bookmarkView('personal')); await painted(h,'bookmark-items');
+  recordButton(h,'Personal saved page','Edit').click(); await tick();
+  const form = h.$('bookmark-form'); h.input(field(form,'title'),'Edited personal title');
+  switchIdentity(h,'work'); h.emit('onBookmarks',bookmarkView('work'));
+  assert.equal(field(form,'id').value,'saved:personal');
+  assert.equal(field(form,'url').value,'https://personal.example/saved');
+  assert.equal(field(form,'parentId').value,'bar:personal');
+  assert.match(h.$('bookmark-draft-identity').textContent,/Personal/);
+  h.submit(form); await tick();
+  assert.deepEqual(h.calls.find(call => call.name === 'bookmark-save').value,
+    {id:'saved:personal',title:'Edited personal title',url:'https://personal.example/saved',identity:'personal'});
+});
+
+test('DOM product: a bookmark move preserves its original identity and selected destination', async t => {
+  const h = await harness(t,{initial:state({panel:'bookmarks'})});
+  h.emit('onBookmarks',bookmarkView('personal')); await painted(h,'bookmark-items');
+  recordButton(h,'Personal saved page','Move').click(); await tick();
+  const form = h.$('bookmark-move-form'); h.select(field(form,'parentId'),'other:personal');
+  switchIdentity(h,'work'); h.emit('onBookmarks',bookmarkView('work'));
+  assert.equal(field(form,'id').value,'saved:personal');
+  assert.equal(field(form,'parentId').value,'other:personal');
+  assert.ok([...field(form,'parentId').options].every(option => option.value.endsWith(':personal')));
+  h.submit(form); await tick();
+  assert.deepEqual(h.calls.find(call => call.name === 'bookmark-move').value,
+    {id:'saved:personal',parentId:'other:personal',identity:'personal'});
+  assert.equal(h.$('bookmark-move-editor').hidden,true);
+});
+
+test('DOM product: dirty history settings retain their identity and failed-save values, then refresh the current identity', async t => {
+  let rejectSave = true;
+  const h = await harness(t,{initial:state({panel:'history'}),command:async name => {
+    if (name === 'history-settings' && rejectSave) throw new Error('Synthetic history disk failure');
+  }});
+  h.emit('onHistory',{identity:'personal',status:'ready',items:[],settings:{recording:true,retentionDays:null}});
+  const form = h.$('history-settings');
+  h.check(field(form,'recording'),false); h.input(field(form,'retentionDays'),'42');
+  switchIdentity(h,'work');
+  h.emit('onHistory',{identity:'work',status:'ready',items:[],settings:{recording:true,retentionDays:7}});
+  assert.equal(field(form,'recording').checked,false);
+  assert.equal(field(form,'retentionDays').value,'42');
+  assert.match(h.$('history-identity').textContent,/Work/);
+  assert.match(h.$('history-draft-identity').textContent,/Unsaved.*Personal/);
+  h.submit(form); await tick();
+  const expected = {identity:'personal',recording:false,retentionDays:42};
+  assert.deepEqual(h.calls.find(call => call.name === 'history-settings').value,expected);
+  assert.match(h.$('notice').textContent,/Synthetic history disk failure/);
+  assert.equal(field(form,'recording').checked,false);
+  assert.equal(field(form,'retentionDays').value,'42');
+  rejectSave = false; h.submit(form); await tick();
+  assert.deepEqual(h.calls.filter(call => call.name === 'history-settings').map(call => call.value),[expected,expected]);
+  assert.equal(field(form,'recording').checked,true);
+  assert.equal(field(form,'retentionDays').value,'7');
+  assert.match(h.$('history-draft-identity').textContent,/apply to Work/);
+});
+
+test('DOM product: a reused tab node derives drag placement from its current workspace after reassignment', async t => {
+  const tab = (id,workspaceId) => ({id,workspaceId,identity:'personal',title:id,url:'https://example.test/'+id});
+  const outside = tab('outside','default'), target = tab('target','default'), moving = tab('moving','project'), anchor = tab('anchor','project');
+  const h = await harness(t,{initial:state({activeId:'target',tabs:[outside,target,moving,anchor]})});
+  const targetNode = h.document.querySelector('[data-tab-id="target"]');
+  h.update({activeWorkspaceId:'project',tabs:[outside,moving,anchor,{...target,workspaceId:'project'}]});
+  assert.equal(h.document.querySelector('[data-tab-id="target"]'),targetNode,'tab identity and DOM node are preserved');
+  assert.equal(targetNode.hidden,false);
+  assert.equal(h.document.querySelector('[data-tab-id="outside"]').hidden,true);
+  const drop = new h.window.Event('drop',{bubbles:true,cancelable:true});
+  Object.defineProperty(drop,'dataTransfer',{value:{types:['application/x-noxviola-tab'],getData:type => type === 'application/x-noxviola-tab' ? 'moving' : ''}});
+  targetNode.dispatchEvent(drop); await tick();
+  assert.equal(drop.defaultPrevented,true);
+  assert.deepEqual(h.calls.find(call => call.name === 'tab-move').value,{id:'moving',index:2});
+});
+
+test('DOM product: preference controls preserve a dirty draft and apply committed appearance and toolbar changes', async t => {
+  const initialPreferences = {searchEngine:'duckduckgo',tabLayout:'horizontal',theme:'dark',accent:'violet',density:'comfortable',
+    homePage:'about:blank',customSearchURL:'https://duckduckgo.com/?q={searchTerms}',showBookmarksBar:false,
+    toolbar:{home:true,library:true,extensions:true,split:true},shortcuts:{}};
+  const shortcuts = [
+    {id:'new',label:'New tab',accelerator:'CmdOrCtrl+T',defaultAccelerator:'CmdOrCtrl+T'},
+    {id:'focus-address',label:'Address or search',accelerator:'CmdOrCtrl+L',defaultAccelerator:'CmdOrCtrl+L'},
+  ];
+  const h = await harness(t,{initial:state({panel:'settings',preferences:initialPreferences,shortcuts})});
+  const form = h.$('settings-form');
+  for (const [name,value] of Object.entries({searchEngine:'custom',tabLayout:'vertical',theme:'light',accent:'teal',density:'compact'})) h.select(field(form,name),value);
+  h.input(field(form,'homePage'),'https://home.example/');
+  h.input(field(form,'customSearchURL'),'https://search.example/?q={searchTerms}');
+  h.check(field(form,'showBookmarksBar'),true);
+  h.check(field(form,'toolbar.home'),false); h.check(field(form,'toolbar.extensions'),false);
+  h.input(field(form,'shortcut.new'),'Ctrl+Shift+N');
+  h.input(field(form,'shortcut.focus-address'),'');
+  h.update({preferences:{...initialPreferences,homePage:'https://background.example/'}});
+  assert.equal(field(form,'homePage').value,'https://home.example/','an external preference event does not discard the dirty form');
+  assert.equal(field(form,'shortcut.new').value,'Ctrl+Shift+N');
+  assert.equal(h.document.body.dataset.theme,'dark','typing a draft does not claim a saved theme');
+  h.submit(form); await tick();
+  const expected = {searchEngine:'custom',tabLayout:'vertical',theme:'light',accent:'teal',density:'compact',
+    homePage:'https://home.example/',customSearchURL:'https://search.example/?q={searchTerms}',showBookmarksBar:true,
+    toolbar:{home:false,library:true,extensions:false,split:true},shortcuts:{new:'Ctrl+Shift+N','focus-address':''}};
+  assert.deepEqual(h.calls.find(call => call.name === 'settings-save').value,expected);
+  h.update({preferences:expected,shortcuts:shortcuts.map(item => ({...item,accelerator:expected.shortcuts[item.id]}))});
+  assert.equal(h.document.body.dataset.theme,'light');
+  assert.equal(h.document.body.dataset.accent,'teal');
+  assert.equal(h.document.body.dataset.density,'compact');
+  assert.equal(h.document.body.dataset.tabLayout,'vertical');
+  assert.equal(h.$('tabs').getAttribute('aria-orientation'),'vertical');
+  assert.equal(h.document.querySelector('[data-toolbar="home"]').hidden,true);
+  assert.equal(h.document.querySelector('[data-toolbar="extensions"]').hidden,true);
+  assert.equal(h.document.querySelector('[data-toolbar="library"]').hidden,false);
+  assert.equal(h.document.querySelector('[data-toolbar="split"]').hidden,false);
+  assert.equal(h.$('bookmarks-bar').hidden,false);
+  assert.equal(field(form,'homePage').value,expected.homePage);
+  assert.equal(field(form,'shortcut.focus-address').value,'');
+});

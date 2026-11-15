@@ -1,6 +1,7 @@
 "use strict";
 const crypto = require('node:crypto');
 const storage = require('./storage.cjs');
+const preferenceStore = require('./preferences.cjs');
 const ID = /^[a-zA-Z0-9_-]+$/;
 const SEARCH = Object.freeze({google: 'https://www.google.com/search?q=', duckduckgo: 'https://duckduckgo.com/?q=', bing: 'https://www.bing.com/search?q='});
 function assertDistinctIdentityPartitions(raw) {
@@ -24,7 +25,7 @@ function httpUrl(value) {
   try { const url = new URL(value); return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password ? url.href : null; }
   catch { return null; }
 }
-function address(value, provider = 'google') {
+function address(value, provider = 'google', customSearchURL) {
   const input = typeof value === 'string' ? value.trim() : '';
   if (!input) return 'about:blank';
   if (/[\u0000-\u001f\u007f]/.test(input)) return null;
@@ -32,6 +33,7 @@ function address(value, provider = 'google') {
   if (/^https?:\/\//i.test(input)) return httpUrl(input);
   if (!/\s/.test(input) && (/^(?:localhost|[\w.-]+\.[\w.-]+)(?::\d+)?(?:[/?#]|$)/i.test(input) || /^\[[0-9a-f:]+\](?::\d+)?(?:[/?#]|$)/i.test(input))) return httpUrl(`https://${input}`);
   if (/^[a-z][a-z\d+.-]*:/i.test(input) || (!/\s/.test(input) && input.includes('@'))) return null;
+  if(provider==='custom')return preferenceStore.searchTemplate(customSearchURL)?customSearchURL.replace('{searchTerms}',encodeURIComponent(input)):null;
   return `${SEARCH[provider] || SEARCH.google}${encodeURIComponent(input)}`;
 }
 function cleanState(raw = {}, {strict = false} = {}) {
@@ -44,6 +46,8 @@ function cleanState(raw = {}, {strict = false} = {}) {
     const url = row?.url === 'about:blank' ? 'about:blank' : httpUrl(row?.url);
     if (!url) { if (strict) throw storage.fail('A saved tab has an unsupported or credential-bearing address.'); return []; }
     if (strict && row.title !== undefined && typeof row.title !== 'string') throw storage.fail('A saved tab title has an unsupported value.', 'UNSUPPORTED_DATA');
+    for(const name of ['pinned','muted'])if(row[name]!==undefined&&typeof row[name]!=='boolean')throw storage.fail(`A saved tab has an unsupported ${name} value.`,'UNSUPPORTED_DATA');
+    for(const name of ['workspaceId','groupId'])if(row[name]!==undefined&&row[name]!==null&&(typeof row[name]!=='string'||!row[name]||/[\u0000-\u001f\u007f]/.test(row[name])))throw storage.fail(`A saved tab has an unsupported ${name} value.`,'UNSUPPORTED_DATA');
     let id = typeof row.id === 'string' && row.id && !seen.has(row.id) ? row.id : null;
     if (!id && strict) throw storage.fail('Saved tab IDs are missing or repeated.');
     id ||= crypto.randomUUID(); seen.add(id);
@@ -65,11 +69,15 @@ function cleanState(raw = {}, {strict = false} = {}) {
   }
   if (!profileIds.has('personal')) profiles.unshift({id: 'personal', name: 'Personal'});
   if (strict && raw.preferences !== undefined && (!raw.preferences || typeof raw.preferences !== 'object' || Array.isArray(raw.preferences))) throw storage.fail('Saved preferences have an unsupported format.', 'UNSUPPORTED_DATA');
-  const preferences = {...raw.preferences};
-  if (strict && ((preferences.searchEngine !== undefined && !Object.hasOwn(SEARCH,preferences.searchEngine)) ||
-      (preferences.tabLayout !== undefined && !['horizontal','vertical'].includes(preferences.tabLayout)))) throw storage.fail('This browser cannot safely interpret a saved preference; its value was preserved.', 'UNSUPPORTED_DATA');
-  if (!Object.hasOwn(SEARCH, preferences.searchEngine)) preferences.searchEngine = 'duckduckgo';
-  if (!['horizontal', 'vertical'].includes(preferences.tabLayout)) preferences.tabLayout = 'horizontal';
+  const preferences = preferenceStore.preferences(raw.preferences || {},{strict});
+  if(raw.activeWorkspaceId!==undefined&&(typeof raw.activeWorkspaceId!=='string'||!raw.activeWorkspaceId||/[\u0000-\u001f\u007f]/.test(raw.activeWorkspaceId)))throw storage.fail('The saved active workspace has an unsupported value.','UNSUPPORTED_DATA');
+  if(raw.siteZooms!==undefined){
+    if(!raw.siteZooms||typeof raw.siteZooms!=='object'||Array.isArray(raw.siteZooms))throw storage.fail('Saved page zoom preferences are invalid.','UNSUPPORTED_DATA');
+    for(const [identity,values] of Object.entries(raw.siteZooms)){
+      if(!ID.test(identity)||!values||typeof values!=='object'||Array.isArray(values))throw storage.fail('Saved page zoom identity preferences are invalid.','UNSUPPORTED_DATA');
+      for(const [origin,factor] of Object.entries(values))if(!httpUrl(origin)||new URL(origin).origin!==origin||typeof factor!=='number'||!Number.isFinite(factor)||factor<0.25||factor>5)throw storage.fail('Saved page zoom values are unsupported.','UNSUPPORTED_DATA');
+    }
+  }
   return {...raw, version: 1, profiles, tabs, preferences, activeId: tabs.some(tab => tab.id === raw.activeId) ? raw.activeId : tabs[0]?.id || null};
 }
 function decode(value) { return cleanState(value, {strict: true}); }

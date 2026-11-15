@@ -279,13 +279,26 @@ const DOCUMENTED_METHODS = new Set([
   'management.getAll', 'management.get', 'management.getSelf', 'management.getPermissionWarningsById', 'management.getPermissionWarningsByManifest',
   'management.onEnabled', 'management.onDisabled', 'tabs.sendMessage', 'tabs.reload', 'tabs.executeScript', 'tabs.query', 'tabs.update',
 ]);
+const HOST_METHODS = new Set(Object.entries({
+  tabs:['get','getCurrent','query','create','update','remove','move','reload','onCreated','onUpdated','onRemoved','onActivated','onMoved'],
+  windows:['get','getCurrent','getLastFocused','getAll','update','onCreated','onRemoved','onFocusChanged','onBoundsChanged'],
+  cookies:['get','getAll','set','remove','getAllCookieStores','onChanged'],
+  bookmarks:['get','getTree','getChildren','getSubTree','getRecent','search','create','update','move','remove','removeTree','onCreated','onChanged','onMoved','onRemoved','onChildrenReordered'],
+  history:['search','getVisits','addUrl','deleteUrl','deleteRange','deleteAll','onVisited','onVisitRemoved'],
+  contextMenus:['create','update','remove','removeAll','onClicked'],
+  action:['setTitle','getTitle','setPopup','getPopup','setBadgeText','getBadgeText','setBadgeBackgroundColor','getBadgeBackgroundColor','enable','disable','onClicked'],
+  browserAction:['setTitle','getTitle','setPopup','getPopup','setBadgeText','getBadgeText','setBadgeBackgroundColor','getBadgeBackgroundColor','enable','disable','onClicked'],
+}).flatMap(([namespace,methods]) => methods.map(name => namespace+'.'+name)));
 function compatibility(manifest, detectedApis, electronVersion) {
   const issues = [];
   const add = (code, detail, api, status = 'unknown') => issues.push({code, status, detail, ...(api ? {api} : {})});
   for (const api of detectedApis) {
     const bare = api.replace(/^(chrome|browser)\./, '');
+    const method = bare.replace(/\.(?:addListener|removeListener|hasListener|hasListeners)$/,'');
     if (bare.startsWith('storage.sync')) add('STORAGE_SYNC_UNSUPPORTED', 'Electron 44.11.3 documents storage.sync as unsupported. No local or cloud substitute is injected.', api, 'unsupported');
     else if (bare.startsWith('storage.managed')) add('MANAGED_STORAGE_UNSUPPORTED', 'Electron 44.11.3 documents storage.managed as unsupported. Enterprise policy storage is not integrated.', api, 'unsupported');
+    else if (HOST_METHODS.has(method)) add('BROWSER_HOST_SUBSET', 'The browser host implements this API for authenticated extension documents with identity and grant checks. Supported options are limited; added content-context APIs, sleeping-worker delivery and exact-package functionality still require verification.', api, 'limited');
+    else if (/^windows\.(?:create|remove)$|^(?:action|browserAction)\.(?:setIcon|openPopup)$/.test(bare)) add('HOST_API_UNSUPPORTED','This host method is explicitly rejected. Window creation/removal, dynamic icons and programmatic popup opening are not implemented by this adapter.',api,'unsupported');
     else if (bare.startsWith('storage.local') || bare === 'storage.onChanged' || /^(scripting|webRequest|devtools\.(inspectedWindow|network|panels))\./.test(bare)) { /* documented subset */ }
     else if (DOCUMENTED_METHODS.has(bare) || (/\.on\w+\.(addListener|removeListener|hasListener|hasListeners)$/.test(bare) && DOCUMENTED_METHODS.has(bare.split('.').slice(0, -1).join('.')))) {
       if (bare === 'tabs.query' || bare === 'tabs.update') add('PARTIAL_TABS_API', 'Electron documents partial tab semantics; active/current-window behavior and unsupported fields need functional verification.', api, 'limited');
@@ -294,21 +307,23 @@ function compatibility(manifest, detectedApis, electronVersion) {
   const documentedPermissions = new Set(['storage', 'scripting', 'webRequest', 'webRequestBlocking', 'tabs', 'activeTab', 'management']);
   for (const permission of stringArray(manifest.permissions, 'permissions')) {
     if (permission === '<all_urls>' || permission.includes('://') || documentedPermissions.has(permission)) continue;
+    if (['cookies','bookmarks','history','contextMenus'].includes(permission)) { add('HOST_PERMISSION_SUBSET',`Required ${permission} grants authorize implemented browser-host methods in this identity; optional grant changes and exact package functionality are not established.`,permission,'limited'); continue; }
     add('PERMISSION_API_NOT_VERIFIED', `The ${permission} permission does not establish that the corresponding API works in Electron.`, permission);
   }
   for (const key of ['sidebar_action', 'side_panel', 'omnibox', 'commands', 'chrome_url_overrides', 'devtools_page']) {
     if (manifest[key]) add('HOST_INTEGRATION_REQUIRED', `${key} needs browser-host integration and has not been functionally verified.`, key, 'limited');
   }
   if (manifest.background?.service_worker) add('SERVICE_WORKER_UNVERIFIED', 'Manifest V3 background service-worker startup and event lifetime require a real runtime test.', 'background.service_worker');
+  if (manifest.optional_permissions?.length || manifest.optional_host_permissions?.length) add('OPTIONAL_GRANTS_UNIMPLEMENTED','Optional permissions are displayed but are not promoted into browser-host grants. Native synchronized request/remove is not implemented.','optional_permissions','limited');
   if (manifest.browser_specific_settings || manifest.applications) add('FIREFOX_METADATA', 'Firefox-specific metadata is preserved. Gecko-specific API behavior and signing trust are not supplied by this import.', 'browser_specific_settings', 'limited');
   if (manifest.update_url) add('UPDATES_NOT_ENABLED', 'The package declares an update source. Automatic acquisition/signature verification is not implemented; no update request is sent.', 'update_url', 'limited');
   return {
     status: issues.length ? 'limited' : 'unverified',
     functionalVerification: 'not-tested',
-    runtime: 'electron-session-extensions',
+    runtime: 'electron-session-extensions-with-authenticated-browser-host',
     electronVersion: electronVersion || 'not-running-in-electron',
     detectedApis,
-    detection: 'Static dotted API references only; computed calls, aliases and runtime dependencies may be missed. No browser.* rewrite or API shim is injected.',
+    detection: 'Static dotted API references only; computed calls, aliases and runtime dependencies may be missed. Package bytes are unchanged. Authenticated extension documents receive a limited host adapter and Mozilla Promise facade; installation never establishes functional compatibility.',
     issues,
     sources: [SUPPORT_URL, LIFECYCLE_URL],
   };
@@ -411,6 +426,11 @@ class ExtensionManager {
     this._adapters = new Map();
     this._sessions = new Map();
     this._observers = new Map();
+    this._sessionIdentities = new WeakMap();
+    this._pendingLoads = new Set();
+    this._runtimeEpochs = new Map();
+    this._runtimeObservers = new Set();
+    this._runtimeAdmissions = new Map();
     this._tail = Promise.resolve();
     this._opened = false;
     this._disposed = false;
@@ -459,12 +479,14 @@ class ExtensionManager {
     if (!adapter || ['loadExtension', 'removeExtension', 'getExtension', 'getAllExtensions'].some(method => typeof adapter[method] !== 'function')) fail('RUNTIME_UNAVAILABLE', 'This Electron session does not expose the required extension lifecycle API.');
     this._adapters.set(identity, adapter);
     this._sessions.set(identity, session);
+    this._sessionIdentities.set(session, identity);
     if (typeof adapter.on === 'function') {
       const unloaded = (_event, extension) => {
         for (const item of this._state.items) {
           const key = this._key(item.id, identity);
           const runtime = this._runtime.get(key);
           if (runtime?.runtimeId !== extension.id) continue;
+          this._revokeRuntime(item.id, identity, extension.id);
           const enabled = item.identities.find(grant => grant.identity === identity)?.enabled;
           this._runtime.set(key, {...runtime, status: enabled ? 'not-loaded' : 'disabled', error: enabled ? 'The extension runtime unloaded this extension.' : null});
         }
@@ -483,6 +505,57 @@ class ExtensionManager {
       this._observers.set(identity, {unloaded, loaded});
     }
     return adapter;
+  }
+  subscribeRuntime(listener) {
+    if (typeof listener !== 'function') throw new TypeError('A runtime observer is required.');
+    this._runtimeObservers.add(listener);
+    return () => this._runtimeObservers.delete(listener);
+  }
+  _revokeRuntime(id, identity, runtimeId) {
+    const key = this._key(id, identity);
+    this._runtimeEpochs.delete(key);
+    this._pendingLoads.delete(key);
+    this._runtimeAdmissions.delete(key);
+    for (const observer of this._runtimeObservers) {
+      try { observer({kind: 'revoked', id, identity, runtimeId}); }
+      catch (error) { console.error('Extension runtime observer failed:', error.message); }
+    }
+  }
+  // Main-process only. Principal comes from a native Session and a committed
+  // extension origin, never from a renderer-supplied browser identity.
+  runtimeContext(session, runtimeId) {
+    if (!this._opened || this._disposed || !/^[a-p]{32}$/.test(runtimeId || '')) return null;
+    const identity = this._sessionIdentities.get(session);
+    if (!identity || !this.getIdentities().includes(identity)) return null;
+    const extension = session.extensions.getExtension(runtimeId);
+    if (!extension || typeof extension.path !== 'string') return null;
+    const id = path.basename(extension.path);
+    const item = this._records.get(id);
+    if (!item || path.resolve(extension.path) !== path.join(this.packagesPath, id)) return null;
+    const grant = item.identities.find(candidate => candidate.identity === identity);
+    const key = this._key(id, identity), runtime = this._runtime.get(key), epoch = this._runtimeEpochs.get(key);
+    if (!grant?.enabled || !epoch || (!this._pendingLoads.has(key) && (runtime?.status !== 'loaded' || runtime.runtimeId !== runtimeId))) return null;
+    let admission = this._runtimeAdmissions.get(key);
+    if (!admission || admission.epoch !== epoch || admission.runtimeId !== runtimeId) {
+      // Admission is derived from the native manifest of the verified owned
+      // package. Editable registry display metadata cannot invent API grants.
+      const {permissions,pages} = validateManifest(extension.manifest);
+      admission = {epoch,runtimeId,permissions,pages,manifest:clone(extension.manifest)};
+      this._runtimeAdmissions.set(key,admission);
+    }
+    return {id, identity, runtimeId, epoch, session, name: item.name, permissions: clone(admission.permissions),
+      manifest: clone(admission.manifest), pages: clone(admission.pages), allowFileAccess: grant.allowFileAccess};
+  }
+  runtimeContexts(identity) {
+    const result = [];
+    for (const [key, session] of this._sessions) {
+      if (identity !== undefined && identity !== key) continue;
+      for (const extension of session.extensions.getAllExtensions()) {
+        const context = this.runtimeContext(session, extension.id);
+        if (context) result.push(context);
+      }
+    }
+    return result;
   }
   async _save(next) {
     validateRegistry(next);
@@ -635,11 +708,15 @@ class ExtensionManager {
       const expectedId = item.sourceIdentity?.startsWith('chromium-key:') ? item.sourceIdentity.slice('chromium-key:'.length, 'chromium-key:'.length + 32).replace(/[0-9a-f]/g, char => String.fromCharCode(97 + parseInt(char, 16))) : null;
       if (expectedId && adapter.getExtension(expectedId)) fail('RUNTIME_ID_CONFLICT', 'An extension with this publisher identity is already running outside this manager. It was not replaced.');
       previousIds = new Set(adapter.getAllExtensions().map(extension => extension.id));
+      this._runtimeEpochs.set(key, crypto.randomUUID());
+      this._pendingLoads.add(key);
       const extension = await this.loadExtension(this._sessions.get(grant.identity), packagePath, {allowFileAccess: grant.allowFileAccess});
       loadedId = extension?.id;
       if (!extension || !/^[a-p]{32}$/.test(extension.id) || !adapter.getExtension(extension.id)) fail('RUNTIME_LOAD_UNCONFIRMED', 'The extension runtime did not confirm a loaded extension identity.');
       this._runtime.set(key, {status: 'loaded', runtimeId: extension.id, error: null, functionalVerification: 'not-tested'});
+      this._pendingLoads.delete(key);
     } catch (error) {
+      this._revokeRuntime(item.id, grant.identity, loadedId);
       if (!loadedId && previousIds) loadedId = adapter.getAllExtensions().find(extension => extension.path === packagePath && !previousIds.has(extension.id))?.id;
       if (loadedId) {
         try {
@@ -656,6 +733,7 @@ class ExtensionManager {
   async _unload(item, identity) {
     const key = this._key(item.id, identity);
     const runtime = this._runtime.get(key);
+    this._revokeRuntime(item.id, identity, runtime?.runtimeId);
     if (!runtime?.runtimeId) { this._runtime.set(key, {status: 'disabled', runtimeId: null, error: null}); return; }
     try {
       const adapter = this._adapters.get(identity) || this._adapter(identity);
@@ -762,6 +840,7 @@ class ExtensionManager {
       }
       this._observers.clear();
       this._disposed = true;
+      this._runtimeObservers.clear();
       if (failures.length) throw new AggregateError(failures, 'Some extension runtimes did not confirm unloading.');
     });
   }

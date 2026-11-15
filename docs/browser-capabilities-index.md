@@ -1,37 +1,52 @@
 # Browser capability index
 
-Inventory version **2026-11-15.3**; reviewed 2026-11-15. **Initial documented inventory; incomplete.** The last verified snapshot is ac3a92f6: its generated Windows/Linux seed and two production phases passed. Earlier failures remain in the JSON history; no complete capability or product gate is promoted.
+Inventory version **2026-11-15.4**; reviewed 2026-11-15. **Initial documented inventory; incomplete.** The current implementation continues published source `d2c347a5bfc8a07725abf9562f0869a51f6d3b74`. Native and packaged-executable qualification of these new services, controls and extension APIs is **pending**. Earlier source-bound receipts, including the ac3a92f6 generated Windows/Linux passes and preceding failed runs, remain unchanged in the canonical ledger; they do not qualify the new implementation.
 
-This checkpoint expands 183 capability records and 100 source records. These are discovered records, not a scope limit. The complete union and configuration audit remains open. Direct inspection of installed Windows browsers has not occurred.
+This checkpoint updates 30 affected existing records and retains all **183 capability records and 110 source records**. These are discovered records, not a scope limit. The complete union and configuration audit remains open. Direct inspection of installed Windows browsers has not occurred.
 
-[Method and current findings](browser-capabilities.md) · [Verified native fixture checkpoint](browser-capabilities.md#verified-native-fixture-checkpoint) · [Extension-host comparison](browser-capabilities-extension-hosts.md) · [Canonical JSON](../browser/capabilities.json) · [Master goal](browser/MASTER-GOAL.md)
+[Method and historical findings](browser-capabilities.md) · [Historical native fixture checkpoint](browser-capabilities.md#verified-native-fixture-checkpoint) · [Current extension architecture](browser/EXTENSION-ARCHITECTURE.md) · [Canonical local data contracts](browser/HISTORY-BOOKMARKS-WORKSPACES.md) · [Canonical JSON](../browser/capabilities.json) · [Master goal](browser/MASTER-GOAL.md)
 
-Search this document by capability ID or name. The application also exposes the same JSON in its explicitly opened Capabilities panel.
+## Current implementation awaiting native qualification
+
+| Area | Implemented scope | Portable evidence and remaining limits |
+| --- | --- | --- |
+| Independent preferences | Home/custom search, dark/light/system appearance, accents/density, toolbar visibility, editable shortcuts and reviewed presets | [Preference contracts](../tests/preferences.test.cjs) and [production-renderer contracts](../tests/renderer-product.test.cjs); native pickers, layout/focus, international input and richer customization remain open. |
+| History and bookmarks | Separate identity-owned canonical services, durable edits/deletes, explicit recovery, recording/retention, hierarchy/search and identity-bound drafts | [History](../tests/history.test.cjs), [bookmarks](../tests/bookmarks.test.cjs) and [DOM](../tests/renderer-product.test.cjs) contracts; native/package restart, scale and complete interchange remain open. |
+| Workspaces and tab groups | Durable local definitions, saved membership, collapse/color and assignment without implicitly closing background tabs | [Workspace contracts](../tests/workspaces.test.cjs); native focus/restart, whole-group lifecycle and extension tabGroups remain open. |
+| Browser controls | Pin/reorder, audible/mute metadata, find match controls, bounded saved origin zoom, print/PDF and visible-page capture | [State/preference contracts](../tests/preferences.test.cjs) and [drag/draft DOM contracts](../tests/renderer-product.test.cjs); actual sound/find/zoom/print behavior and OS output dialogs remain pending. |
+| Resource samples | Explicit process CPU/memory/native-owner view with shared-process and missing-value caveats; no polling or limiter claims | [Resource contracts](../tests/resources.test.cjs); OS correlation, attribution completeness, observer overhead and whole-workload performance remain open. |
+| Extension host bridge | Authenticated extension frames/observed workers, canonical tab/window/bookmark/history operations, host-filtered cookies, native menu models and toolbar actions; genuine Mozilla Promise adaptation | [Host-router contracts](../tests/extension-bridge.test.cjs), [actual-preload contracts](../tests/extension-preload.test.cjs) and [exact architecture/limits](browser/EXTENSION-ARCHITECTURE.md); new native fixture, real package corpus, MV3 wake/lifetime, optional grants and missing APIs remain open. |
+
+Source and portable contracts establish these bounded implementations, not complete browser equivalence. All G001–G012 gates remain open.
+
+## Searchable capability records
+
+Search by capability ID or name. The application exposes the same JSON in its explicitly opened Capabilities panel.
 
 | ID | Capability | Category | Current Noxviola status | Next action |
 | --- | --- | --- | --- | --- |
 | navigation-history | Address, search, back and forward | navigation | implemented-unverified | Verify forward-branch replacement, interrupted-load/error UI and per-tab navigation-history restoration; extend beyond generated loopback pages. |
-| find-in-page | Find in page | navigation | implemented-unverified | Exercise existing find bridge and add match-count/focus acceptance. |
+| find-in-page | Find in page | navigation | implemented-unverified | Run the new source against repeated and Unicode fixture text, next/previous traversal, Escape, tab changes and native focus; retain explicit match-count UI. |
 | multi-window | Multiple browser windows | navigation | absent | Extend canonical session state with window records and tested tab transfers. |
-| save-print-page | Save page and print/PDF | navigation | absent | Expose supported engine save/print APIs with explicit destinations and errors. |
+| save-print-page | Save page and print/PDF | navigation | partial | Qualify real print cancellation and saved PDF/PNG output on both hosted platforms, then implement complete save-page and print-option workflows without implying output from source inspection. |
 | default-browser-protocols | Default browser and protocol handling | navigation | absent | Define OS registration separately from safe navigation and per-origin protocol policy. |
-| startup-home-search | Startup, home and search configuration | navigation | partial | Verify selected provider persistence and address/search handling, then add validated custom templates and independent startup/home controls. |
+| startup-home-search | Startup, home and search configuration | navigation | partial | Validate the configured home/custom-search workflow in the new native gate and add independent startup modes without discarding saved sessions. |
 | web-app-installation | Installed web apps | navigation | absent | Evaluate engine-supported PWA hosting and OS integration without treating a shortcut as complete PWA support. |
-| tab-lifecycle | Create, select, close and reopen tabs | tabs | partial | Add reorder/pin/bulk operations and qualify late events and keyboard focus while preserving the verified duplicate/reopen and restart metadata. |
+| tab-lifecycle | Create, select, close and reopen tabs | tabs | partial | Exercise pin, reorder, background create, lazy native-ID translation and restart on the new source before adding bulk tab operations. |
 | vertical-tabs | Vertical and horizontal tab layouts | tabs | implemented-unverified | Verify both layouts with keyboard navigation, scrolling, many long-title tabs, resize and actual WebContentsView bounds. |
 | tab-search | Search tabs across windows | tabs | absent | Add local indexed search with explicit identity scope and no truncation. |
 | tab-preview | Tab previews and resource hints | tabs | absent | Reuse throttled on-demand capture and expose an accessible text alternative. |
-| tab-audio | Audible tab identification and mute | tabs | absent | Publish audible/muted state and use native WebContents audio controls. |
-| tab-groups-manual | Named manual tab groups | tabs | absent | Add versioned groups to session state and expose shared group operations to extensions. |
-| tab-groups-firefox-local | Firefox local saved groups | tabs | absent | Keep local group preservation independent of any future sync adapter. |
+| tab-audio | Audible tab identification and mute | tabs | partial | Play separate fixture audio in two identities and verify per-tab mute, navigation, restart and indicators before adding site-wide policy. |
+| tab-groups-manual | Named manual tab groups | tabs | partial | Verify workspace/group creation, assignment, collapse and restart through the production UI, then add missing group lifecycle and extension operations over the same canonical definitions. |
+| tab-groups-firefox-local | Firefox local saved groups | tabs | partial | Verify workspace/group creation, assignment, collapse and restart through the production UI, then add missing group lifecycle and extension operations over the same canonical definitions. |
 | tab-islands | Opera GX automatic tab islands | tabs | absent | Implement opener/context grouping as an optional policy on manual groups. |
-| workspaces-local | Local workspaces | tabs | absent | Add durable workspace IDs without equating workspaces to isolated cookie stores. |
+| workspaces-local | Local workspaces | tabs | partial | Verify workspace/group creation, assignment, collapse and restart through the production UI, then add missing group lifecycle and extension operations over the same canonical definitions. |
 | workspaces-edge-v2 | Edge current workspace variant | tabs | absent | Implement local task sets first; keep any remote sync optional. |
 | workspaces-shared-legacy | Shared workspace collaboration (historical variant) | tabs | absent | Retain the useful historical requirement; research a separately consented collaboration adapter. |
 | split-browser | Split browsing surfaces | tabs | partial | Qualify split keyboard/focus routing, independent pane permissions, resize/closure and restoration before adding layouts or larger splits. |
 | session-recovery | Session preservation and explicit recovery | tabs | implemented-unverified | Exercise native crash/interrupted-save recovery, corrupt/future checkpoints, canceled recovery and failed close writes; preserve the passing normal-close/restart metadata workflow. |
 | identity-partitions | Named isolated identities | identities | implemented-unverified | Qualify authenticated accounts, cross-origin frame permissions, redirected/remote roots and older engine/profile upgrades while preserving the proven same-engine store transition and original IDs. |
-| profiles-complete | Full profile preferences and data | identities | partial | Define app-wide versus identity-owned data explicitly before expanding profile UI. |
+| profiles-complete | Full profile preferences and data | identities | partial | Qualify identity-bound history/bookmarks and drafts in the native UI, then specify and implement the remaining per-profile data/preferences without silently changing ownership. |
 | private-browsing | Ephemeral private browsing | identities | absent | Add a distinct ephemeral identity policy; Electron extensions cannot simply load into in-memory sessions. |
 | container-site-rules | Container site assignment rules | identities | absent | Add rule resolution over canonical identity routing; compare native containers and the Mozilla extension separately. |
 | site-permission-prompts | Origin-scoped permission prompts | permissions | implemented-unverified | Exercise real main-frame/subframe media and notification requests, same-document and cross-document navigation, prompt cancellation, OS denial and both check/request handlers on the exact build. |
@@ -51,11 +66,11 @@ Search this document by capability ID or name. The application also exposes the 
 | telemetry-zero | Zero first-party telemetry | security | implemented-unverified | Audit code and runtime network behavior; retain security updates and user-requested traffic. |
 | browser-update-verification | Verified browser updates | security | absent | Add a supported updater and publish accurate build/engine versions before general use. |
 | favorites-library | Local favorites and reference library | library | implemented-unverified | Qualify all item types and complete search, real import/export picker interaction, stale or changed preview files and failed-write/recovery UI; preserve the passing metadata round-trip and restart fixture. |
-| bookmark-tree | Bookmark folders and tags | library | absent | Map bookmark APIs onto a deliberate canonical store; do not pretend a flat collection is a full bookmark tree. |
+| bookmark-tree | Bookmark folders and tags | library | partial | Qualify the shared tree and identity-bound forms in native/package runs, then add complete tag and import/export workflows using the same canonical store. |
 | reading-list | Read-later tracking | library | absent | Add independent reading state and supported offline capture only when requested. |
 | collections-legacy | Rich research collections (historical Edge variant) | library | partial | Improve the existing vault for rich references; record Edge Collections as retired from149. |
 | pinboards | Visual pinboards | library | absent | Provide a board view of the existing vault rather than a second store. |
-| history-manager | Searchable browsing history | library | absent | Add a local history service with retention controls and a shared extension API. |
+| history-manager | Searchable browsing history | library | partial | Verify committed-navigation recording, title updates, per-identity settings/deletion and restart in the new native workflow; add missing range controls and history interchange over the same store. |
 | account-atlas | Metadata-only account atlas | library | implemented-unverified | Preserve the existing metadata boundary and separately evaluate credential-manager integration. |
 | downloads-manager | Download lifecycle manager | productivity | partial | Exercise actual destination-picker cancellation, network interruption/terminal retry, durable history and restart of in-progress downloads. |
 | import-browser-data | User-selected browser data migration | library | absent | Inventory source formats and supported APIs without copying cookies, tokens or confidential extension state. |
@@ -63,7 +78,7 @@ Search this document by capability ID or name. The application also exposes the 
 | data-cleaner | Selective local data cleanup | security | absent | Implement precise scope and preview; never use indiscriminate cache deletion as a performance claim. |
 | reader-mode | Distraction-reduced reading | accessibility | absent | Evaluate maintained reader extraction and retain original access on extraction failures. |
 | read-aloud | Read aloud | accessibility | absent | Prefer disclosed local platform voices and on-demand speech integration. |
-| zoom-font-colors | Zoom, fonts and contrast | accessibility | absent | Expose engine zoom/preferences plus accessible chrome scaling. |
+| zoom-font-colors | Zoom, fonts and contrast | accessibility | partial | Validate native origin/identity zoom restoration and readable focus at high zoom; add the independent font/text/color controls still missing. |
 | keyboard-carets | Keyboard and caret navigation | accessibility | partial | Audit focus semantics and shortcut conflicts across chrome and page views. |
 | live-captions | Local live captions | accessibility | absent | Evaluate supported local speech models and platform capture routes without weakening permissions. |
 | live-caption-translation | Live caption translation | accessibility | absent | Separate local captioning from any remote translation service and disclose the boundary. |
@@ -81,8 +96,8 @@ Search this document by capability ID or name. The application also exposes the 
 | gx-volume | Per-tab volume amplification | media | absent | Evaluate a consented audio graph; expose real gain and quality cost rather than a decorative slider. |
 | gx-equalizer | Per-tab audio equalizer | media | absent | Prototype a genuine tab-scoped DSP path and compare fidelity/latency before integration. |
 | gx-rgx-enhancement | Image and video enhancement | media | absent | Evaluate an optional maintained filter pipeline with accessible bypass and no unverified quality claims. |
-| toolbar-customization | Customizable toolbar and sidebar | customization | absent | Add versioned preferences over one action registry. |
-| themes | Composable themes and colors | customization | partial | Reuse CSS variables and scoped assets without privileged theme code. |
+| toolbar-customization | Customizable toolbar and sidebar | customization | partial | Qualify saved visibility/density with native bounds and keyboard access, then add arrangement controls without hiding essential browser actions. |
+| themes | Composable themes and colors | customization | partial | Render and operate the saved appearance combinations on both native platforms, then add independent font/asset modules with accessibility and provenance. |
 | gx-mod-components | Composable GX-style mod components | customization | absent | Define a permissionless declarative mod schema and preserve licenses/provenance. |
 | live-wallpaper | Optional animated wallpaper | customization | absent | Load wallpaper on demand with pause and accessibility policy. |
 | custom-cursor | Custom cursor presentation | customization | absent | Use standard cursor roles with safe validated assets. |
@@ -91,7 +106,7 @@ Search this document by capability ID or name. The application also exposes the 
 | background-music | Adaptive background music | customization | absent | Use one optional audio service with explicit ducking and pause policy. |
 | forced-dark-pages | Per-site forced dark appearance | customization | absent | Evaluate CSS/engine darkening without changing page semantics. |
 | tab-emoji | Tab emoji labels | customization | absent | Add optional metadata to the tab model without replacing page titles for accessibility. |
-| shortcut-customization | User-configurable keyboard shortcuts | customization | absent | Build a shared command registry and retain platform reserved shortcuts. |
+| shortcut-customization | User-configurable keyboard shortcuts | customization | partial | Exercise custom and cleared bindings with native page focus and non-US/IME input, then integrate extension commands with the same conflict resolver. |
 | mouse-gestures | Mouse and rocker gestures | customization | absent | Implement optional gesture recognition using the canonical commands. |
 | panic-switch | Reversible privacy cover | customization | absent | Implement a reversible view/media state transaction with shortcut conflict handling. |
 | history-replacement | Optional history replacement | security | absent | Retain this behavior as an opt-in target with reviewable data-loss semantics; do not execute it during audit. |
@@ -100,7 +115,7 @@ Search this document by capability ID or name. The application also exposes the 
 | energy-saver | Battery-aware browser policy | performance | absent | Add platform power-state observation and explicit policies after measurement. |
 | page-preloading | Optional predictive page loading | performance | absent | Keep prediction opt-in and local where possible; do not hide network/data costs. |
 | performance-alerts | Resource issue alerts | performance | absent | Use an inexpensive on-demand monitor and explicit user-selected action. |
-| resource-monitor | Browser and extension resource monitor | performance | absent | Build whole-process accounting before resource limits or superiority claims. |
+| resource-monitor | Browser and extension resource monitor | performance | partial | Compare explicit samples with the actual process tree on both platforms and measure overhead before adding controls or performance claims. |
 | gx-ram-limiter | User-selected memory budget | performance | absent | Evaluate supported controls; do not masquerade tab destruction or content caps as a memory limit. |
 | gx-cpu-limiter | User-selected CPU budget | performance | absent | Research OS-supported scheduling controls and disclose throughput/latency tradeoffs. |
 | gx-network-limiter | User-selected network budget | performance | absent | Evaluate per-session throttling versus real whole-browser shaping; report scope accurately. |
@@ -154,20 +169,20 @@ Search this document by capability ID or name. The application also exposes the 
 | extension-marketplaces | Unified source discovery and acquisition | extensions | absent | Keep store adapters separate from runtime compatibility and respect documented distribution restrictions. |
 | extension-migration | User-authorized extension migration | extensions | absent | Start with manifest/ID/version discovery and explicit unsupported-settings reporting. |
 | extension-manifest-v2 | Manifest V2 compatibility | extensions | partial | Expand beyond the persistent fixture to lazy/event pages, UI contexts and pinned real MV2 packages; compare Firefox separately and retain version/distribution provenance. |
-| extension-manifest-v3 | Manifest V3 compatibility | extensions | partial | Run a real MV3 service-worker lifecycle fixture on Electron44.11.3; its pinned support document only names background ManifestV2, so neither modern Chrome support nor a load success proves MV3 lifecycle parity. |
-| extension-namespaces | Namespace and async-call adaptation | extensions | absent | Test the exact embedded runtime before adapting namespaces. Chrome148+ documentation is not evidence that Electron44.11.3 implements browser.*; a namespace alias cannot implement missing APIs. |
-| extension-messaging | Extension messaging and event routing | extensions | partial | Qualify long-lived ports, authenticated sender boundaries, iframe navigation, worker death and source-browser serialization beyond the passing one-shot MV2 fixture. |
-| extension-content-scripts | Content scripts and execution worlds | extensions | partial | Prefer engine-supported injection; test Firefox Xray/world differences explicitly. |
-| extension-actions | Toolbar and page actions | extensions | partial | Harden the maintained adapter before binding action state and events into browser chrome; test per-tab and per-identity action isolation. |
+| extension-manifest-v3 | Manifest V3 compatibility | extensions | partial | Run an actual pinned-runtime MV3 worker lifecycle fixture; portable worker-object checks and content-only package passes cannot qualify background behavior. |
+| extension-namespaces | Namespace and async-call adaptation | extensions | partial | Run the new native bridge fixture and pinned upstream packages against callback and Promise behavior before adding further namespace/member support. |
+| extension-messaging | Extension messaging and event routing | extensions | partial | Run native one-shot/Port and both-direction ID translation workflows with revocation and restart, retaining earlier scoped MV2 receipts. |
+| extension-content-scripts | Content scripts and execution worlds | extensions | partial | Verify absence of the new transport in webpages and content worlds, then qualify native injection and required browser-specific world semantics. |
+| extension-actions | Toolbar and page actions | extensions | partial | Verify action controls and popup/click behavior in the native bridge fixture, then implement remaining icon/pageAction and accessibility contracts. |
 | extension-sidepanels | Chrome sidePanel behavior | extensions | absent | Add a panel host tied to the extension service after required API semantics are qualified. |
 | extension-firefox-sidebar | Firefox sidebarAction behavior | extensions | absent | Adapt the shared panel host while preserving Firefox-specific API behavior. |
-| extension-tabs-api | Complete required tabs members | extensions | partial | Connect a maintained adapter to the canonical tab service; record support per member and option. |
-| extension-windows-api | Required windows members | extensions | absent | Complete a real window model before declaring windows API support. |
-| extension-tab-groups | Extension tab group semantics | extensions | absent | Build on the same durable group service used by browser UI. |
+| extension-tabs-api | Complete required tabs members | extensions | partial | Qualify real tab mutations/events, lazy/native ID translation, identity denial and cleanup using the new native bridge fixture, then implement the remaining members. |
+| extension-windows-api | Required windows members | extensions | partial | Verify the real single-window subset natively, then extend the canonical window/session model before exposing complete windows APIs. |
+| extension-tab-groups | Extension tab group semantics | extensions | absent | Adapt tabGroups to the existing canonical group definitions after native UI/group acceptance; do not create a second extension-only group store. |
 | extension-containers | Firefox contextualIdentities semantics | extensions | absent | Define an explicit mapping to Noxviola identity partitions; do not expose a fake cookieStoreId field. |
-| extension-bookmarks | Extension bookmark tree | extensions | absent | Extend canonical local data and then adapt API operations; flat vault matching is insufficient. |
-| extension-history | Extension history API | extensions | absent | Implement canonical history first with permission-aware API access. |
-| extension-cookies | Extension cookie API | extensions | absent | Harden the audited4.10.0 adapter: bind sender identity and require cookies plus effective host grants for methods and events before exposing its cookie bridge. |
+| extension-bookmarks | Extension bookmark tree | extensions | partial | Exercise durable bookmark mutation/event/readback and denial in the native fixture, then qualify real packages and remaining tree/field edge cases. |
+| extension-history | Extension history API | extensions | partial | Qualify the actual native history bridge and per-identity events, including paused recording, partial visit deletion and restart. |
+| extension-cookies | Extension cookie API | extensions | partial | Run native host-filtered method/event and cross-identity denial tests, then implement remaining cookie fields and selection semantics without broadening grants. |
 | extension-storage | Extension storage areas | extensions | partial | Use the exact44.11.3 source documentation: local is documented; sync and managed are explicitly unsupported. Latest-site descriptions differ. Qualify additional areas and never label local-only storage as cloud sync. |
 | extension-downloads | Extension download control | extensions | absent | Bind to the canonical download manager, with filename/path/permission enforcement. |
 | extension-webnavigation | Frame navigation events | extensions | absent | Use supported runtime events and explicitly record any iframe gaps in adapters. |
@@ -175,9 +190,9 @@ Search this document by capability ID or name. The application also exposes the 
 | extension-dnr | Declarative request filtering | extensions | absent | Audit actual native DNR support; a webRequest name shim is not equivalent. |
 | extension-userscripts | User-script runtime | extensions | absent | Keep Firefox legacy and modern userScripts variants distinct; use engine worlds and reviewed adapters. |
 | extension-commands | Extension keyboard commands | extensions | absent | Share the canonical shortcut registry while preserving extension command semantics. |
-| extension-context-menus | Extension context menu items | extensions | absent | Integrate maintained menu support with trusted contextual payloads. |
+| extension-context-menus | Extension context menu items | extensions | partial | Exercise the actual native menu controls and click payloads; extend unsupported contexts only with explicit semantic tests. |
 | extension-notifications | Extension notifications | extensions | absent | Use OS notifications with scoped extension identity and user control. |
-| extension-permissions | Runtime extension permission management | extensions | partial | Fix the audited adapter grant/removal/caller-authentication gaps before promotion; test per-host methods and events after revocation. |
+| extension-permissions | Runtime extension permission management | extensions | partial | Qualify native principal, host and revocation boundaries before implementing optional grants with explicit consent and durable scope changes. |
 | extension-native-messaging | Native messaging adapters | extensions | absent | Retain native platform blockers; compare Chrome/Firefox/Apple host contracts before implementation. |
 | extension-devtools | Developer-tools extensions | extensions | partial | Use Electron's documented DevTools path and independently qualify each required API. |
 | extension-alarms | Extension alarms and background scheduling | extensions | absent | Preserve extension background lifetimes and wake events. The maintained adapter is a source candidate, not an adopted or verified service-worker implementation. |
@@ -192,7 +207,7 @@ Search this document by capability ID or name. The application also exposes the 
 | extension-screen-capture | Extension screen/tab capture | extensions | absent | Use the same permission/chooser service as website capture and keep source-specific API differences. |
 | extension-resources | Extension resources and CSP | extensions | partial | Qualify actual engine behavior; CEF's reported dynamic-URL regression is a comparative test, not a solved fact. |
 | extension-safari-portability | Safari portable payload versus native app | extensions | absent | Do not claim a macOS/iOS executable runs on Windows; report its exact required native component. |
-| extension-resource-monitor | Per-extension resource and activity view | extensions | absent | Add optional inexpensive diagnostics after the canonical lifecycle works. |
+| extension-resource-monitor | Per-extension resource and activity view | extensions | partial | Compare explicit samples with the actual process tree on both platforms and measure overhead before adding controls or performance claims. |
 
 ## Discovery queues
 

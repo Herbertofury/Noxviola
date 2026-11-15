@@ -7,11 +7,14 @@
 /browser/*.json text eol=lf
 /browser/*.html text eol=lf
 /browser/*.css text eol=lf
+/browser/*.txt text eol=lf
 /browser/assets/* -text
 /package.json text eol=lf
 /package-lock.json text eol=lf
 /scripts/native-smoke.cjs text eol=lf
+/scripts/package-preview.cjs text eol=lf
 /tests/native/**/*.cjs text eol=lf
 /tests/native/**/*.js text eol=lf
 /tests/native/**/*.json text eol=lf
 /tests/native/**/*.md text eol=lf
+/tests/native/**/*.py text eol=lf

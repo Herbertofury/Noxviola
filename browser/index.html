@@ -14,14 +14,17 @@
   <input id="identity-name" placeholder="Identity name · Enter" aria-label="New identity name" hidden>
   <button id="back" title="Back" aria-label="Back">←</button><button id="forward" title="Forward" aria-label="Forward">→</button>
   <button data-command="reload" title="Reload" aria-label="Reload">↻</button>
+  <button data-command="home" data-toolbar="home" title="Home page" aria-label="Home page">⌂</button>
   <form id="navigate"><input id="address" aria-label="Address or search" placeholder="Search or enter an address" autocomplete="off" spellcheck="false"></form>
   <button data-command="new" title="New tab" aria-label="New tab">＋</button>
-  <button data-command="split" title="Toggle split view" aria-label="Toggle split view">◫</button>
-  <button data-command="vault" title="Your library" aria-label="Your library">♡</button>
-  <button data-command="extensions" title="Extensions" aria-label="Extensions">⌘</button>
+  <button data-command="split" data-toolbar="split" title="Toggle split view" aria-label="Toggle split view">◫</button>
+  <button data-command="vault" data-toolbar="library" title="Your library" aria-label="Your library">♡</button>
+  <button data-command="extensions" data-toolbar="extensions" title="Extensions" aria-label="Extensions">⌘</button>
+  <div id="extension-actions" aria-label="Extension actions" hidden></div>
   <button id="open-tools" title="Browser tools" aria-label="Browser tools">☰</button>
  </nav>
- <div class="status-line"><p id="notice" role="status">Noxviola · Experimental browser</p><button id="retry-save" data-command="save-session" hidden>Retry save</button><input id="find" aria-label="Find in page" placeholder="Find in page"></div>
+ <div class="status-line"><select id="workspace-select" aria-label="Current workspace"><option value="default">Default</option></select><p id="notice" role="status">Noxviola · Experimental browser</p><button id="retry-save" data-command="save-session" hidden>Retry save</button><input id="find" aria-label="Find in page" placeholder="Find in page"><span id="find-count" class="subtle" aria-live="polite"></span><button id="find-previous" aria-label="Previous match" title="Previous match">↑</button><button id="find-next" aria-label="Next match" title="Next match">↓</button></div>
+ <div id="bookmarks-bar" aria-label="Bookmarks bar" hidden></div>
 </header>
 <main id="workspace">
 <section id="start" class="start-page" hidden>
@@ -39,10 +42,17 @@
   <button data-command="extensions"><strong>Extensions</strong><span>Inspect local packages and manage each identity</span></button>
   <button data-command="downloads"><strong>Downloads</strong><span>Progress, pause, resume, cancel and show in folder</span></button>
   <button data-command="permissions"><strong>Site permissions</strong><span>Review and revoke origin-specific decisions</span></button>
-  <button data-command="settings"><strong>Customize</strong><span>Search provider and horizontal or vertical tabs</span></button>
+  <button data-command="bookmarks"><strong>Bookmarks</strong><span>Folders and saved websites for each identity</span></button>
+  <button data-command="history"><strong>History</strong><span>Search visits and control local recording</span></button>
+  <button data-command="workspaces"><strong>Workspaces and groups</strong><span>Organize tabs while keeping their account identities</span></button>
+  <button data-command="resources"><strong>Resource monitor</strong><span>Inspect browser processes when you choose</span></button>
+  <button data-command="settings"><strong>Customize</strong><span>Themes, layouts, toolbar, shortcuts and reusable presets</span></button>
   <button data-command="capabilities"><strong>Browser capability tracker</strong><span>Source-backed goals and acceptance gaps</span></button>
   <button data-command="restore"><strong>Reopen closed tab</strong><span>Restore its identity, position and saved metadata</span></button>
   <button data-command="duplicate"><strong>Duplicate current tab</strong><span>Keep its identity and source address</span></button>
+  <button data-command="save-pdf"><strong>Save page as PDF</strong><span>Export the current website to a local file</span></button>
+  <button data-command="print"><strong>Print page</strong><span>Review your printer and page settings</span></button>
+  <button data-command="devtools"><strong>Developer tools</strong><span>Inspect the current website</span></button>
  </div>
 </section>
 <section id="vault" class="panel" hidden>
@@ -91,8 +101,50 @@
 </section>
 <section id="settings" class="panel" hidden>
  <div class="panel-heading"><div><h1>Make it yours</h1><p>Use the same browser capabilities with your preferred layout.</p></div><button data-command="panel-close">Back to page</button></div>
- <form id="settings-form" class="editor"><label>Search provider<select name="searchEngine"><option value="duckduckgo">DuckDuckGo</option><option value="google">Google</option><option value="bing">Bing</option></select></label><label>Tabs<select name="tabLayout"><option value="horizontal">Horizontal</option><option value="vertical">Vertical</option></select></label><div class="form-actions"><button class="primary">Save preferences</button></div></form>
+ <div class="controls"><button data-command="settings-import-preview">Import preset</button><button data-command="settings-export">Export preset</button></div>
+ <div id="settings-preview" class="review" hidden><h2>Review preference changes</h2><pre id="settings-preview-details"></pre><button data-command="settings-import-apply" class="primary">Apply reviewed preset</button><button data-command="settings-import-cancel">Cancel</button></div>
+ <form id="settings-form" class="editor">
+  <label>Search provider<select name="searchEngine"><option value="duckduckgo">DuckDuckGo</option><option value="google">Google</option><option value="bing">Bing</option><option value="custom">Custom provider</option></select></label>
+  <label>Tabs<select name="tabLayout"><option value="horizontal">Horizontal</option><option value="vertical">Vertical</option></select></label>
+  <label>Appearance<select name="theme"><option value="dark">Dark</option><option value="light">Light</option><option value="system">Follow system</option></select></label>
+  <label>Accent<select name="accent"><option value="violet">Violet</option><option value="blue">Blue</option><option value="teal">Teal</option><option value="rose">Rose</option><option value="amber">Amber</option></select></label>
+  <label>Spacing<select name="density"><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></label>
+  <label>Home page<input name="homePage" placeholder="about:blank or https://…" required></label>
+  <label class="wide">Custom search URL<input name="customSearchURL" placeholder="https://example.com/search?q={searchTerms}" required><span>Use {searchTerms} once where the query belongs. Searches go to this address only when you submit them.</span></label>
+  <fieldset class="wide"><legend>Toolbar and bookmarks</legend><div class="choices"><label><input name="showBookmarksBar" type="checkbox">Bookmarks bar</label><label><input name="toolbar.home" type="checkbox">Home button</label><label><input name="toolbar.library" type="checkbox">Library button</label><label><input name="toolbar.extensions" type="checkbox">Extension buttons</label><label><input name="toolbar.split" type="checkbox">Split-view button</label></div></fieldset>
+  <details class="wide"><summary>Keyboard shortcuts</summary><p class="subtle">Use combinations such as Ctrl+Shift+K, CmdOrCtrl+L or F8. Leave a shortcut empty to disable it. Each active combination must be unique.</p><div id="shortcut-fields" class="editor"></div><button id="shortcuts-reset" type="button">Restore default shortcuts</button></details>
+  <div class="form-actions"><button class="primary">Save preferences</button></div>
+ </form>
  <p class="subtle">A search sends the entered query to this provider. New tabs are local and do not contact it automatically. There is no Noxviola analytics or crash-upload service configured.</p><p id="engine-version" class="subtle"></p>
+</section>
+<section id="bookmarks" class="panel" hidden>
+ <div class="panel-heading"><div><h1>Bookmarks</h1><p id="bookmark-identity"></p></div><button data-command="panel-close">Back to page</button></div>
+ <p id="bookmark-error" class="error" hidden></p><button id="bookmark-recover" data-command="bookmark-recover" hidden>Restore previous bookmarks</button>
+ <div class="controls"><input id="bookmark-search" placeholder="Search bookmarks and folders" aria-label="Search bookmarks"><button data-command="bookmark-current">Bookmark current page</button><button id="bookmark-add">New bookmark or folder</button><button id="bookmark-up">Parent folder</button></div>
+ <p id="bookmark-location" class="subtle"></p>
+ <details id="bookmark-editor"><summary>Add or edit a bookmark</summary><p id="bookmark-draft-identity" class="subtle"></p><form id="bookmark-form" class="editor"><input name="id" type="hidden"><label>Type<select name="type"><option value="bookmark">Website</option><option value="folder">Folder</option></select></label><label>Title<input name="title" required></label><label>Address<input name="url" type="url" placeholder="https://example.com"></label><label>Folder<select name="parentId" id="bookmark-parent"></select></label><div class="form-actions"><button class="primary">Save bookmark</button><button type="button" id="bookmark-reset">Cancel editing</button></div></form></details>
+ <details id="bookmark-move-editor" hidden><summary>Move selected bookmark or folder</summary><form id="bookmark-move-form" class="controls"><input name="id" type="hidden"><select name="parentId" id="bookmark-move-parent" aria-label="Destination folder"></select><button class="primary">Move here</button></form></details>
+ <div id="bookmark-items" class="record-list"></div>
+</section>
+<section id="history" class="panel" hidden>
+ <div class="panel-heading"><div><h1>History</h1><p id="history-identity"></p></div><button data-command="panel-close">Back to page</button></div>
+ <p id="history-error" class="error" hidden></p><button id="history-recover" data-command="history-recover" hidden>Restore previous history</button>
+ <div class="controls"><input id="history-search" placeholder="Search title or address" aria-label="Search history"><button id="history-clear">Remove this identity’s history</button></div>
+ <details><summary>Recording and retention</summary><p id="history-draft-identity" class="subtle"></p><form id="history-settings" class="controls"><label><input name="recording" type="checkbox">Record visits for this identity</label><label>Keep days<input name="retentionDays" type="number" min="1" step="1" placeholder="No automatic expiration"></label><button>Save history settings</button></form><p class="subtle">History stays on this device. Turning recording off keeps existing entries. Removing entries or expiring old visits does not securely erase recovery checkpoints or website data.</p></details>
+ <p id="history-count" class="subtle"></p><div id="history-items" class="record-list"></div>
+</section>
+<section id="workspaces" class="panel" hidden>
+ <div class="panel-heading"><div><h1>Workspaces and tab groups</h1><p>Organize your tabs. Every tab keeps its existing browser identity and account session.</p></div><button data-command="panel-close">Back to page</button></div>
+ <p id="workspace-error" class="error" hidden></p><button id="workspace-recover" data-command="workspace-recover" hidden>Restore previous workspaces</button>
+ <form id="workspace-form" class="controls"><input name="id" type="hidden"><input name="name" placeholder="Workspace name" aria-label="Workspace name" required><select name="color" id="workspace-color" aria-label="Workspace color"></select><button class="primary">Save workspace</button><button type="button" id="workspace-reset">New workspace</button></form>
+ <div id="workspace-items" class="cards"></div>
+ <h2 class="section-title">Groups in this workspace</h2><form id="group-form" class="controls"><input name="id" type="hidden"><input name="name" placeholder="Group name" aria-label="Group name" required><select name="color" id="group-color" aria-label="Group color"></select><button class="primary">Save group</button><button type="button" id="group-reset">New group</button></form><div id="group-items" class="cards"></div>
+ <h2 class="section-title">Arrange tabs</h2><div id="workspace-tabs" class="record-list"></div>
+</section>
+<section id="resources" class="panel" hidden>
+ <div class="panel-heading"><div><h1>Resource monitor</h1><p>Measure the browser’s processes when you choose. No monitoring timer runs in the background.</p></div><button data-command="panel-close">Back to page</button></div>
+ <div class="controls"><button id="resource-refresh" class="primary">Take a new sample</button><p id="resource-summary"></p></div><p id="resource-caveat" class="subtle"></p>
+ <div class="table-scroll"><table><thead><tr><th>Process</th><th>Tabs or extensions</th><th>CPU</th><th>Working set</th><th>Sandbox</th></tr></thead><tbody id="resource-items"></tbody></table></div>
 </section>
 <section id="capabilities" class="panel" hidden>
  <div class="panel-heading"><div><h1>Capability tracker</h1><p>The union of browser goals, with source evidence and unfinished acceptance kept visible.</p></div><button data-command="panel-close">Back to page</button></div>

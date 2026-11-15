@@ -9,6 +9,8 @@ on:
       - 'tests/native/**'
       - 'tests/native-harness.test.cjs'
       - 'scripts/native-smoke.cjs'
+      - 'scripts/package-preview.cjs'
+      - 'tests/package.test.cjs'
       - 'scripts/check-source.cjs'
       - 'scripts/check-electron.cjs'
       - 'package*.json'
@@ -24,7 +26,7 @@ concurrency:
 
 jobs:
   native:
-    timeout-minutes: 20
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -52,13 +54,34 @@ jobs:
       - name: Exercise actual sandboxed Electron on Linux
         if: runner.os == 'Linux'
         run: xvfb-run -a npm run test:native
+      - name: Build and verify the complete native application package
+        run: npm run package:preview -- --receipt native-results/package.json
+      - name: Exercise the exact packaged Windows executable and bounded HTTPS cases
+        if: runner.os == 'Windows'
+        run: npm run test:native -- --package-receipt native-results/package.json --public-https --output native-results/packaged
+      - name: Exercise the exact packaged Linux executable and bounded HTTPS cases
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run test:native -- --package-receipt native-results/package.json --public-https --output native-results/packaged
+      - name: Archive the complete package and verify every extracted entry digest
+        run: python tests/native/portable-archive.py --receipt native-results/package.json --output native-results/distribution
       - name: Retain exact native gate evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: Noxviola-native-${{ matrix.os }}-${{ github.sha }}
-          path: native-results/
+          path: |
+            native-results/
+            !native-results/distribution/**
           if-no-files-found: warn
+          retention-days: 14
+      - name: Retain the complete portable preview with exact-byte provenance
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: Noxviola-portable-${{ matrix.os }}-${{ github.sha }}
+          path: native-results/distribution/
+          if-no-files-found: error
+          compression-level: 0
           retention-days: 14
 
 # No continue-on-error, sandbox-disable switches, OS security changes, private

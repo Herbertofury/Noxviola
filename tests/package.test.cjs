@@ -30,3 +30,54 @@ test('preview cross-packaging selects an explicit target and rejects malformed t
   assert.throws(() => packageTarget(args), /Unknown|incomplete|Unsupported/);
  }
 });
+
+test('complete package verification rejects changed, omitted and additional runtime files', () => {
+ const {verifyPackageFiles}=require('../scripts/package-preview.cjs');
+ const crypto=require('node:crypto');
+ const directory=fs.mkdtempSync(path.join(os.tmpdir(),'nox-package-byte-proof-'));
+ try {
+  fs.writeFileSync(path.join(directory,'Noxviola'),'synthetic executable bytes, never run');
+  const files=manifest(directory),applicationFiles=[];
+  const record={commit:'b'.repeat(40),files,applicationFiles,totalBytes:files.reduce((sum,file)=>sum+file.bytes,0),applicationManifestSha256:crypto.createHash('sha256').update(JSON.stringify(applicationFiles)).digest('hex')};
+  fs.writeFileSync(path.join(directory,'PACKAGE-MANIFEST.json'),JSON.stringify(record));
+  assert.equal(verifyPackageFiles(directory).files.length,1);
+  fs.writeFileSync(path.join(directory,'unlisted-profile.json'),'must not ship');
+  assert.throws(()=>verifyPackageFiles(directory),/file set or bytes/);
+  fs.unlinkSync(path.join(directory,'unlisted-profile.json'));
+  fs.appendFileSync(path.join(directory,'Noxviola'),' modified');
+  assert.throws(()=>verifyPackageFiles(directory),/file set or bytes/);
+  fs.unlinkSync(path.join(directory,'Noxviola'));
+  assert.throws(()=>verifyPackageFiles(directory),/file set or bytes/);
+ } finally {fs.rmSync(directory,{recursive:true,force:true});}
+});
+
+test('actual ASAR verification binds production entry and every application byte to its source', async () => {
+ const {verifyPackagedApplication}=require('../scripts/package-preview.cjs');
+ const {createPackage}=await import('@electron/asar');
+ const crypto=require('node:crypto');
+ const directory=fs.mkdtempSync(path.join(os.tmpdir(),'nox-package-asar-proof-'));
+ try {
+  const root=path.join(directory,'source'),stage=path.join(directory,'stage'),packaged=path.join(directory,'Noxviola-linux-x64');
+  fs.mkdirSync(root);fs.mkdirSync(path.join(packaged,'resources'),{recursive:true});
+  for(const name of APP_FILES){fs.mkdirSync(path.dirname(path.join(root,name)),{recursive:true});fs.writeFileSync(path.join(root,name),`Synthetic ${name}; never executed.`);}
+  fs.writeFileSync(path.join(root,'package.json'),JSON.stringify({name:'fixture',version:'0.1.0',main:'browser/main.cjs',devDependencies:{electron:'44.11.3','@electron/packager':'20.3.0'}}));
+  const info=stageApp(root,stage,'c'.repeat(40));
+  const applicationFiles=manifest(stage),applicationManifestSha256=crypto.createHash('sha256').update(JSON.stringify(applicationFiles)).digest('hex');
+  await createPackage(stage,path.join(packaged,'resources','app.asar'));
+  fs.writeFileSync(path.join(packaged,'Noxviola'),'synthetic executable fixture; never run');
+  const files=manifest(packaged);
+  fs.writeFileSync(path.join(packaged,'PACKAGE-MANIFEST.json'),JSON.stringify({...info,platform:'linux',arch:'x64',applicationManifestSha256,applicationFiles,files,totalBytes:files.reduce((sum,file)=>sum+file.bytes,0)}));
+  const result=await verifyPackagedApplication(packaged,{root});
+  assert.equal(result.entry,'browser/main.cjs');
+  assert.equal(result.executable,path.join(packaged,'Noxviola'));
+  fs.appendFileSync(path.join(root,'browser','main.cjs'),' source changed');
+  await assert.rejects(verifyPackagedApplication(packaged,{root}),/differs from the current acceptance source/);
+  fs.writeFileSync(path.join(root,'browser','main.cjs'),'Synthetic browser/main.cjs; never executed.');
+  const stagedPackage=JSON.parse(fs.readFileSync(path.join(stage,'package.json')));stagedPackage.main='tests/native/driver.cjs';
+  fs.writeFileSync(path.join(stage,'package.json'),JSON.stringify(stagedPackage));
+  await createPackage(stage,path.join(packaged,'resources','app.asar'));
+  const alteredApplication=manifest(stage),alteredFiles=manifest(packaged).filter(file=>file.path!=='PACKAGE-MANIFEST.json');
+  fs.writeFileSync(path.join(packaged,'PACKAGE-MANIFEST.json'),JSON.stringify({...info,platform:'linux',arch:'x64',applicationManifestSha256:crypto.createHash('sha256').update(JSON.stringify(alteredApplication)).digest('hex'),applicationFiles:alteredApplication,files:alteredFiles,totalBytes:alteredFiles.reduce((sum,file)=>sum+file.bytes,0)}));
+  await assert.rejects(verifyPackagedApplication(packaged,{root}),/unchanged production package entry/);
+ } finally {fs.rmSync(directory,{recursive:true,force:true});}
+});

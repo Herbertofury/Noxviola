@@ -138,3 +138,30 @@ All full product gates G001–G012 remain open. Priorities beyond the passing ho
 The inspected maintained extension adapter remains unbundled because its permission removal, host admission and sender authentication need repair. Its audit defines concrete next integration work. A loaded extension, working popup, static API name or synthetic adapter is not a universal-compatibility result.
 
 No superiority, zero-network-traffic or production-security claim follows from this checkpoint. First-party telemetry remains prohibited; a full network audit is still required. Existing failed and blocked evidence remains part of the continuation state.
+
+## Continued implementation after `d2c347a`
+
+The owner requested completion of the full accepted goal after the published `d2c347a` checkpoint. Development continues on the same draft PR #5. The held PR #4 and separate native candidate PR #6 remain unchanged; the master directive and previous failures remain preserved. This section records the next source milestone before its own native receipts, without retroactively qualifying it from the older run.
+
+### Product and canonical service changes
+
+- Durable history records committed visits by identity, supports explicit recording/retention choices and uses stable page/visit IDs. Durable bookmark trees support folders, editing, moves and protected roots. Workspace/group definitions and tab assignments preserve browsing identities. These services reuse the existing atomic/checkpoint primitives, retain unknown metadata and reject stale writers.
+- The product exposes history, bookmark folders/bar, workspaces/groups, pin/mute and tab placement. Unsaved bookmark and history drafts retain the identity where editing began. Drag handlers resolve current workspace membership, and native application/tab menus share close admission/draining with trusted renderer commands.
+- Preferences add independent themes, accents, density, toolbar buttons, home/custom search, individual shortcuts and reviewed presets. Find direction/count, origin-specific bounded zoom, printing, PDF/visible screenshot export, fullscreen and developer tools invoke actual browser actions. Presets exclude browsing/identity/account/extension-grant data.
+- The explicit resource monitor reports actual native processes, shared owners and missing values without a polling timer. A first observation has no CPU interval; no comparative performance conclusion is drawn.
+
+### Authenticated extension host
+
+The maintained `electron-chrome-extensions` preload architecture was adapted with a Noxviola-owned authenticated router and canonical services. Mozilla's byte-preserved `webextension-polyfill` 0.12.0 supplies Promise and asynchronous message semantics. Both upstream licenses/provenance are included in the production allowlist.
+
+Actual native frame/worker origin and exact Session identify the principal; request payloads cannot choose an extension or browsing identity. Enrollment epochs revoke in-flight replies/subscriptions/actions/menus even when native unloading fails. The host implements scoped tabs, windows, cookies, bookmark/history, menu and action behavior while rejecting unsupported members and options. Stable browser tab IDs are translated at the native messaging/script boundary without awakening lazy tabs just to query them. Supported event registration is authenticated before it returns. Admitted asynchronous calls participate in normal browser close.
+
+The new generated MV2 fixture checks real callback/Promise calls, first tab-event delivery, native sender/target ID translation, canonical tab/bookmark/cookie mutations, foreign-identity/host denial, callback errors, Promise rejection, actual action badge/title/color and cleanup. Its driver uses real consent, two identities, disable/re-enable, restart and uninstall. This is a reusable regression fixture, not a third-party extension corpus or evidence for every MV2/MV3 member.
+
+### Actual packaged-executable gate
+
+The hosted workflow now builds and verifies the complete application archive, copies the byte-identical package outside the source checkout, then starts the actual executable with its ordinary production entry. Chromium's ephemeral loopback CDP is the external renderer driver; no main-process inspection, alternate production entry, hidden testing IPC or sandbox-disabling switch is added. The product itself reports `app.isPackaged`, and executable/ASAR digests are recorded before and after execution.
+
+Two normal launches exercise the actual UI/preload, sixteen tabs, five stores in two identities, Library metadata, history, nested bookmarks, workspace/group assignments, pin/mute, customization, live page geometry and restart. Two explicitly declared HTTPS documents add bounded Internet browsing. Default Chromium NetLog, selected header/body-free CDP network events, screenshots and native process samples are retained. Package archive extraction is read back against every file digest and mode. Packaged native file-picker and extension-import/lifecycle qualification remain distinct from the source-app extension fixture.
+
+The integrated portable suite passes **223 contracts, zero failures/skips and 61 JavaScript syntax checks**. Peer review and the targeted identity-draft, drag, extension-event and badge regressions pass for the changed components. The first new Windows/Linux source and packaged receipts are pending publication and execution. Full gates G001–G012 remain open; no new build, universal compatibility, zero-telemetry or superiority acceptance is inferred merely from these implementations.

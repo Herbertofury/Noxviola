@@ -4,7 +4,7 @@ Reviewed 2026-11-15 against Electron **44.11.3**, pinned `yauzl` **3.4.0**, and 
 
 ## Implemented boundary
 
-`browser/extensions.cjs` is the canonical package and lifecycle service. Production injects `browser/extension-runtime.cjs` over the real identity `Session.extensions` object; Node contract tests substitute only the native event/adapter boundary. The raw loader default exists for those isolated contract adapters; the desktop shell must inject `createExtensionLoader`. The service does not inject extension API shims, rewrite `browser.*`, contact marketplaces, request updates, or transmit package inventories.
+`browser/extensions.cjs` is the canonical package and lifecycle service. Production injects `browser/extension-runtime.cjs` over the real identity `Session.extensions` object; Node contract tests substitute only the native event/adapter boundary. The raw loader default exists for those isolated contract adapters; the desktop shell must inject `createExtensionLoader`. Package source bytes are not rewritten. Production additionally attaches the authenticated browser-host bridge described below, including a pinned Mozilla Promise facade in extension documents. Neither service contacts marketplaces, requests updates or transmits package inventories.
 
 | Workflow | Behavior |
 | --- | --- |
@@ -35,6 +35,7 @@ Disabled extensions have no manager-started runtime; verifying termination of ac
 
 ```js
 const {createExtensionLoader} = require('./extension-runtime.cjs');
+const {createExtensionBridge} = require('./extension-bridge.cjs');
 const manager = new ExtensionManager({
   directory: path.join(userData, 'extensions'),
   getSession: identitySession,
@@ -42,6 +43,8 @@ const manager = new ExtensionManager({
   loadExtension: createExtensionLoader({app, webContents}),
 });
 await manager.open();
+const bridge = createExtensionBridge({ipcMain, manager, host: extensionHost()});
+// identitySession() calls bridge.attachSession(nativeSession) before every load.
 await manager.restoreIdentity(activeIdentity);
 
 const preview = await manager.preview(userSelectedAbsolutePath);
@@ -59,16 +62,67 @@ await manager.authorizeIdentity(item.id, anotherIdentity, {
 const optionsURL = manager.pageFor(item.id, anotherIdentity, 'options');
 const snapshot = manager.list();
 await manager.uninstall(item.id);
+await bridge.dispose();
 await manager.dispose();
 ```
 
 The acceptance flags in this example must come from actual user review, not automatic approval. `list()` separates `enabled` intent from `status`, `runtimeId`, and `error` for every identity. `loaded` means the engine confirmed loading and, for a persistent MV2 background, its initial document completed. It does not promise completion of asynchronous extension initialization or establish API compatibility. `compatibility.functionalVerification` remains `not-tested`; a synthetic package passing a native fixture does not prove every extension with similar permissions will function.
 
+## Authenticated browser-host API integration
+
+The current continuation adds `extension-bridge.cjs`, `extension-policy.cjs`, `extension-menus.cjs` and `extension-api.preload.cjs`. The maintained Electron adapter supplied reusable context-menu selection/title rules and an isolated-to-main-world transport design; the insecure principal routing and success-shaped methods identified below were not imported. The browser services remain canonical: tabs and the actual window come from the shell, cookies from the exact native identity Session, and bookmarks/history from their durable services. There is no second extension-only bookmark or history database.
+
+### Principal, grant and lifecycle boundaries
+
+Every request authenticates the native `senderFrame`'s committed `chrome-extension://` URL and actual Session, or the actual native worker object/version/Session. The host resolves that runtime ID to the manager's verified owned package path and enabled identity grant. Caller-supplied extension IDs, identity names, remote sessions or secret tokens are not authority. Granted host patterns and required permissions come from the loaded manifest after package verification, not mutable display metadata in the registry. Optional manifest permissions are displayed but never promoted into accepted host grants.
+
+Authorization is available during a verified managed load so real background startup can call host APIs. Each load has a distinct enrollment epoch. Disabling, failed loading, native unloading or uninstall revokes that epoch before cleanup; failed native removal remains visibly `disable-failed` while browser-host calls and events stay revoked. An old native context cannot borrow a new enrollment after re-enable. Asynchronous replies recheck both the epoch and committed caller origin, so navigation during a cookie read cannot deliver the result to a website. Main-process `host.runOperation` admission covers dispatch through the final check and participates in normal shutdown draining.
+
+The Session preload is limited to actual extension URLs, with origin fallback disabled. Ordinary webpages, content scripts in web-frame worlds, initial empty frames, blob URLs and about pages do not receive this added transport. Native content-script messaging remains native. Expanded content-context APIs require a separate authenticated principal mechanism and are **not** claimed. Frame/worker listeners use weak references and are removed on revocation, worker stop and disposal. No background keepalive, poller, hidden host, worker wake shim or replay queue was added.
+
+`addListener`/`removeListener` use a separate synchronous, authenticated route that only changes in-memory weak subscriptions. Registration is complete when `addListener` returns; the first host event cannot overtake an asynchronous registration request. The other synchronous route performs browser/native tab-ID metadata lookups only. Neither path performs disk work, starts a view, waits for a service or mutates user data. A runtime context lacking the required synchronous transport fails explicitly. Service methods remain asynchronous IPC.
+
+### Implemented subset and explicit limits
+
+| Namespace | Real behavior in this continuation | Material limits |
+| --- | --- | --- |
+| `tabs` | Identity-filtered get/current/query/create/update/remove/move/reload; actual tab pin, mute, order, activation and lifecycle events. URL/title/favicon/pending URL are filtered by `tabs`, required host grants, or an actual toolbar `activeTab` metadata grant. | Unsupported query/mutation options reject. Creates/updates currently accept HTTP(S) and `about:blank`; arbitrary extension-page tab navigation, multiselection, opener changes, capture/group APIs and complete upstream semantics remain open. |
+| Native tab targets | Stable browser IDs translate to native WebContents IDs for messaging, Port connections, MV2 injection and documented scripting targets; incoming native message/Port sender IDs translate back. Optional MV2 injection tab IDs resolve through the same identity's active tab. | A lazy tab without a native context rejects; query and translation never awaken it. Native engine permissions still govern script injection. Toolbar `activeTab` metadata admission does not assert a native scripting grant. |
+| `windows` | Reads report the actual single browser window; populated tabs are identity-filtered. Real focus, bounds and supported window-state changes use that window. | No fabricated identity windows. Creating/removing windows, draw-attention and defocusing reject. Complete multiple-window behavior remains open. |
+| `cookies` | Real jar reads/writes/removal and change events require both `cookies` and accepted host access. Cookie store `0` refers only to the authenticated identity. Writes are read back. | Partitioned cookies and unsupported fields reject. Ambiguous same-name cookies at multiple paths are not falsely removed as a single selected cookie. Caller-selected identities and broader cookie domains reject. |
+| `bookmarks` | Canonical tree/children/subtree/recent/search/create/update/move/remove operations and events after durable writes. Identity metadata is removed from extension responses. | Service URL admission is credential-free HTTP(S); unsupported schemes are explicit. Tags-only internal changes do not generate false Chrome title/URL events. |
+| `history` | Canonical search/visits/add/delete operations, identity-scoped visited/removal events. Adapter search applies Chrome's documented 24-hour/100-result defaults; the UI service remains unrestricted by those defaults. | Paused user recording rejects `addUrl` instead of reporting a write. Partial visit deletion does not falsely emit final-page removal. Broader browser/history behavior still needs native package tests. |
+| `contextMenus` | Real native menu templates, hierarchy, visibility, match conditions, selection text, checkbox/radio state and clicks. Unnamed menu IDs are unique across extension documents. A menu captured before its tab closes becomes a denied click. | Only the listed supported contexts/properties are admitted. There is no success-shaped fallback for unsupported menus. A native click integration fixture remains separate from model tests. |
+| `action` / `browserAction` | Actual toolbar title, badge text/color, enablement, same-loaded-origin popup route and click events, with per-tab overrides. | Dynamic icons and programmatic popup opening reject. Supported badge colors are RGBA arrays and hexadecimal CSS forms. Full popup lifecycle/accessibility and other CSS color forms remain open. |
+| `browser.*` | Mozilla `webextension-polyfill` 0.12.0 wraps the real callback APIs and host methods with Promise/error/message semantics. Chrome callback errors use callback-scoped `runtime.lastError`. | A Promise facade does not implement missing engine APIs or establish Firefox equivalence. Content-world injection, Gecko-only APIs, optional permission synchronization and MV3 worker event wake/lifetime remain open. |
+
+Native `storage.local`, runtime messaging and engine-supported APIs remain native. There is no substitute cloud storage, no success-returning `permissions.remove`, no automatic optional grant approval and no stub that merely accepts a method name. The scanner now identifies implemented host subsets as limited, distinguishes explicit rejections and preserves `functionalVerification: not-tested` for every imported package. Static discovery misses computed calls, aliases and runtime dependencies.
+
+### Host integration and packaging contract
+
+`createExtensionBridge({ipcMain, manager, host})` returns `attachSession`, `contextMenuItems(identity, tabId, nativeParams)`, `actionState(identity, tabId)`, `activateAction(identity, runtimeId, tabId)` and `dispose`. Attach each exact Session **before** native extension loading. Registering the bridge does not enroll any new identity.
+
+The host supplies identity-first `tabs.list/get/create/update/remove/move/reload`, synchronous `tabs.nativeId/browserId` mappings, `windows.getCurrent/getAll/update`, the canonical `bookmarks` and `history` objects, `{identity,event,args}` subscriptions, `actionsChanged`, a same-loaded-origin `openExtensionPage`, and `runOperation(work)` for close admission/draining. Tab descriptors include internal `identity` so the bridge can verify and strip it. `windows` receives the requested `{populate}` option. The host must not create native contents merely to enumerate metadata.
+
+Runtime packaging must retain the four new modules and both `extension-adapter-LICENSE.txt` and `extension-browser-polyfill-LICENSE.txt`, alongside the existing manager and readiness loader. The Mozilla distribution is embedded in the single extension preload to avoid runtime filesystem imports/evaluation in a sandboxed preload. The portable test hashes the exact embedded bytes. No new runtime dependency or native sandbox exception is required.
+
+### Mozilla distribution provenance
+
+The official [0.12.0 release](https://github.com/mozilla/webextension-polyfill/releases/tag/0.12.0) resolves to source commit `1649d84ad93c6ebb7225a3db44e96c33e6bbb4a7`. The registry archive was downloaded without lifecycle scripts and verified against its published SHA-512 integrity before reading it. Its complete unmodified `dist/browser-polyfill.js` is the marked block inside `extension-api.preload.cjs`. A local wrapper supplies the patched Chrome object and isolates UMD globals so an existing Chromium `browser` alias does not bypass Promise adaptation. This wrapper is Noxviola integration; the marked distribution bytes are unchanged. MPL 2.0 text is retained in `extension-browser-polyfill-LICENSE.txt` and the source remains available in this repository.
+
+| Artifact | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `webextension-polyfill-0.12.0.tgz` | 43,702 | `f822c1604f588750cf66316e9992ba4571f04c019316ddcbc58010b5b2c78e46` |
+| Embedded `dist/browser-polyfill.js` | 38,440 | `cfc53c3525587467c783ef1c6fdefbaf1d60ed197ea2fe0d45899b18069cf496` |
+| Upstream `LICENSE` | 16,725 | `1f256ecad192880510e84ad60474eab7589218784b9a50bc7ceee34c2b91f1d5` |
+
+The archive integrity was `sha512-97TBmpoWJEE+3nFBQ4VocyCdLKfw54rFaJ6EVQYLBCXqCIpLSZkwGgASpv4oPt9gdKCJ80RJlcmNzNn008Ag6Q==`. Reference semantics come from primary [Chrome tabs](https://developer.chrome.com/docs/extensions/reference/api/tabs), [MV2 injection signatures](https://developer.chrome.com/docs/extensions/mv2/reference/tabs), [cookies permission rules](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/cookies), [activeTab](https://developer.chrome.com/docs/extensions/develop/concepts/activeTab), and the pinned Electron [preload registration](https://github.com/electron/electron/blob/v44.11.3/docs/api/structures/preload-script.md), [frame IPC](https://github.com/electron/electron/blob/v44.11.3/docs/api/structures/ipc-main-invoke-event.md) and [worker IPC](https://github.com/electron/electron/blob/v44.11.3/docs/api/structures/ipc-main-service-worker-invoke-event.md) sources. These specifications define the intended subset; they do not certify native execution.
+
 ## Version-specific runtime evidence
 
 The [44.11.3 extension support document](https://github.com/electron/electron/blob/v44.11.3/docs/api/extensions.md) and [44.11.3 lifecycle API document](https://github.com/electron/electron/blob/v44.11.3/docs/api/extensions-api.md) were retrieved from that exact source tag. This matters: the current website already differs from this release in its storage descriptions.
 
-Electron 44.11.3 documents an intentionally incomplete extension API, persistent sessions, explicit loading each application run, unpacked packages, partial tabs semantics, and unsupported `storage.sync` / `storage.managed`. Its documented background manifest support is Manifest V2. A Manifest V3 service worker therefore remains unverified by this documentation and requires an actual pinned-runtime test. Browser-host concepts such as creating Noxviola tabs/windows and complete action behavior need additional integration. An omitted API remains unknown unless a source or a functional test establishes its behavior.
+Electron 44.11.3 documents an intentionally incomplete extension API, persistent sessions, explicit loading each application run, unpacked packages, partial tabs semantics, and unsupported `storage.sync` / `storage.managed`. Its documented background manifest support is Manifest V2. A Manifest V3 service worker therefore remains unverified by this documentation and requires an actual pinned-runtime test. The host bridge above supplies a tested subset of browser concepts; multiple-window and complete action behavior still require further integration. An omitted API remains unknown unless a source or a functional test establishes its behavior.
 
 API scanning is advisory: computed calls, aliases, comments, dynamically loaded dependencies and API argument semantics are outside this simple static scan. It is not a claim that all required APIs were found. There is no package allowlist, and the `browser.*` namespace is not rejected wholesale. Exact package/version functionality still needs testing.
 
@@ -96,7 +150,7 @@ Candidate: [`electron-chrome-extensions` 4.10.0](https://www.npmjs.com/package/e
 | `package/dist/cjs/index.js` | `d9065e17c44fcc02453eda134f2b8b235a968edb1317bd7195e10ee4d8d5efca` |
 | `package/LICENSE.md` | `c8e4420327c053bb685506bffc21bf1126e0bca9ea275aee3cda3cdb711f80d9` |
 
-The downloaded archive also matched the registry SHA-512 integrity value before inspection. It was inspected as source and **not installed or executed** in Noxviola. It has useful real implementations and browser integration hooks, but enabling it unmodified would weaken the permission contract:
+The downloaded archive also matched the registry SHA-512 integrity value before inspection. The complete package was **not installed or executed wholesale** in Noxviola. This continuation selectively adapts its MIT context-menu rules and isolated transport architecture; `extension-adapter-LICENSE.txt` preserves the notice. It has useful real implementations and browser integration hooks, but enabling it unmodified would weaken the permission contract:
 
 | Inspected source | Finding | Required next work |
 | --- | --- | --- |
@@ -106,14 +160,14 @@ The downloaded archive also matched the registry SHA-512 integrity value before 
 | `ExtensionRouter.onExtensionMessage` around 2460–2480 | Resolves the caller-supplied extension ID against the session, without binding that ID to the sender frame or service-worker origin before dispatch. | Authenticate the actual extension context and session, then authorize each handler. Regression-test forged extension IDs and remote-session action requests. This is a source finding, not a claimed demonstrated exploit. |
 | `ExtensionRouter` around 2354–2388 | Deliberately retains background-host and worker references; no complete session disposal API is exposed. | Measure background lifetime and release behavior, test disable/uninstall, and provide lifecycle cleanup before adopting the adapter. |
 
-The next integration should harden this maintained candidate or contribute fixes upstream, then exercise its actual `createTab`, `selectTab`, `removeTab`, `createWindow`, action and event paths against the canonical browser services. Writing superficial replacement API names is not the alternative.
+The current selective integration addresses actual native principals, cookie admission and revocation without importing those unsafe defaults. Contributing the applicable fixes upstream, adding genuinely supported methods and testing pinned real extension packages remain next work. The single-window host deliberately rejects `windows.create` rather than manufacturing a successful result.
 
 ## Verification and remaining acceptance
 
-`node --test tests/extensions.test.cjs` currently covers **28 contract tests**: permission admission, exact copied bytes, additional identity consent, restart and storage separation in the fake adapter, disabled startup, serial lifecycle ordering, load/unload/uninstall failures, stale previews, modified installed bytes, registry corruption/conflicts, invalid UTF-8, ambiguous post-rename failure, source/ZIP symlinks, portable name collisions, traversal, encryption, CRC failure, CRX blocking, unsigned XPI acceptance, native-event observation without bypassing managed readiness, identity-scoped startup, and validated popup/options routes.
+The current focused portable gate is **69/69 passing**: 30 manager contracts, 17 native-readiness loader contracts, 13 authenticated host-router contracts and 9 actual-preload VM contracts. These run production source with substituted native boundaries; they are not an Electron execution result. The manager tests include verified pending-load admission, permissions derived from the loaded manifest rather than display fields, distinct re-enable epochs, failed-unload revocation and the existing byte preservation/recovery cases. The preload tests serialize the real main-world function into a separate VM, hash the embedded Mozilla bytes, exercise Promise and callback errors, async message listeners, optional MV2 tab arguments, real Port listener identities, subscription ordering and cross-document menu-ID uniqueness. Router tests cover forged principals, foreign identities, host-filtered cookies/events, revocation during a pending read, post-navigation reply denial, shutdown admission, canonical window population, actual menu state, stale clicks and worker-object identity.
 
-`tests/extension-runtime.test.cjs` adds **17 production-loader contracts**: initial-empty/registration/ready/commit ordering, early completion, native loading-flag ordering, already-completed committed documents, identity/runtime/document/type mismatch, old-host replacement and draining, unaffected lazy/MV3/content-only paths, load failure, crash, destruction, unload, a deterministic deadline, observer cleanup, raw native rejection, and actual manager readiness failure/cleanup/re-enable behavior. They use synthetic native events and do not execute Electron or extension code.
+The new generated native package is `tests/native/fixtures/extension-bridge`. Its required permissions are reviewed through the actual installation controls. It performs one-shot browser-host and native message calls; the created content target sends an explicit ready message to a waiter registered before creation. It checks callback/Promise tab queries, the first created event, mute/reorder/readback, both native ID translation directions, bookmark mutation/event/readback, cookie host and identity denial, foreign-tab denial, error contracts and real action state. It then removes only its generated tab/bookmark/cookie and checks that pre-existing ordered tabs remain. Timed event waits have failure deadlines, no retries or fixed delays. A failed operation retains its step/error and cleanup failures; it cannot become a passing receipt because cleanup succeeded.
 
-`tests/renderer.test.cjs` adds **15 DOM contracts** using the actual production HTML and renderer with only the preload IPC boundary substituted. They cover reviewed package consent and exact selected identities, unsigned XPI acceptance, failed installation versus failed runtime loading, stop retry after failed unload, text escaping, preservation of rejected and newer in-flight drafts, complete tab/collection rendering, panel commands, terminal download controls, permission scope and the real capability inventory. The delayed-reply tests reproduced address/form draft loss before the renderer fix, and the failed-unload test guards the actual manager state where disabled intent coexists with possibly-running code. The combined focused run passed **60/60**. This does not prove native dialogs, CSS layout, extension execution, or Chromium isolation.
+**Native execution of this new bridge is pending until a source-bound CI receipt is recorded.** The earlier successful runs above cover the previous local lifecycle/storage fixtures, not this new host adapter. The native driver must also verify the actual action controls, no bridge in ordinary web pages, disable/re-enable, restart and uninstall. A real pinned upstream extension corpus, MV3 worker lifecycle/wake semantics, complete API unions, trusted marketplace updates and optional-grant changes remain required P1 work. No universal compatibility or whole-browser performance advantage is claimed.
 
-These portable tests are manager contracts. The separate native results above identify the exact runtime, generated packages and exercised workflows. Real store extensions, broad API coverage, CRX/XPI trust verification, automatic verified updates, migration of settings, workspace/site/temporary scopes, user-facing data erasure, resource attribution and owner-device qualification remain open. No browser-wide performance advantage is claimed. The bounded efficiency improvements are removal of redundant load calls, streamed package processing, no background polling and inactive-identity initialization only when that identity is opened; whole-process measurements remain a separate acceptance gate.
+There are no adapter polling tasks, keepalive workers or per-query native view creation. Admission caches are tied to verified runtime epochs and ID translations use existing metadata. These properties avoid unnecessary work; they are not a measured speedup. End-to-end resource, network, packaged-executable and owner-device acceptance remain separately recorded gates.

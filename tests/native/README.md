@@ -32,7 +32,106 @@ the checkout contains uncommitted changes. A successful run also verifies these
 inputs stayed unchanged across both launches. Existing browser profiles are never
 used. Generated profile data is removed after the run; it is not an artifact.
 
-## What executes
+## Packaged executable acceptance and delivery
+
+The deep source gate below and the packaged gate are separate receipts. To build
+and exercise the exact application executable on an ordinary desktop runner:
+
+```sh
+npm run package:preview -- --receipt native-results/package.json
+npm run test:native -- --package-receipt native-results/package.json --public-https --output native-results/packaged
+python tests/native/portable-archive.py --receipt native-results/package.json --output native-results/distribution
+```
+
+The package gate requires a clean Git checkpoint and the same platform and
+architecture as the runner. Before launch it verifies the complete executable
+distribution against `PACKAGE-MANIFEST.json`, the actual ASAR allowlist and file
+hashes, the embedded build/source commit, and every production source byte. It
+repeats the package verification after both processes exit. It never replaces
+the packaged main entry, unpacks/rebuilds the application for testing, imports
+the source driver into the package, or uses Electron's Node inspection mode.
+The executable runs from a separately verified, byte-identical copy inside the
+owned temporary fixture, outside the repository. Its working directory is that
+copy and `NODE_PATH` overrides are refused. This prevents an omitted package
+dependency from being accidentally satisfied by the checkout's `node_modules`.
+The original distribution and executed copy must both remain byte-identical.
+
+The external Node driver starts the real `Noxviola.exe` or `Noxviola` with
+Electron's built-in `--user-data-dir` pointing to a newly marked synthetic
+profile, `--remote-debugging-port=0`, and a default-mode Chromium NetLog output.
+The pinned engine handles the profile switch before application code and binds
+its HTTP debugging server to `127.0.0.1`; the harness accepts only the ephemeral
+browser endpoint printed by its own child process. It attaches to the real
+shell loaded from `resources/app.asar/browser/index.html` and drives its
+existing renderer/preload interface. No new production test command or code
+loading hook is needed. The normal application does not enable a debug server.
+See the pinned engine's
+[startup implementation](https://github.com/electron/electron/blob/v44.11.3/shell/app/electron_main_delegate.cc)
+and [debug server binding](https://github.com/electron/electron/blob/v44.11.3/shell/browser/ui/devtools_manager_delegate.cc).
+
+The packaged workload covers real navigation/redirect/back/forward, sixteen
+loaded tabs with duplicate URLs and close/reopen, split-mode state, two browser
+identities with cookies/localStorage/IndexedDB/CacheStorage/service workers,
+the actual Library form and rendered saved card, and a second normal process
+launch restoring tabs, preferences, identities and full saved Library metadata.
+It also checks committed navigation history/title, nested bookmark creation,
+editing and movement through the real forms, identity-separated history and
+bookmark trees, workspace/group forms and tab assignments, pin/mute state, and
+those stable IDs after restart. The actual preferences form switches to vertical
+tabs, light/teal/compact appearance and the bookmarks bar; the page's measured
+viewport must match the real sidebar and enlarged browser header without losing
+any tabs or identity data.
+Persistent and session-only cookie lifetimes are checked independently through
+the actual renderer cookie jar. DOM `window.close()` reaches the production
+close lifecycle; the gate requires clean exit and real files under its selected
+fresh profile. It does not add a test-only storage flush.
+
+`--public-https` adds exactly two public documents: RFC Editor's RFC 9110 and
+MDN's JavaScript documentation. Each must render the expected document over a
+successful secure HTTPS response, with no Node or privileged shell bridge in
+the page. Actual screenshots and navigation timing entries are retained. No
+account, sign-in, CAPTCHA bypass or certificate exception is used. A timeout,
+DNS failure, access-denied page or failed certificate remains a failed gate
+with evidence; there is no fallback site or silent skip. These two samples do
+not establish general Internet compatibility. Omit this explicit flag only
+when intentionally requesting the deterministic loopback-only package gate;
+the hosted acceptance workflow includes it.
+
+Network evidence includes every selected CDP request/response/data/finish/error
+event for attached page targets, without headers, bodies, URL credentials or
+query values. The receipt records attachment boundaries and an explicit
+three-second fresh-blank observation window. Default-mode Chromium NetLog runs
+from process launch through normal close and is retained separately, with
+event counts and URL-origin metadata. Renderer CDP cannot see all engine,
+Node or OS traffic; a finite NetLog capture also does not prove universal zero
+telemetry or identify every request's purpose. Public pages can initiate their
+own third-party requests; those observations are not silently attributed to
+Noxviola.
+
+Resource milestones use the real product's on-demand `resource-sample` command,
+Chromium `SystemInfo.getProcessInfo`, and per-page `Performance.getMetrics`.
+Windows renderer sandbox flags must remain true. CPU intervals, process
+working sets, and JS heap/document counters retain their distinct units and
+scope. Summing working sets can count shared pages more than once. Instrumented
+spawn-to-observed-shell time and navigation timings are observations, not a
+calibrated comparative benchmark. No background sampler or production telemetry
+is added for these tests. Protocol references:
+[SystemInfo](https://chromedevtools.github.io/devtools-protocol/tot/SystemInfo/),
+[Network](https://chromedevtools.github.io/devtools-protocol/tot/Network/), and
+[Performance](https://chromedevtools.github.io/devtools-protocol/tot/Performance/).
+
+After a successful gate, the Python 3 standard-library archive helper creates
+one complete Windows ZIP or Linux tar.gz and reads every entry back to verify
+the exact file set, lengths and SHA-256 values. Linux executable/helper modes
+must also match the original package. It refuses modified packages, links,
+special files, duplicate entries and overwriting an existing archive. The
+archive includes the Electron runtime and production dependency closure, so an
+end user does not need Node or Python to start it. Its `distribution.json`
+records complete entry evidence and the archive hash. This is still an unsigned
+preview; an actual packaged pass is scoped workflow evidence, not signing,
+installer/update, owner-device, security or release qualification.
+
+## What executes in the deep source gate
 
 The test-only Electron entry sets a freshly created, marked temporary userData
 and session-data directory, forces `app.enableSandbox()`, and imports the actual
@@ -67,6 +166,19 @@ Two subsequent actual Noxviola processes exercise:
   identity choices, consent checkbox and Install button before the runtime checks.
 - A separate MV2 background page responding through `runtime.sendMessage`,
   destruction on disable and restoration on re-enable/restart.
+- A third, persistent MV2 host-bridge package, installed through real consent
+  in both identities. Its actual background exercises Chrome callbacks and the
+  browser Promise namespace, first-event registration, stable public tab IDs,
+  inactive tab creation/read/update/move/remove and native content messaging,
+  durable bookmark events and edits, own-identity cookie writes/readback,
+  rejected ungranted hosts and foreign tabs, callback-scoped errors, rejected
+  unsupported operations, and real toolbar action title/badge state. A target
+  content-ready message gates its single message attempt; no retry hides a
+  missing receiver. The fixture removes only its own temporary tab/bookmark/
+  cookie and verifies all pre-existing ordered tabs remain intact. Disable,
+  re-enable, real process restart and uninstall are checked again by the host
+  driver. This proves only the enumerated synthetic API paths when the gate
+  passes, not full Chrome/Firefox API or arbitrary extension compatibility.
 - Uninstall followed by fresh navigation, proving future injection and the
   background context stop. This does not claim stored extension data was erased.
 - Library editing, archive/restore, export, import preview/cancel/merge and
@@ -89,6 +201,10 @@ It therefore does **not** verify interaction with native OS dialogs. Internet
 site compatibility, account sessions, arbitrary third-party extensions,
 cross-browser parity, full security, first-party telemetry/network behavior,
 accessibility and performance qualification remain separate acceptance work.
+The extension import and privileged native lifecycle checks in this section
+execute in the deep source gate. They are not silently relabeled as packaged
+extension acceptance; the external packaged gate above currently does not drive
+the native extension-import picker or install these extension fixtures.
 
 The optional native gate records `app.getAppMetrics()` for every reported
 process at blank/restored startup, more than twelve loaded tabs, extension
@@ -112,7 +228,7 @@ background worker; these tests make no MV3 service-worker compatibility claim.
 
 Use an ordinary desktop user on a supported Windows/macOS/Linux environment.
 Linux requires a display; CI supplies a normal Xvfb display on Ubuntu 22.04.
-The harness refuses root Linux execution, `NODE_OPTIONS`, Electron Node-mode or
+The harness refuses root Linux execution, `NODE_OPTIONS`, `NODE_PATH`, Electron Node-mode or
 sandbox-disable overrides. It never adds sandbox-disable switches, changes
 kernel/AppArmor policy, makes a helper setuid, or elevates privileges.
 
@@ -127,7 +243,11 @@ The `browser-native.yml` workflow runs the actual gate on Windows and Linux
 when relevant files are pushed to `browser/enderloom-baseline-20261115`, or when
 manually dispatched. It retains evidence even on failure. It has no
 `continue-on-error` acceptance path and no release or merge permissions. A
-workflow definition is not evidence that a hosted native run has passed.
+workflow definition is not evidence that a hosted native run has passed. It
+then builds and runs the exact packaged executable on the same runner, verifies
+the complete portable archive, and uploads the archive only if all required
+gates succeed. Native JSON, screenshots and logs are retained on failure as
+well. Source and packaged results remain distinguishable in those artifacts.
 
 ## Electron version decision, November 15, 2026
 

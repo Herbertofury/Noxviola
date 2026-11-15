@@ -9,6 +9,8 @@ const { app, BrowserWindow, dialog, session, webContents } = require('electron')
 const { readContext, preflight, sourceEvidence } = require('../../scripts/native-smoke.cjs');
 const { createIdentitySessionResolver, identityStoragePaths } = require('../../browser/session-path.cjs');
 const { DOWNLOAD } = require('./fixture-server.cjs');
+const bridgeManifest = require('./fixtures/extension-bridge/manifest.json');
+const BRIDGE_CHECKS = ['chrome-callback-query', 'browser-promise-query', 'first-tab-event', 'canonical-tabs', 'native-message-ids', 'bookmark-service', 'cookie-host-and-identity', 'foreign-tab-denied', 'callback-last-error', 'promise-rejection', 'action-state', 'cleanup'];
 const context = readContext(process.argv[2]);
 const phase = Number(process.argv[3]);
 assert.ok([1, 2].includes(phase), 'Only the two explicit fixture phases may run');
@@ -95,7 +97,7 @@ function partitionFor(identity) {
   return partition;
 }
 function isFixtureExtension(extension) {
-  if (!extension || typeof extension.path !== 'string' || !['Noxviola synthetic storage fixture', 'Noxviola synthetic background fixture'].includes(extension.name)) return false;
+  if (!extension || typeof extension.path !== 'string' || !['Noxviola synthetic storage fixture', 'Noxviola synthetic background fixture', bridgeManifest.name].includes(extension.name)) return false;
   const relative = path.relative(path.join(context.profile, 'extensions', 'packages'), extension.path);
   return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
 }
@@ -434,6 +436,8 @@ async function previewFixture(name) {
   return preview;
 }
 async function installPreviewThroughRenderer(preview, identity) {
+  const identities = Array.isArray(identity) ? identity : [identity];
+  assert.ok(identities.length && new Set(identities).size === identities.length, 'Explicit distinct fixture identities are required');
   await until(() => window.webContents.executeJavaScript(`(() => {
     return !document.getElementById('extensions').hidden &&
       !document.getElementById('extension-preview').hidden &&
@@ -441,16 +445,16 @@ async function installPreviewThroughRenderer(preview, identity) {
       !document.getElementById('extension-cancel').disabled;
   })()`), 'the real extension consent preview');
   const selected = await window.webContents.executeJavaScript(`(() => {
-    const identity = ${JSON.stringify(identity)};
+    const identities = ${JSON.stringify(identities)};
     const choices = [...document.querySelectorAll('#extension-preview-identities input')];
-    if (!choices.some(input => input.value === identity)) throw new Error('The intended fixture identity is not available in the real preview');
-    for (const input of choices) if (input.checked !== (input.value === identity)) input.click();
+    if (!identities.every(identity => choices.some(input => input.value === identity))) throw new Error('An intended fixture identity is not available in the real preview');
+    for (const input of choices) if (input.checked !== identities.includes(input.value)) input.click();
     const consent = document.getElementById('extension-accept');
     if (consent.checked) throw new Error('The real preview must require fresh permission consent');
     consent.click();
     return { identities: choices.filter(input => input.checked).map(input => input.value), permissionsAccepted: consent.checked, installEnabled: !document.getElementById('extension-install').disabled };
   })()`);
-  assert.deepEqual(selected.identities, [identity]);
+  assert.deepEqual([...selected.identities].sort(), [...identities].sort());
   assert.equal(selected.permissionsAccepted, true);
   assert.equal(selected.installEnabled, true, 'The actual Install control must become enabled after fixture consent');
   await window.webContents.executeJavaScript("void document.getElementById('extension-install').click()");
@@ -459,7 +463,7 @@ async function installPreviewThroughRenderer(preview, identity) {
     if (!hidden) return null;
     return (await command('extension-list')).find(item => item.packageDigest === preview.packageDigest) || null;
   }, 'real renderer installation, cleared consent preview and matching installed package');
-  assert.deepEqual(installed.identities.map(grant => grant.identity), [identity]);
+  assert.deepEqual(installed.identities.map(grant => grant.identity).sort(), [...identities].sort());
   await until(() => window.webContents.executeJavaScript(`(() => {
     const items = document.getElementById('extension-items');
     if (document.getElementById('extensions').hidden || items.hasAttribute('aria-busy')) return false;
@@ -468,6 +472,52 @@ async function installPreviewThroughRenderer(preview, identity) {
   result.extensionRendererInstalls ||= [];
   result.extensionRendererInstalls.push({ name: installed.name, id: installed.id, packageDigest: installed.packageDigest, selectedIdentities: selected.identities, permissionsAccepted: true, previewCleared: true, installedCardRendered: true });
   return installed;
+}
+
+async function runBridgeFixture(expected, runId) {
+  const foreignBackground = backgroundPages(expected.bridgeRuntimeIds[expected.secondIdentity], expected.secondIdentity);
+  assert.equal(foreignBackground.length, 1, 'The actual authorized second-identity background context must exist');
+  // Read the genuine public numeric tab ID through the installed extension's
+  // normal API in its own context. Never infer it from WebContents IDs or supply
+  // a caller-selected identity to the host dispatcher.
+  const foreignTabs = await foreignBackground[0].executeJavaScript('browser.tabs.query({})');
+  const secondUrl = (await state()).tabs.find(tab => tab.id === expected.secondTab).url;
+  const foreign = foreignTabs.find(tab => tab.url === secondUrl);
+  assert.ok(foreign && Number.isSafeInteger(foreign.id), 'A genuine foreign public tab ID is required');
+  await activate(expected.personalTab);
+  const before = await state();
+  const address = new URL('/page', context.origin);
+  address.searchParams.set('noxviolaBridgeRun', runId);
+  address.searchParams.set('foreignTabId', String(foreign.id));
+  address.searchParams.set('expectedCookie', 'personal');
+  const view = await navigate(address.href);
+  assert.equal(await view.webContents.executeJavaScript('typeof window.__noxviolaExtensionHost'), 'undefined', 'The webpage must never receive the extension-document host transport');
+  const response = await extensionData(view, 'noxviolaBridgeResult');
+  result.bridgeRuns ||= [];
+  result.bridgeRuns.push({ runId, foreignPublicTabId: foreign.id, response });
+  assert.equal(response.version, 1);
+  assert.equal(response.runId, runId);
+  assert.equal(response.passed, true, `The installed bridge fixture failed: ${JSON.stringify(response.failure || response.cleanupErrors || response)}`);
+  assert.deepEqual(response.checks.map(check => check.name).sort(), [...BRIDGE_CHECKS].sort());
+  assert.ok(response.checks.every(check => check.passed === true));
+  assert.deepEqual(response.cleanupErrors || [], []);
+  assert.equal(response.details.createdTabId, response.details.readySenderTabId, 'Native messaging must round-trip the public tab ID');
+  assert.notEqual(response.details.createdTabId, foreign.id);
+  const after = await state();
+  assert.deepEqual(after.tabs.map(({ id, identity }) => ({ id, identity })), before.tabs.map(({ id, identity }) => ({ id, identity })), 'The bridge workload must preserve every pre-existing ordered tab and identity');
+  assert.equal(after.activeId, expected.personalTab, 'Inactive extension work must preserve the foreground tab');
+  assert.equal(after.currentIdentity, expected.personalIdentity);
+  assertIdentity(await identityData(view), 'personal', { sessionCookieExpected: phase === 1 });
+  assert.equal((await partitionFor(expected.personalIdentity).cookies.get({ url: context.origin, name: response.details.cookieName })).length, 0, 'The fixture must remove its temporary cookie through the actual service');
+  const actions = await until(() => window.webContents.executeJavaScript(`window.__noxviolaNativeActions?.find(item => item.id === ${JSON.stringify(expected.bridgeId)} && item.badgeText === 'OK' && item.title === 'Bridge native accepted')`), 'actual browser extension action state');
+  assert.equal(actions.identity, expected.personalIdentity);
+  assert.equal(actions.runtimeId, expected.bridgeRuntimeIds[expected.personalIdentity]);
+  assert.deepEqual(response.details.actionColor, [37, 99, 235, 255]);
+  assert.deepEqual(actions.color, response.details.actionColor, 'The real action model must retain the requested badge color');
+  await until(() => window.webContents.executeJavaScript("[...document.querySelectorAll('#extension-actions button')].some(button => button.title === 'Bridge native accepted' && button.textContent.includes('OK') && !button.disabled)"), 'the actual enabled browser toolbar action');
+  await until(() => window.webContents.executeJavaScript("[...document.querySelectorAll('#extension-actions .extension-badge')].some(badge => badge.textContent === 'OK' && getComputedStyle(badge).backgroundColor === 'rgb(37, 99, 235)')"), 'the actual requested toolbar badge color');
+  await navigate(`${context.origin}/page?bridge-idle=${encodeURIComponent(runId)}`);
+  return response;
 }
 function nativeExtension(id, identity) {
   return partitionFor(identity).extensions.getExtension(id);
@@ -652,6 +702,30 @@ async function firstLaunch() {
     assert.equal((await extensionData(view, 'noxviolaBackground')).runtimeId, expected.backgroundRuntimeId);
     await captureMetrics('both-extension-fixtures-enabled');
   });
+  await check('authenticated native extension host routes real APIs, identity denials and revocation', async () => {
+    await window.webContents.executeJavaScript('window.__noxviolaNativeActions = null; void window.browser.onExtensionActions(value => { window.__noxviolaNativeActions = value; });');
+    const preview = await previewFixture('extension-bridge');
+    const record = await installPreviewThroughRenderer(preview, [expected.personalIdentity, expected.secondIdentity]);
+    expected.bridgeId = record.id;
+    expected.bridgeRuntimeIds = Object.fromEntries(record.identities.map(grant => {
+      assert.equal(grant.status, 'loaded');
+      assert.ok(nativeExtension(grant.runtimeId, grant.identity));
+      return [grant.identity, grant.runtimeId];
+    }));
+    await runBridgeFixture(expected, 'phase1-first');
+    await command('extension-enable', { id: expected.bridgeId, identity: expected.personalIdentity, enabled: false });
+    await until(() => backgroundPages(expected.bridgeRuntimeIds[expected.personalIdentity], expected.personalIdentity).length === 0, 'disabled host bridge background removal');
+    await until(() => window.webContents.executeJavaScript(`Array.isArray(window.__noxviolaNativeActions) && !window.__noxviolaNativeActions.some(item => item.id === ${JSON.stringify(expected.bridgeId)})`), 'disabled bridge action removal');
+    const disabled = await navigate(`${context.origin}/page?noxviolaBridgeRun=must-not-run&foreignTabId=1&expectedCookie=personal`);
+    assert.equal(await disabled.webContents.executeJavaScript('document.documentElement.dataset.noxviolaBridgeInjected || null'), null, 'Disabling must stop injection into a fresh document');
+    assert.equal(backgroundPages(expected.bridgeRuntimeIds[expected.secondIdentity], expected.secondIdentity).length, 1, 'Disabling one identity must preserve the other authorized runtime');
+    await command('extension-enable', { id: expected.bridgeId, identity: expected.personalIdentity, enabled: true });
+    await runBridgeFixture(expected, 'phase1-reenabled');
+    const second = await activate(expected.secondTab);
+    assertIdentity(await identityData(second), 'second');
+    await activate(expected.personalTab);
+    await captureMetrics('native-host-bridge-enabled-and-functionally-verified');
+  });
   await check('actual library IPC edits, previews, cancels, merges and exports complete synthetic metadata', async () => {
     await window.webContents.executeJavaScript('window.__noxviolaNativeVault = null; void window.browser.onVault(value => { window.__noxviolaNativeVault = value; });');
     const libraryState = () => window.webContents.executeJavaScript('window.__noxviolaNativeVault');
@@ -694,16 +768,18 @@ async function firstLaunch() {
       const panel = document.getElementById('extensions'), items = document.getElementById('extension-items');
       if (panel.hidden || !document.getElementById('extension-preview').hidden || items.hasAttribute('aria-busy')) return null;
       const cards = [...items.querySelectorAll('article')].map(card => ({title: card.querySelector('h2')?.textContent, grants: [...card.querySelectorAll('.identity-grant > p')].map(row => row.textContent)}));
-      return cards.length === 2 ? cards : null;
+      return cards.length === 3 ? cards : null;
     })()`), 'actual installed extension cards after the consent previews are cleared');
     const current = await state();
     const personalName = current.profiles.find(profile => profile.id === expected.personalIdentity).name;
     const secondName = current.profiles.find(profile => profile.id === expected.secondIdentity).name;
     const storageCard = cards.find(card => card.title.startsWith('Noxviola synthetic storage fixture ·'));
     const backgroundCard = cards.find(card => card.title.startsWith('Noxviola synthetic background fixture ·'));
-    assert.ok(storageCard && backgroundCard, 'Both actual installed fixture packages must be rendered');
+    const bridgeCard = cards.find(card => card.title.startsWith('Noxviola synthetic host bridge fixture ·'));
+    assert.ok(storageCard && backgroundCard && bridgeCard, 'All three actual installed fixture packages must be rendered');
     assert.deepEqual(storageCard.grants.sort(), [`${personalName} · loaded`, `${secondName} · loaded`].sort());
     assert.deepEqual(backgroundCard.grants, [`${personalName} · loaded`]);
+    assert.deepEqual(bridgeCard.grants.sort(), [`${personalName} · loaded`, `${secondName} · loaded`].sort());
     result.extensionStatusUi = { previewHidden: true, cards };
     for (const [width, height] of [[700, 600], [1320, 860]]) await captureShell('synthetic-extensions', width, height);
     await command('panel-close');
@@ -750,6 +826,16 @@ async function secondLaunch() {
     data = await extensionData(view);
     assert.equal(data.fixtureSeed, 'second-extension');
   });
+  await check('authenticated extension host and native messaging remain functional after process restart', async () => {
+    await window.webContents.executeJavaScript('window.__noxviolaNativeActions = null; void window.browser.onExtensionActions(value => { window.__noxviolaNativeActions = value; });');
+    const bridge = (await command('extension-list')).find(item => item.id === expected.bridgeId);
+    assert.ok(bridge, 'The actual host-bridge fixture package must survive restart');
+    for (const grant of bridge.identities) {
+      assert.equal(grant.runtimeId, expected.bridgeRuntimeIds[grant.identity]);
+      assert.equal(grant.status, 'loaded');
+    }
+    await runBridgeFixture(expected, 'phase2-restarted');
+  });
   await check('library edits and merged metadata survive a real process restart', async () => {
     await window.webContents.executeJavaScript('window.__noxviolaNativeVault = null; void window.browser.onVault(value => { window.__noxviolaNativeVault = value; });');
     await command('vault');
@@ -764,15 +850,19 @@ async function secondLaunch() {
     dialogAction = 'Uninstall';
     await command('extension-uninstall', expected.backgroundId);
     assert.equal(dialogAction, null);
+    dialogAction = 'Uninstall';
+    await command('extension-uninstall', expected.bridgeId);
+    assert.equal(dialogAction, null);
     assert.equal((await command('extension-list')).length, 0);
     for (const tab of [expected.personalTab, expected.secondTab]) {
       await activate(tab);
-      const view = await navigate(`${context.origin}/page?uninstalled=${tab}`);
-      const data = await view.webContents.executeJavaScript('({storage:document.documentElement.dataset.noxviolaExtension||null,background:document.documentElement.dataset.noxviolaBackground||null})');
-      assert.deepEqual(data, { storage: null, background: null });
+      const view = await navigate(`${context.origin}/page?uninstalled=${tab}&noxviolaBridgeRun=must-not-run&foreignTabId=1&expectedCookie=personal`);
+      const data = await view.webContents.executeJavaScript('({storage:document.documentElement.dataset.noxviolaExtension||null,background:document.documentElement.dataset.noxviolaBackground||null,bridge:document.documentElement.dataset.noxviolaBridgeInjected||null})');
+      assert.deepEqual(data, { storage: null, background: null, bridge: null });
     }
     assert.equal(backgroundPages(expected.backgroundRuntimeId, expected.personalIdentity).length, 0);
-    await captureMetrics('both-extension-fixtures-uninstalled');
+    for (const identity of [expected.personalIdentity, expected.secondIdentity]) assert.equal(backgroundPages(expected.bridgeRuntimeIds[identity], identity).length, 0);
+    await captureMetrics('all-three-extension-fixtures-uninstalled');
   });
 }
 

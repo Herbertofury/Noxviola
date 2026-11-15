@@ -72,6 +72,44 @@ async function install(manager, source, identities = ['personal']) {
   const preview = await manager.preview(source);
   return manager.install(preview.token, {identities, permissionsAccepted: true});
 }
+test('runtime admission is bound to verified native Session, owned path and manifest before background startup', async t => {
+  const {root,manager,fake} = await setup(t);
+  const session = fake.getSession('personal');
+  let startup;
+  session.extensions.on('extension-loaded', (_event,extension) => { startup = manager.runtimeContext(session,extension.id); });
+  const item = await install(manager,await fixture(root,{permissions:['cookies'],host_permissions:['https://example.test/*']}));
+  const runtimeId = item.identities[0].runtimeId;
+  assert.ok(startup, 'Verified consent must be available when native background startup calls the host');
+  assert.deepEqual(startup.permissions.required,['cookies']);
+  assert.deepEqual(startup.permissions.hosts,['https://example.test/*']);
+  assert.equal(manager.runtimeContext(fake.getSession('work'),runtimeId),null);
+  // Display metadata is not an authority to invent a permission the loaded
+  // package never declared. The native manifest remains bound to hashed code.
+  manager._records.get(item.id).permissions.required.push('bookmarks');
+  assert.deepEqual(manager.runtimeContext(session,runtimeId).permissions.required,['cookies']);
+  const original = session.loaded.get(runtimeId);
+  session.loaded.set(runtimeId,{...original,path:path.join(root,'foreign-package')});
+  assert.equal(manager.runtimeContext(session,runtimeId),null);
+  session.loaded.set(runtimeId,original);
+  const epoch = manager.runtimeContext(session,runtimeId).epoch;
+  await manager.setEnabled(item.id,'personal',false);
+  assert.equal(manager.runtimeContext(session,runtimeId),null);
+  await manager.setEnabled(item.id,'personal',true);
+  assert.notEqual(manager.runtimeContext(session,runtimeId).epoch,epoch);
+});
+test('failed native unload still revokes browser-host admission and emits cleanup', async t => {
+  const {root,manager,fake} = await setup(t);
+  const item = await install(manager,await fixture(root));
+  const session = fake.getSession('personal'),runtimeId = item.identities[0].runtimeId,revocations = [];
+  manager.subscribeRuntime(event=>revocations.push(event));
+  assert.ok(manager.runtimeContext(session,runtimeId));
+  fake.controls.removeFailure = true;
+  await assert.rejects(manager.setEnabled(item.id,'personal',false),/unload refused/);
+  assert.ok(session.extensions.getExtension(runtimeId),'Native runtime failure remains represented honestly');
+  assert.equal(manager.runtimeContext(session,runtimeId),null);
+  assert.equal(manager.list()[0].identities[0].status,'disable-failed');
+  assert.ok(revocations.some(event=>event.id===item.id&&event.identity==='personal'));
+});
 function archive(entries) {
   const local = [], central = [];
   let offset = 0;

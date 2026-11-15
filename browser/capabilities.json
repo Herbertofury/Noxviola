@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "inventoryVersion": "2026-11-15.3",
+  "inventoryVersion": "2026-11-15.4",
   "auditedAt": "2026-11-15",
   "title": "Noxviola browser capability union — initial documented inventory",
   "coverage": {
@@ -184,7 +184,45 @@
         "retainedEvidence": "https://github.com/Herbertofury/Noxviola/blob/ac3a92f628519ae14f04a0499a665af8a7d89110/docs/browser/CHECKPOINT-2026-11-15.md",
         "scope": "All twelve first-process checks passed on both platforms, including Windows compact-path storage and library operations. Ordered tab/profile/active-ID restoration passed before an invalid session-only cookie persistence expectation failed in phase two. Historical failed gates remain failed; the following fixture adds explicit persistent and session cookie lifetimes."
       }
-    ]
+    ],
+    "implementationCheckpoint": {
+      "date": "2026-11-15",
+      "inventoryVersion": "2026-11-15.4",
+      "baseSourceRevision": "d2c347a5bfc8a07725abf9562f0869a51f6d3b74",
+      "sourceState": "working-tree continuation awaiting the next published source freeze",
+      "scope": "Independent preferences, durable identity-owned history and hierarchical bookmarks, local workspace/group definitions, browser controls, explicit resource samples and authenticated extension-host APIs are integrated in source. Prior native receipts remain historical evidence for their exact revisions.",
+      "nativeAcceptance": "pending for this implementation",
+      "packagedRuntimeAcceptance": "pending for this implementation",
+      "portableEvidence": {
+        "localData": [
+          "tests/history.test.cjs",
+          "tests/bookmarks.test.cjs",
+          "tests/workspaces.test.cjs"
+        ],
+        "preferencesAndState": [
+          "tests/preferences.test.cjs",
+          "tests/state.test.cjs"
+        ],
+        "renderer": [
+          "tests/renderer-product.test.cjs",
+          "tests/renderer.test.cjs"
+        ],
+        "resources": [
+          "tests/resources.test.cjs"
+        ],
+        "extensions": [
+          "tests/extensions.test.cjs",
+          "tests/extension-runtime.test.cjs",
+          "tests/extension-bridge.test.cjs",
+          "tests/extension-preload.test.cjs"
+        ]
+      },
+      "limitations": [
+        "Portable source and DOM contracts substitute native boundaries; they do not establish native or packaged-executable acceptance.",
+        "Existing native receipts do not qualify the new host bridge, controls, services or customization.",
+        "All G001–G012 gates, the installed Windows browser audit, real extension corpus, whole-workload performance and privacy network audits remain open."
+      ]
+    }
   },
   "statusDefinitions": {
     "absent": "No implementation of the complete contract found in the reviewed baseline.",
@@ -1044,10 +1082,10 @@
     {
       "id": "extension-adapter-410",
       "url": "../docs/browser/EXTENSION-ARCHITECTURE.md",
-      "title": "Pinned electron-chrome-extensions4.10.0 source and license audit",
+      "title": "Pinned electron-chrome-extensions 4.10.0 source, license audit and selective integration",
       "accessedAt": "2026-11-15",
       "kind": "pinned-source-audit",
-      "versionScope": "exact package artifact digests; MIT; candidate not adopted"
+      "versionScope": "Exact package artifact digests and MIT source audit; selected transport/menu source is adapted in the current working tree, while the complete upstream package is not adopted wholesale."
     },
     {
       "id": "chrome-cast",
@@ -1056,6 +1094,86 @@
       "accessedAt": "2026-11-15",
       "kind": "primary-documentation",
       "versionScope": "desktop documentation; exact installed version unresolved"
+    },
+    {
+      "id": "noxviola-preferences",
+      "url": "preferences.cjs",
+      "title": "Noxviola independent preference schema, shortcuts and preset review",
+      "accessedAt": "2026-11-15",
+      "kind": "project-implementation-source",
+      "versionScope": "PR5 working-tree continuation of d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source and portable contracts only, new native/package acceptance pending"
+    },
+    {
+      "id": "noxviola-history-service",
+      "url": "history.cjs",
+      "title": "Noxviola canonical identity-owned history service",
+      "accessedAt": "2026-11-15",
+      "kind": "project-implementation-source",
+      "versionScope": "PR5 working-tree continuation of d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source and portable contracts only, new native/package acceptance pending"
+    },
+    {
+      "id": "noxviola-bookmarks-service",
+      "url": "bookmarks.cjs",
+      "title": "Noxviola canonical hierarchical bookmark service",
+      "accessedAt": "2026-11-15",
+      "kind": "project-implementation-source",
+      "versionScope": "PR5 working-tree continuation of d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source and portable contracts only, new native/package acceptance pending"
+    },
+    {
+      "id": "noxviola-workspace-service",
+      "url": "workspaces.cjs",
+      "title": "Noxviola local workspace and group definitions",
+      "accessedAt": "2026-11-15",
+      "kind": "project-implementation-source",
+      "versionScope": "PR5 working-tree continuation of d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source and portable contracts only, new native/package acceptance pending"
+    },
+    {
+      "id": "noxviola-resource-monitor",
+      "url": "resources.cjs",
+      "title": "Noxviola explicit native process sampling service",
+      "accessedAt": "2026-11-15",
+      "kind": "project-implementation-source",
+      "versionScope": "PR5 working-tree continuation of d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source and portable contracts only, new native/package acceptance pending"
+    },
+    {
+      "id": "noxviola-extension-bridge",
+      "url": "extension-bridge.cjs",
+      "title": "Noxviola authenticated identity-scoped extension-host bridge",
+      "accessedAt": "2026-11-15",
+      "kind": "project-implementation-source",
+      "versionScope": "PR5 working-tree continuation of d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source and portable contracts only, new native/package acceptance pending"
+    },
+    {
+      "id": "noxviola-extension-preload",
+      "url": "extension-api.preload.cjs",
+      "title": "Noxviola extension preload and embedded Mozilla Promise adapter",
+      "accessedAt": "2026-11-15",
+      "kind": "project-implementation-source",
+      "versionScope": "PR5 working-tree continuation of d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source and portable contracts only, new native/package acceptance pending"
+    },
+    {
+      "id": "noxviola-local-data-contracts",
+      "url": "../docs/browser/HISTORY-BOOKMARKS-WORKSPACES.md",
+      "title": "Noxviola history, bookmark and workspace contracts and limits",
+      "accessedAt": "2026-11-15",
+      "kind": "project-implementation-source",
+      "versionScope": "PR5 working-tree continuation of d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source and portable contracts only, new native/package acceptance pending"
+    },
+    {
+      "id": "noxviola-main-integration",
+      "url": "main.cjs",
+      "title": "Noxviola canonical browser commands and native integration",
+      "accessedAt": "2026-11-15",
+      "kind": "project-implementation-source",
+      "versionScope": "PR5 working-tree continuation of d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source and portable contracts only, new native/package acceptance pending"
+    },
+    {
+      "id": "noxviola-renderer-controls",
+      "url": "renderer.js",
+      "title": "Noxviola browser-chrome controls and identity-bound drafts",
+      "accessedAt": "2026-11-15",
+      "kind": "project-implementation-source",
+      "versionScope": "PR5 working-tree continuation of d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source and portable contracts only, new native/package acceptance pending"
     }
   ],
   "capabilities": [
@@ -1308,17 +1426,22 @@
         "chrome-tabs",
         "firefox-keys",
         "gx-tabs",
-        "edge-productivity"
+        "edge-productivity",
+        "noxviola-main-integration",
+        "noxviola-renderer-controls"
       ],
       "configuration": {
         "knownOptions": [
           "query",
           "next",
           "previous",
-          "close"
+          "close",
+          "match count",
+          "previous match",
+          "clear selection"
         ],
         "coverage": "partial",
-        "remaining": "Inspect every relevant setting and interaction in a synthetic profile of each exact reference build; record defaults, range, persistence and platform conditions."
+        "remaining": "Native match accuracy, repeated/Unicode text, tab switching, keyboard/focus routing and accessibility require execution. Full reference-browser configuration, default and platform auditing also remains open."
       },
       "dependencies": [
         "Electron WebContentsView",
@@ -1329,10 +1452,11 @@
         "codeOwner": "browser lifecycle",
         "paths": [
           "browser/main.cjs",
-          "browser/state.cjs"
+          "browser/renderer.js",
+          "browser/index.html"
         ],
-        "integrationStrategy": "Reuse the existing tab controller and trusted command boundary.",
-        "note": "Existing command uses WebContents findInPage; complete native focus workflow unverified."
+        "integrationStrategy": "Use canonical services and existing durable storage; keep independent preferences and identity ownership explicit, preserve unknown metadata and require explicit recovery.",
+        "note": "The toolbar exposes text search, next/previous match actions, active-match/total counts and an Escape clear path; keyboard focus commands route to browser chrome. Actual Unicode, page focus and native match behavior remain unqualified for this source."
       },
       "performance": "Measure real navigation and input latency across the whole process tree.",
       "privacy": "Keep entered URLs and page history local; never send typed text without an explicitly selected provider.",
@@ -1350,17 +1474,34 @@
           "chrome-tabs",
           "firefox-keys",
           "gx-tabs",
-          "edge-productivity"
+          "edge-productivity",
+          "noxviola-main-integration",
+          "noxviola-renderer-controls"
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
         "nativeRuntime": "not-run",
-        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
+        "workingTreeReview": "2026-11-15 implementation continuation from d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source-reviewed, new native and packaged-executable acceptance pending",
+        "currentImplementation": {
+          "inventoryVersion": "2026-11-15.4",
+          "baseSourceRevision": "d2c347a5bfc8a07725abf9562f0869a51f6d3b74",
+          "sourcePaths": [
+            "browser/main.cjs",
+            "browser/renderer.js",
+            "browser/index.html"
+          ],
+          "portableContractPaths": [
+            "tests/renderer.test.cjs"
+          ],
+          "nativeAcceptance": "pending",
+          "packagedRuntimeAcceptance": "pending",
+          "qualification": "These source/test paths do not promote the complete capability or replace earlier source-bound native receipts."
+        }
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Exercise existing find bridge and add match-count/focus acceptance.",
+      "nextAction": "Run the new source against repeated and Unicode fixture text, next/previous traversal, Escape, tab changes and native focus; retain explicit match-count UI.",
       "priority": "P2",
       "updatedAt": "2026-11-15"
     },
@@ -1577,7 +1718,9 @@
         "chrome-tabs",
         "firefox-keys",
         "gx-tabs",
-        "edge-productivity"
+        "edge-productivity",
+        "noxviola-main-integration",
+        "noxviola-renderer-controls"
       ],
       "configuration": {
         "knownOptions": [
@@ -1585,24 +1728,29 @@
           "print destination",
           "PDF",
           "scale",
-          "range"
+          "range",
+          "native print dialog",
+          "PDF export",
+          "visible-page PNG capture"
         ],
         "coverage": "partial",
-        "remaining": "Inspect every relevant setting and interaction in a synthetic profile of each exact reference build; record defaults, range, persistence and platform conditions."
+        "remaining": "Actual OS print/file dialogs, cancellation, output quality, page ranges/scaling, HTML/MHTML save and packaged behavior require acceptance. Full reference-browser configuration, default and platform auditing also remains open."
       },
       "dependencies": [
         "Electron WebContentsView",
         "validated navigation"
       ],
       "noxviola": {
-        "status": "absent",
+        "status": "partial",
         "codeOwner": "browser lifecycle",
         "paths": [
           "browser/main.cjs",
-          "browser/state.cjs"
+          "browser/renderer.js",
+          "browser/index.html",
+          "browser/storage.cjs"
         ],
-        "integrationStrategy": "Reuse the existing tab controller and trusted command boundary.",
-        "note": "No accepted end-to-end Noxviola evidence for this complete capability."
+        "integrationStrategy": "Use canonical services and existing durable storage; keep independent preferences and identity ownership explicit, preserve unknown metadata and require explicit recovery.",
+        "note": "Browser commands call the real native print dialog, printToPDF and visible-page PNG capture. Export uses an explicit destination, refuses changed replacement bytes and reports errors; close admission drains accepted menu operations. HTML/MHTML save-page and a complete print-options UI are not implemented."
       },
       "performance": "Measure real navigation and input latency across the whole process tree.",
       "privacy": "Keep entered URLs and page history local; never send typed text without an explicitly selected provider.",
@@ -1620,17 +1768,35 @@
           "chrome-tabs",
           "firefox-keys",
           "gx-tabs",
-          "edge-productivity"
+          "edge-productivity",
+          "noxviola-main-integration",
+          "noxviola-renderer-controls"
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
         "nativeRuntime": "not-run",
-        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
+        "workingTreeReview": "2026-11-15 implementation continuation from d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source-reviewed, new native and packaged-executable acceptance pending",
+        "currentImplementation": {
+          "inventoryVersion": "2026-11-15.4",
+          "baseSourceRevision": "d2c347a5bfc8a07725abf9562f0869a51f6d3b74",
+          "sourcePaths": [
+            "browser/main.cjs",
+            "browser/renderer.js",
+            "browser/index.html",
+            "browser/storage.cjs"
+          ],
+          "portableContractPaths": [
+            "tests/storage.test.cjs"
+          ],
+          "nativeAcceptance": "pending",
+          "packagedRuntimeAcceptance": "pending",
+          "qualification": "These source/test paths do not promote the complete capability or replace earlier source-bound native receipts."
+        }
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Expose supported engine save/print APIs with explicit destinations and errors.",
+      "nextAction": "Qualify real print cancellation and saved PDF/PNG output on both hosted platforms, then implement complete save-page and print-option workflows without implying output from source inspection.",
       "priority": "P2",
       "updatedAt": "2026-11-15"
     },
@@ -1843,17 +2009,22 @@
         "chrome-tabs",
         "firefox-keys",
         "gx-tabs",
-        "edge-productivity"
+        "edge-productivity",
+        "noxviola-preferences",
+        "noxviola-main-integration",
+        "noxviola-renderer-controls"
       ],
       "configuration": {
         "knownOptions": [
           "restore session",
           "home page",
           "default search",
-          "custom search keywords"
+          "custom search keywords",
+          "custom search template",
+          "independent home URL"
         ],
         "coverage": "partial",
-        "remaining": "Inspect every relevant setting and interaction in a synthetic profile of each exact reference build; record defaults, range, persistence and platform conditions."
+        "remaining": "Independent startup modes/page sets, all provider/default variations and actual native search/home/restart behavior remain unqualified. Full reference-browser configuration, default and platform auditing also remains open."
       },
       "dependencies": [
         "Electron WebContentsView",
@@ -1863,11 +2034,15 @@
         "status": "partial",
         "codeOwner": "browser lifecycle",
         "paths": [
+          "browser/preferences.cjs",
+          "browser/state.cjs",
           "browser/main.cjs",
-          "browser/state.cjs"
+          "browser/renderer.js",
+          "browser/index.html",
+          "browser/style.css"
         ],
-        "integrationStrategy": "Reuse the existing tab controller and trusted command boundary.",
-        "note": "Session restoration and selectable search providers exist in source. A complete home/startup/custom-keyword policy is still missing."
+        "integrationStrategy": "Use canonical services and existing durable storage; keep independent preferences and identity ownership explicit, preserve unknown metadata and require explicit recovery.",
+        "note": "Search provider, validated custom query template and home-page destination are independent saved preferences. Queries are encoded before navigation; invalid or credential-bearing templates reject. The browser still restores its saved session; separate startup-page sets and modes remain open."
       },
       "performance": "Measure real navigation and input latency across the whole process tree.",
       "privacy": "Keep entered URLs and page history local; never send typed text without an explicitly selected provider.",
@@ -1885,17 +2060,39 @@
           "chrome-tabs",
           "firefox-keys",
           "gx-tabs",
-          "edge-productivity"
+          "edge-productivity",
+          "noxviola-preferences",
+          "noxviola-main-integration",
+          "noxviola-renderer-controls"
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
         "nativeRuntime": "not-run",
-        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
+        "workingTreeReview": "2026-11-15 implementation continuation from d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source-reviewed, new native and packaged-executable acceptance pending",
+        "currentImplementation": {
+          "inventoryVersion": "2026-11-15.4",
+          "baseSourceRevision": "d2c347a5bfc8a07725abf9562f0869a51f6d3b74",
+          "sourcePaths": [
+            "browser/preferences.cjs",
+            "browser/state.cjs",
+            "browser/main.cjs",
+            "browser/renderer.js",
+            "browser/index.html",
+            "browser/style.css"
+          ],
+          "portableContractPaths": [
+            "tests/preferences.test.cjs",
+            "tests/renderer-product.test.cjs"
+          ],
+          "nativeAcceptance": "pending",
+          "packagedRuntimeAcceptance": "pending",
+          "qualification": "These source/test paths do not promote the complete capability or replace earlier source-bound native receipts."
+        }
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Verify selected provider persistence and address/search handling, then add validated custom templates and independent startup/home controls.",
+      "nextAction": "Validate the configured home/custom-search workflow in the new native gate and add independent startup modes without discarding saved sessions.",
       "priority": "P2",
       "updatedAt": "2026-11-15"
     },
@@ -2061,7 +2258,9 @@
         "chrome-tabs",
         "firefox-vertical",
         "gx-tabs",
-        "edge-productivity"
+        "edge-productivity",
+        "noxviola-main-integration",
+        "noxviola-renderer-controls"
       ],
       "configuration": {
         "knownOptions": [
@@ -2070,10 +2269,13 @@
           "reorder",
           "pin",
           "reopen",
-          "bulk selection"
+          "bulk selection",
+          "pin/unpin",
+          "workspace-aware drag",
+          "background create"
         ],
         "coverage": "partial",
-        "remaining": "Inspect every relevant setting and interaction in a synthetic profile of each exact reference build; record defaults, range, persistence and platform conditions."
+        "remaining": "Bulk/multiselect operations, pinned ordering across every mutation, native keyboard/focus and all error/restart paths remain unqualified. Full reference-browser configuration, default and platform auditing also remains open."
       },
       "dependencies": [
         "stable tab identity",
@@ -2087,8 +2289,8 @@
           "browser/state.cjs",
           "browser/renderer.js"
         ],
-        "integrationStrategy": "Extend the canonical tab model; expose the same operations to chrome and extensions.",
-        "note": "Creation, selection, duplication, close and in-memory reopening exist. Reordering, pinning, bulk selection and full per-tab navigation-history restoration remain open."
+        "integrationStrategy": "Use canonical services and existing durable storage; keep independent preferences and identity ownership explicit, preserve unknown metadata and require explicit recovery.",
+        "note": "Canonical tabs now support pin/unpin, workspace-relative UI reordering and drag placement, duplicate/reopen, mute metadata and lazy restored IDs. Background creation does not temporarily activate the new tab. Existing native receipts cover older lifecycle behavior only; bulk/multiselect and the full current lifecycle remain open."
       },
       "performance": "Diff tab updates and preserve complete collections; do not silently drop tabs.",
       "privacy": "Do not expose tabs or titles across identities without an explicit permission.",
@@ -2106,12 +2308,14 @@
           "chrome-tabs",
           "firefox-vertical",
           "gx-tabs",
-          "edge-productivity"
+          "edge-productivity",
+          "noxviola-main-integration",
+          "noxviola-renderer-controls"
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
         "nativeRuntime": "Recorded generated workflows passed on Windows and Linux; the complete declared capability remains unverified.",
-        "workingTreeReview": "2026-11-15 inventory.3; last verified source snapshot ac3a92f6 with prior failed receipts retained.",
+        "workingTreeReview": "2026-11-15 implementation continuation from d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source-reviewed, new native and packaged-executable acceptance pending",
         "nativeReceipts": [
           {
             "sourceRevision": "ac3a92f628519ae14f04a0499a665af8a7d89110",
@@ -2130,12 +2334,31 @@
             "fullGatePassed": false,
             "qualification": "This receipt covers the stated synthetic workflow only; the complete acceptanceTests, capability status and master product gates are unchanged."
           }
-        ]
+        ],
+        "currentImplementation": {
+          "inventoryVersion": "2026-11-15.4",
+          "baseSourceRevision": "d2c347a5bfc8a07725abf9562f0869a51f6d3b74",
+          "sourcePaths": [
+            "browser/main.cjs",
+            "browser/state.cjs",
+            "browser/renderer.js"
+          ],
+          "portableContractPaths": [
+            "tests/state.test.cjs",
+            "tests/preferences.test.cjs",
+            "tests/renderer-product.test.cjs",
+            "tests/extension-bridge.test.cjs",
+            "tests/extension-preload.test.cjs"
+          ],
+          "nativeAcceptance": "pending",
+          "packagedRuntimeAcceptance": "pending",
+          "qualification": "These source/test paths do not promote the complete capability or replace earlier source-bound native receipts."
+        }
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Add reorder/pin/bulk operations and qualify late events and keyboard focus while preserving the verified duplicate/reopen and restart metadata.",
+      "nextAction": "Exercise pin, reorder, background create, lazy native-ID translation and restart on the new source before adding bulk tab operations.",
       "priority": "P2",
       "updatedAt": "2026-11-15"
     },
@@ -2628,31 +2851,35 @@
         "chrome-tabs",
         "firefox-vertical",
         "gx-tabs",
-        "edge-productivity"
+        "edge-productivity",
+        "noxviola-main-integration",
+        "noxviola-renderer-controls"
       ],
       "configuration": {
         "knownOptions": [
           "mute tab",
           "mute site",
-          "audible indicator"
+          "audible indicator",
+          "saved per-tab mute",
+          "native audible indicator"
         ],
         "coverage": "partial",
-        "remaining": "Inspect every relevant setting and interaction in a synthetic profile of each exact reference build; record defaults, range, persistence and platform conditions."
+        "remaining": "Site-wide mute policy, two-identity audio playback, navigation/restart sound behavior and accessible audible indicators need native acceptance. Full reference-browser configuration, default and platform auditing also remains open."
       },
       "dependencies": [
         "stable tab identity",
         "durable session state"
       ],
       "noxviola": {
-        "status": "absent",
+        "status": "partial",
         "codeOwner": "tab/session service",
         "paths": [
           "browser/main.cjs",
-          "browser/state.cjs",
-          "browser/renderer.js"
+          "browser/renderer.js",
+          "browser/index.html"
         ],
-        "integrationStrategy": "Extend the canonical tab model; expose the same operations to chrome and extensions.",
-        "note": "No accepted end-to-end Noxviola evidence for this complete capability."
+        "integrationStrategy": "Use canonical services and existing durable storage; keep independent preferences and identity ownership explicit, preserve unknown metadata and require explicit recovery.",
+        "note": "Audible state comes from native WebContents events; per-tab mute/unmute uses native audio control and persists saved mute metadata. UI and extension commands share the same tab operation. Persistent site-wide sound policy remains absent."
       },
       "performance": "Diff tab updates and preserve complete collections; do not silently drop tabs.",
       "privacy": "Do not expose tabs or titles across identities without an explicit permission.",
@@ -2670,17 +2897,36 @@
           "chrome-tabs",
           "firefox-vertical",
           "gx-tabs",
-          "edge-productivity"
+          "edge-productivity",
+          "noxviola-main-integration",
+          "noxviola-renderer-controls"
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
         "nativeRuntime": "not-run",
-        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
+        "workingTreeReview": "2026-11-15 implementation continuation from d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source-reviewed, new native and packaged-executable acceptance pending",
+        "currentImplementation": {
+          "inventoryVersion": "2026-11-15.4",
+          "baseSourceRevision": "d2c347a5bfc8a07725abf9562f0869a51f6d3b74",
+          "sourcePaths": [
+            "browser/main.cjs",
+            "browser/renderer.js",
+            "browser/index.html"
+          ],
+          "portableContractPaths": [
+            "tests/preferences.test.cjs",
+            "tests/extension-bridge.test.cjs",
+            "tests/extension-preload.test.cjs"
+          ],
+          "nativeAcceptance": "pending",
+          "packagedRuntimeAcceptance": "pending",
+          "qualification": "These source/test paths do not promote the complete capability or replace earlier source-bound native receipts."
+        }
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Publish audible/muted state and use native WebContents audio controls.",
+      "nextAction": "Play separate fixture audio in two identities and verify per-tab mute, navigation, restart and indicators before adding site-wide policy.",
       "priority": "P2",
       "updatedAt": "2026-11-15"
     },
@@ -2771,7 +3017,10 @@
         "chrome-tabs",
         "firefox-vertical",
         "gx-tabs",
-        "edge-productivity"
+        "edge-productivity",
+        "noxviola-workspace-service",
+        "noxviola-local-data-contracts",
+        "noxviola-main-integration"
       ],
       "configuration": {
         "knownOptions": [
@@ -2780,25 +3029,34 @@
           "collapse",
           "move",
           "save",
-          "delete"
+          "delete",
+          "durable local definitions",
+          "name/color",
+          "explicit tab assignment",
+          "preserve background tabs",
+          "collapsed state"
         ],
         "coverage": "partial",
-        "remaining": "Inspect every relevant setting and interaction in a synthetic profile of each exact reference build; record defaults, range, persistence and platform conditions."
+        "remaining": "Native layout/focus and restart qualification, whole-group close/reopen, bulk operations, complete source-browser semantics and extension tabGroups adapters remain open. Full reference-browser configuration, default and platform auditing also remains open."
       },
       "dependencies": [
         "stable tab identity",
         "durable session state"
       ],
       "noxviola": {
-        "status": "absent",
+        "status": "partial",
         "codeOwner": "tab/session service",
         "paths": [
-          "browser/main.cjs",
+          "browser/workspaces.cjs",
+          "browser/service-store.cjs",
+          "browser/storage.cjs",
           "browser/state.cjs",
-          "browser/renderer.js"
+          "browser/main.cjs",
+          "browser/renderer.js",
+          "browser/index.html"
         ],
-        "integrationStrategy": "Extend the canonical tab model; expose the same operations to chrome and extensions.",
-        "note": "No accepted end-to-end Noxviola evidence for this complete capability."
+        "integrationStrategy": "Use canonical services and existing durable storage; keep independent preferences and identity ownership explicit, preserve unknown metadata and require explicit recovery.",
+        "note": "Durable named/color group definitions, collapsed state and saved tab group IDs are integrated with shared assignment controls. Groups belong to workspaces and cannot be removed while referenced. This is a local manual model, not Firefox-equivalent saved-group lifecycle or sync."
       },
       "performance": "Diff tab updates and preserve complete collections; do not silently drop tabs.",
       "privacy": "Do not expose tabs or titles across identities without an explicit permission.",
@@ -2816,17 +3074,41 @@
           "chrome-tabs",
           "firefox-vertical",
           "gx-tabs",
-          "edge-productivity"
+          "edge-productivity",
+          "noxviola-workspace-service",
+          "noxviola-local-data-contracts",
+          "noxviola-main-integration"
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
         "nativeRuntime": "not-run",
-        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
+        "workingTreeReview": "2026-11-15 implementation continuation from d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source-reviewed, new native and packaged-executable acceptance pending",
+        "currentImplementation": {
+          "inventoryVersion": "2026-11-15.4",
+          "baseSourceRevision": "d2c347a5bfc8a07725abf9562f0869a51f6d3b74",
+          "sourcePaths": [
+            "browser/workspaces.cjs",
+            "browser/service-store.cjs",
+            "browser/storage.cjs",
+            "browser/state.cjs",
+            "browser/main.cjs",
+            "browser/renderer.js",
+            "browser/index.html"
+          ],
+          "portableContractPaths": [
+            "tests/workspaces.test.cjs",
+            "tests/preferences.test.cjs",
+            "tests/renderer-product.test.cjs"
+          ],
+          "nativeAcceptance": "pending",
+          "packagedRuntimeAcceptance": "pending",
+          "qualification": "These source/test paths do not promote the complete capability or replace earlier source-bound native receipts."
+        }
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Add versioned groups to session state and expose shared group operations to extensions.",
+      "nextAction": "Verify workspace/group creation, assignment, collapse and restart through the production UI, then add missing group lifecycle and extension operations over the same canonical definitions.",
       "priority": "P2",
       "updatedAt": "2026-11-15"
     },
@@ -2851,7 +3133,10 @@
         }
       ],
       "sourceIds": [
-        "firefox-groups"
+        "firefox-groups",
+        "noxviola-workspace-service",
+        "noxviola-local-data-contracts",
+        "noxviola-main-integration"
       ],
       "configuration": {
         "knownOptions": [
@@ -2859,25 +3144,34 @@
           "color",
           "save and close",
           "ungroup",
-          "delete"
+          "delete",
+          "durable local definitions",
+          "name/color",
+          "explicit tab assignment",
+          "preserve background tabs",
+          "collapsed state"
         ],
         "coverage": "partial",
-        "remaining": "Inspect every relevant setting and interaction in a synthetic profile of each exact reference build; record defaults, range, persistence and platform conditions."
+        "remaining": "Native layout/focus and restart qualification, whole-group close/reopen, bulk operations, complete source-browser semantics and extension tabGroups adapters remain open. Full reference-browser configuration, default and platform auditing also remains open."
       },
       "dependencies": [
         "stable tab identity",
         "durable session state"
       ],
       "noxviola": {
-        "status": "absent",
+        "status": "partial",
         "codeOwner": "tab/session service",
         "paths": [
-          "browser/main.cjs",
+          "browser/workspaces.cjs",
+          "browser/service-store.cjs",
+          "browser/storage.cjs",
           "browser/state.cjs",
-          "browser/renderer.js"
+          "browser/main.cjs",
+          "browser/renderer.js",
+          "browser/index.html"
         ],
-        "integrationStrategy": "Extend the canonical tab model; expose the same operations to chrome and extensions.",
-        "note": "No accepted end-to-end Noxviola evidence for this complete capability."
+        "integrationStrategy": "Use canonical services and existing durable storage; keep independent preferences and identity ownership explicit, preserve unknown metadata and require explicit recovery.",
+        "note": "Durable named/color group definitions, collapsed state and saved tab group IDs are integrated with shared assignment controls. Groups belong to workspaces and cannot be removed while referenced. This is a local manual model, not Firefox-equivalent saved-group lifecycle or sync."
       },
       "performance": "Diff tab updates and preserve complete collections; do not silently drop tabs.",
       "privacy": "Do not expose tabs or titles across identities without an explicit permission.",
@@ -2892,17 +3186,41 @@
       "evidence": {
         "level": "documentation-and-source-review",
         "referenceSources": [
-          "firefox-groups"
+          "firefox-groups",
+          "noxviola-workspace-service",
+          "noxviola-local-data-contracts",
+          "noxviola-main-integration"
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
         "nativeRuntime": "not-run",
-        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
+        "workingTreeReview": "2026-11-15 implementation continuation from d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source-reviewed, new native and packaged-executable acceptance pending",
+        "currentImplementation": {
+          "inventoryVersion": "2026-11-15.4",
+          "baseSourceRevision": "d2c347a5bfc8a07725abf9562f0869a51f6d3b74",
+          "sourcePaths": [
+            "browser/workspaces.cjs",
+            "browser/service-store.cjs",
+            "browser/storage.cjs",
+            "browser/state.cjs",
+            "browser/main.cjs",
+            "browser/renderer.js",
+            "browser/index.html"
+          ],
+          "portableContractPaths": [
+            "tests/workspaces.test.cjs",
+            "tests/preferences.test.cjs",
+            "tests/renderer-product.test.cjs"
+          ],
+          "nativeAcceptance": "pending",
+          "packagedRuntimeAcceptance": "pending",
+          "qualification": "These source/test paths do not promote the complete capability or replace earlier source-bound native receipts."
+        }
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Keep local group preservation independent of any future sync adapter.",
+      "nextAction": "Verify workspace/group creation, assignment, collapse and restart through the production UI, then add missing group lifecycle and extension operations over the same canonical definitions.",
       "priority": "P2",
       "updatedAt": "2026-11-15"
     },
@@ -3023,7 +3341,10 @@
       ],
       "sourceIds": [
         "gx-workspaces",
-        "edge-workspaces"
+        "edge-workspaces",
+        "noxviola-workspace-service",
+        "noxviola-local-data-contracts",
+        "noxviola-main-integration"
       ],
       "configuration": {
         "knownOptions": [
@@ -3031,25 +3352,33 @@
           "rename",
           "color/icon",
           "switch",
-          "move tabs"
+          "move tabs",
+          "durable local definitions",
+          "name/color",
+          "explicit tab assignment",
+          "preserve background tabs"
         ],
         "coverage": "partial",
-        "remaining": "Inspect every relevant setting and interaction in a synthetic profile of each exact reference build; record defaults, range, persistence and platform conditions."
+        "remaining": "Native layout/focus and restart qualification, whole-group close/reopen, bulk operations, complete source-browser semantics and extension tabGroups adapters remain open. Full reference-browser configuration, default and platform auditing also remains open."
       },
       "dependencies": [
         "stable tab identity",
         "durable session state"
       ],
       "noxviola": {
-        "status": "absent",
+        "status": "partial",
         "codeOwner": "tab/session service",
         "paths": [
-          "browser/main.cjs",
+          "browser/workspaces.cjs",
+          "browser/service-store.cjs",
+          "browser/storage.cjs",
           "browser/state.cjs",
-          "browser/renderer.js"
+          "browser/main.cjs",
+          "browser/renderer.js",
+          "browser/index.html"
         ],
-        "integrationStrategy": "Extend the canonical tab model; expose the same operations to chrome and extensions.",
-        "note": "No accepted end-to-end Noxviola evidence for this complete capability."
+        "integrationStrategy": "Use canonical services and existing durable storage; keep independent preferences and identity ownership explicit, preserve unknown metadata and require explicit recovery.",
+        "note": "Durable named/color workspace definitions and independent saved tab workspace IDs are integrated with a selector and assignment UI. Switching preserves background tabs and each tab’s browser identity. Definitions use explicit recovery and refuse deleting an in-use workspace."
       },
       "performance": "Diff tab updates and preserve complete collections; do not silently drop tabs.",
       "privacy": "Do not expose tabs or titles across identities without an explicit permission.",
@@ -3065,17 +3394,41 @@
         "level": "documentation-and-source-review",
         "referenceSources": [
           "gx-workspaces",
-          "edge-workspaces"
+          "edge-workspaces",
+          "noxviola-workspace-service",
+          "noxviola-local-data-contracts",
+          "noxviola-main-integration"
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
         "nativeRuntime": "not-run",
-        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
+        "workingTreeReview": "2026-11-15 implementation continuation from d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source-reviewed, new native and packaged-executable acceptance pending",
+        "currentImplementation": {
+          "inventoryVersion": "2026-11-15.4",
+          "baseSourceRevision": "d2c347a5bfc8a07725abf9562f0869a51f6d3b74",
+          "sourcePaths": [
+            "browser/workspaces.cjs",
+            "browser/service-store.cjs",
+            "browser/storage.cjs",
+            "browser/state.cjs",
+            "browser/main.cjs",
+            "browser/renderer.js",
+            "browser/index.html"
+          ],
+          "portableContractPaths": [
+            "tests/workspaces.test.cjs",
+            "tests/preferences.test.cjs",
+            "tests/renderer-product.test.cjs"
+          ],
+          "nativeAcceptance": "pending",
+          "packagedRuntimeAcceptance": "pending",
+          "qualification": "These source/test paths do not promote the complete capability or replace earlier source-bound native receipts."
+        }
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Add durable workspace IDs without equating workspaces to isolated cookie stores.",
+      "nextAction": "Verify workspace/group creation, assignment, collapse and restart through the production UI, then add missing group lifecycle and extension operations over the same canonical definitions.",
       "priority": "P2",
       "updatedAt": "2026-11-15"
     },
@@ -3700,7 +4053,13 @@
       "sourceIds": [
         "firefox-containers",
         "edge-productivity",
-        "gx-index"
+        "gx-index",
+        "noxviola-history-service",
+        "noxviola-local-data-contracts",
+        "noxviola-main-integration",
+        "noxviola-bookmarks-service",
+        "noxviola-preferences",
+        "noxviola-renderer-controls"
       ],
       "configuration": {
         "knownOptions": [
@@ -3708,10 +4067,13 @@
           "bookmarks",
           "extensions",
           "search",
-          "history"
+          "history",
+          "identity-owned history",
+          "identity-owned bookmarks",
+          "app-wide presentation/workspace definitions"
         ],
         "coverage": "partial",
-        "remaining": "Inspect every relevant setting and interaction in a synthetic profile of each exact reference build; record defaults, range, persistence and platform conditions."
+        "remaining": "Full profile preferences, import/export/migration and native multi-account acceptance remain open. Full reference-browser configuration, default and platform auditing also remains open."
       },
       "dependencies": [
         "persistent session partitions",
@@ -3721,11 +4083,17 @@
         "status": "partial",
         "codeOwner": "identity/session service",
         "paths": [
+          "browser/history.cjs",
+          "browser/bookmarks.cjs",
+          "browser/workspaces.cjs",
+          "browser/preferences.cjs",
+          "browser/state.cjs",
           "browser/main.cjs",
-          "browser/state.cjs"
+          "browser/renderer.js",
+          "browser/index.html"
         ],
-        "integrationStrategy": "Keep identity labels separate from storage boundaries and test every storage channel.",
-        "note": "Partitions and profile names exist; vault is explicitly shared app-wide and full preference isolation is absent."
+        "integrationStrategy": "Use canonical services and existing durable storage; keep independent preferences and identity ownership explicit, preserve unknown metadata and require explicit recovery.",
+        "note": "History and bookmarks are explicitly identity-owned, while presentation preferences and workspace/group definitions are app-wide. Canonical services validate existing identity IDs; UI drafts keep their original identity through profile changes. Full per-profile preferences, import and browser-data management remain incomplete."
       },
       "performance": "Initialize only needed sessions and reuse one handler set per partition.",
       "privacy": "Prove cookies, storage, permissions and extension state stay in the selected identity.",
@@ -3742,17 +4110,45 @@
         "referenceSources": [
           "firefox-containers",
           "edge-productivity",
-          "gx-index"
+          "gx-index",
+          "noxviola-history-service",
+          "noxviola-local-data-contracts",
+          "noxviola-main-integration",
+          "noxviola-bookmarks-service",
+          "noxviola-preferences",
+          "noxviola-renderer-controls"
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
         "nativeRuntime": "not-run",
-        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
+        "workingTreeReview": "2026-11-15 implementation continuation from d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source-reviewed, new native and packaged-executable acceptance pending",
+        "currentImplementation": {
+          "inventoryVersion": "2026-11-15.4",
+          "baseSourceRevision": "d2c347a5bfc8a07725abf9562f0869a51f6d3b74",
+          "sourcePaths": [
+            "browser/history.cjs",
+            "browser/bookmarks.cjs",
+            "browser/workspaces.cjs",
+            "browser/preferences.cjs",
+            "browser/state.cjs",
+            "browser/main.cjs",
+            "browser/renderer.js",
+            "browser/index.html"
+          ],
+          "portableContractPaths": [
+            "tests/history.test.cjs",
+            "tests/bookmarks.test.cjs",
+            "tests/renderer-product.test.cjs"
+          ],
+          "nativeAcceptance": "pending",
+          "packagedRuntimeAcceptance": "pending",
+          "qualification": "These source/test paths do not promote the complete capability or replace earlier source-bound native receipts."
+        }
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Define app-wide versus identity-owned data explicitly before expanding profile UI.",
+      "nextAction": "Qualify identity-bound history/bookmarks and drafts in the native UI, then specify and implement the remaining per-profile data/preferences without silently changing ownership.",
       "priority": "P2",
       "updatedAt": "2026-11-15"
     },
@@ -5561,35 +5957,47 @@
       "sourceIds": [
         "firefox-index",
         "gx-index",
-        "edge-collections"
+        "edge-collections",
+        "noxviola-bookmarks-service",
+        "noxviola-local-data-contracts",
+        "noxviola-main-integration"
       ],
       "configuration": {
         "knownOptions": [
           "folders",
           "order",
           "tags",
-          "import/export"
+          "import/export",
+          "protected roots",
+          "stable IDs",
+          "folder hierarchy",
+          "separators",
+          "bookmark bar",
+          "explicit recovery"
         ],
         "coverage": "partial",
-        "remaining": "Inspect every relevant setting and interaction in a synthetic profile of each exact reference build; record defaults, range, persistence and platform conditions."
+        "remaining": "Tag-management UI, HTML/JSON import/export, complete reordering controls, large-tree rendering and native restart/draft workflows remain unqualified. Full reference-browser configuration, default and platform auditing also remains open."
       },
       "dependencies": [
         "validated local data",
         "recoverable writes"
       ],
       "noxviola": {
-        "status": "absent",
+        "status": "partial",
         "codeOwner": "local library service",
         "paths": [
-          "browser/vault.cjs",
-          "browser/accounts.cjs",
-          "browser/main.cjs"
+          "browser/bookmarks.cjs",
+          "browser/service-store.cjs",
+          "browser/storage.cjs",
+          "browser/main.cjs",
+          "browser/renderer.js",
+          "browser/index.html"
         ],
-        "integrationStrategy": "Extend existing local formats and preserve metadata; avoid parallel stores for the same concept.",
-        "note": "No accepted end-to-end Noxviola evidence for this complete capability."
+        "integrationStrategy": "Use canonical services and existing durable storage; keep independent preferences and identity ownership explicit, preserve unknown metadata and require explicit recovery.",
+        "note": "A separate canonical hierarchical bookmark service provides stable IDs, protected roots, folders, separators, tags, sibling order, search/recent/subtree operations, cycle prevention, durable edits/moves/deletes and explicit recovery. The UI supplies identity-bound create/edit/move drafts, folders and a bookmarks bar. Tag editing, HTML/JSON import/export and the full reference workflow remain open."
       },
-      "performance": "Index only when needed; measure large complete imports and searches.",
-      "privacy": "Plaintext personal metadata stays local by default; export is an explicit user action.",
+      "performance": "Queries use canonical in-memory indexes; mutations rewrite the complete durable JSON checkpoint. Deep-hierarchy and complete-result portable regressions exist, but large-library latency, memory and write cost are not measured.",
+      "privacy": "Bookmark data stays in the selected identity’s local plaintext service. Deletion retains a previous recovery checkpoint and is not secure erasure; unsupported URL schemes and embedded credentials reject.",
       "acceptanceTests": [
         {
           "id": "accept-bookmark-tree",
@@ -5603,17 +6011,41 @@
         "referenceSources": [
           "firefox-index",
           "gx-index",
-          "edge-collections"
+          "edge-collections",
+          "noxviola-bookmarks-service",
+          "noxviola-local-data-contracts",
+          "noxviola-main-integration"
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
         "nativeRuntime": "not-run",
-        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
+        "workingTreeReview": "2026-11-15 implementation continuation from d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source-reviewed, new native and packaged-executable acceptance pending",
+        "currentImplementation": {
+          "inventoryVersion": "2026-11-15.4",
+          "baseSourceRevision": "d2c347a5bfc8a07725abf9562f0869a51f6d3b74",
+          "sourcePaths": [
+            "browser/bookmarks.cjs",
+            "browser/service-store.cjs",
+            "browser/storage.cjs",
+            "browser/main.cjs",
+            "browser/renderer.js",
+            "browser/index.html"
+          ],
+          "portableContractPaths": [
+            "tests/bookmarks.test.cjs",
+            "tests/renderer-product.test.cjs",
+            "tests/extension-bridge.test.cjs",
+            "tests/extension-preload.test.cjs"
+          ],
+          "nativeAcceptance": "pending",
+          "packagedRuntimeAcceptance": "pending",
+          "qualification": "These source/test paths do not promote the complete capability or replace earlier source-bound native receipts."
+        }
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Map bookmark APIs onto a deliberate canonical store; do not pretend a flat collection is a full bookmark tree.",
+      "nextAction": "Qualify the shared tree and identity-bound forms in native/package runs, then add complete tag and import/export workflows using the same canonical store.",
       "priority": "P2",
       "updatedAt": "2026-11-15"
     },
@@ -6013,35 +6445,47 @@
       "sourceIds": [
         "firefox-index",
         "gx-index",
-        "edge-collections"
+        "edge-collections",
+        "noxviola-history-service",
+        "noxviola-local-data-contracts",
+        "noxviola-main-integration"
       ],
       "configuration": {
         "knownOptions": [
           "search",
           "time range",
           "per-identity scope",
-          "clear"
+          "clear",
+          "recording pause",
+          "optional retention days",
+          "per-visit deletion",
+          "date-range query",
+          "identity-bound settings",
+          "explicit recovery"
         ],
         "coverage": "partial",
-        "remaining": "Inspect every relevant setting and interaction in a synthetic profile of each exact reference build; record defaults, range, persistence and platform conditions."
+        "remaining": "Native commit/title/redirect timing, range-deletion controls, full historical import/export and large-history workload acceptance remain open. Full reference-browser configuration, default and platform auditing also remains open."
       },
       "dependencies": [
         "validated local data",
         "recoverable writes"
       ],
       "noxviola": {
-        "status": "absent",
+        "status": "partial",
         "codeOwner": "local library service",
         "paths": [
-          "browser/vault.cjs",
-          "browser/accounts.cjs",
-          "browser/main.cjs"
+          "browser/history.cjs",
+          "browser/service-store.cjs",
+          "browser/storage.cjs",
+          "browser/main.cjs",
+          "browser/renderer.js",
+          "browser/index.html"
         ],
-        "integrationStrategy": "Extend existing local formats and preserve metadata; avoid parallel stores for the same concept.",
-        "note": "No accepted end-to-end Noxviola evidence for this complete capability."
+        "integrationStrategy": "Use canonical services and existing durable storage; keep independent preferences and identity ownership explicit, preserve unknown metadata and require explicit recovery.",
+        "note": "Canonical history records committed HTTP(S) main-frame navigations per identity, maintains stable page/visit IDs and latest titles, and supports full query/search, visit lookup, URL/range deletion, clear, recording pause and optional retention. UI search and identity-bound settings share the service; recovery is explicit. Broader browser-history parity and native acceptance remain open."
       },
-      "performance": "Index only when needed; measure large complete imports and searches.",
-      "privacy": "Plaintext personal metadata stays local by default; export is an explicit user action.",
+      "performance": "Search uses in-memory canonical indexes and has no arbitrary UI result cap. Every mutation writes a complete durable JSON checkpoint; large-history write/search cost and retention scheduling remain unmeasured.",
+      "privacy": "Only committed HTTP(S) page visits are recorded in the owning identity. Recording can be paused; clearing/retention does not securely erase recovery checkpoints or website stores. No history upload or sync service is added.",
       "acceptanceTests": [
         {
           "id": "accept-history-manager",
@@ -6055,17 +6499,41 @@
         "referenceSources": [
           "firefox-index",
           "gx-index",
-          "edge-collections"
+          "edge-collections",
+          "noxviola-history-service",
+          "noxviola-local-data-contracts",
+          "noxviola-main-integration"
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
         "nativeRuntime": "not-run",
-        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
+        "workingTreeReview": "2026-11-15 implementation continuation from d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source-reviewed, new native and packaged-executable acceptance pending",
+        "currentImplementation": {
+          "inventoryVersion": "2026-11-15.4",
+          "baseSourceRevision": "d2c347a5bfc8a07725abf9562f0869a51f6d3b74",
+          "sourcePaths": [
+            "browser/history.cjs",
+            "browser/service-store.cjs",
+            "browser/storage.cjs",
+            "browser/main.cjs",
+            "browser/renderer.js",
+            "browser/index.html"
+          ],
+          "portableContractPaths": [
+            "tests/history.test.cjs",
+            "tests/renderer-product.test.cjs",
+            "tests/extension-bridge.test.cjs",
+            "tests/extension-preload.test.cjs"
+          ],
+          "nativeAcceptance": "pending",
+          "packagedRuntimeAcceptance": "pending",
+          "qualification": "These source/test paths do not promote the complete capability or replace earlier source-bound native receipts."
+        }
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Add a local history service with retention controls and a shared extension API.",
+      "nextAction": "Verify committed-navigation recording, title updates, per-identity settings/deletion and restart in the new native workflow; add missing range controls and history interchange over the same store.",
       "priority": "P2",
       "updatedAt": "2026-11-15"
     },
@@ -7022,7 +7490,10 @@
         "chrome-reader",
         "chrome-tools",
         "firefox-settings",
-        "edge-productivity"
+        "edge-productivity",
+        "noxviola-preferences",
+        "noxviola-main-integration",
+        "noxviola-renderer-controls"
       ],
       "configuration": {
         "knownOptions": [
@@ -7030,26 +7501,27 @@
           "text size",
           "fonts",
           "contrast",
-          "colors"
+          "colors",
+          "bounded page zoom",
+          "identity/origin zoom persistence"
         ],
         "coverage": "partial",
-        "remaining": "Inspect every relevant setting and interaction in a synthetic profile of each exact reference build; record defaults, range, persistence and platform conditions."
+        "remaining": "Native same-origin/shared-renderer zoom semantics, reset/restart, 200%/400% accessibility and font/text/color controls remain unqualified. Full reference-browser configuration, default and platform auditing also remains open."
       },
       "dependencies": [
         "keyboard and focus routing",
         "platform accessibility"
       ],
       "noxviola": {
-        "status": "absent",
+        "status": "partial",
         "codeOwner": "accessible browser chrome",
         "paths": [
-          "browser/index.html",
-          "browser/style.css",
-          "browser/renderer.js",
-          "browser/main.cjs"
+          "browser/main.cjs",
+          "browser/state.cjs",
+          "browser/preferences.cjs"
         ],
-        "integrationStrategy": "Share semantic controls with keyboard and assistive technology; retain a resettable preference.",
-        "note": "No accepted end-to-end Noxviola evidence for this complete capability."
+        "integrationStrategy": "Use canonical services and existing durable storage; keep independent preferences and identity ownership explicit, preserve unknown metadata and require explicit recovery.",
+        "note": "Native zoom in/out/reset is bounded to the saved-state range 0.25–5 and persisted by identity plus origin. The source restores configured factors after committed navigation. This does not implement independent page fonts, text-only sizing, contrast or colors."
       },
       "performance": "Avoid animation and focus work when disabled; measure real interaction tails.",
       "privacy": "Local preferences; speech or translation services must disclose any network processing.",
@@ -7067,17 +7539,36 @@
           "chrome-reader",
           "chrome-tools",
           "firefox-settings",
-          "edge-productivity"
+          "edge-productivity",
+          "noxviola-preferences",
+          "noxviola-main-integration",
+          "noxviola-renderer-controls"
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
         "nativeRuntime": "not-run",
-        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
+        "workingTreeReview": "2026-11-15 implementation continuation from d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source-reviewed, new native and packaged-executable acceptance pending",
+        "currentImplementation": {
+          "inventoryVersion": "2026-11-15.4",
+          "baseSourceRevision": "d2c347a5bfc8a07725abf9562f0869a51f6d3b74",
+          "sourcePaths": [
+            "browser/main.cjs",
+            "browser/state.cjs",
+            "browser/preferences.cjs"
+          ],
+          "portableContractPaths": [
+            "tests/preferences.test.cjs",
+            "tests/state.test.cjs"
+          ],
+          "nativeAcceptance": "pending",
+          "packagedRuntimeAcceptance": "pending",
+          "qualification": "These source/test paths do not promote the complete capability or replace earlier source-bound native receipts."
+        }
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Expose engine zoom/preferences plus accessible chrome scaling.",
+      "nextAction": "Validate native origin/identity zoom restoration and readable focus at high zoom; add the independent font/text/color controls still missing.",
       "priority": "P2",
       "updatedAt": "2026-11-15"
     },
@@ -8733,7 +9224,10 @@
       "sourceIds": [
         "gx-mods",
         "firefox-settings",
-        "edge-productivity"
+        "edge-productivity",
+        "noxviola-preferences",
+        "noxviola-main-integration",
+        "noxviola-renderer-controls"
       ],
       "configuration": {
         "knownOptions": [
@@ -8741,25 +9235,33 @@
           "reorder",
           "density",
           "sidebar side",
-          "reset"
+          "reset",
+          "Home visibility",
+          "Library visibility",
+          "Extensions visibility",
+          "Split visibility",
+          "bookmarks bar visibility"
         ],
         "coverage": "partial",
-        "remaining": "Inspect every relevant setting and interaction in a synthetic profile of each exact reference build; record defaults, range, persistence and platform conditions."
+        "remaining": "Control reordering, sidebar-side placement, reset of complete arrangements and native keyboard/order/accessibility acceptance are incomplete. Full reference-browser configuration, default and platform auditing also remains open."
       },
       "dependencies": [
         "versioned settings",
         "accessible defaults"
       ],
       "noxviola": {
-        "status": "absent",
+        "status": "partial",
         "codeOwner": "optional chrome settings",
         "paths": [
+          "browser/preferences.cjs",
+          "browser/state.cjs",
+          "browser/main.cjs",
+          "browser/renderer.js",
           "browser/index.html",
-          "browser/style.css",
-          "browser/renderer.js"
+          "browser/style.css"
         ],
-        "integrationStrategy": "Compose independent options over canonical services, with conflict handling and reset.",
-        "note": "No accepted end-to-end Noxviola evidence for this complete capability."
+        "integrationStrategy": "Use canonical services and existing durable storage; keep independent preferences and identity ownership explicit, preserve unknown metadata and require explicit recovery.",
+        "note": "Independent saved visibility controls exist for Home, Library, Extensions and Split, plus the bookmarks bar and compact/comfortable density. Actual renderer state drives visibility; the tools menu retains access. Reordering, sidebar-side selection and richer layouts remain open."
       },
       "performance": "Disabled modules must create no ongoing work; pause decorative media when hidden.",
       "privacy": "Keep customization local; downloaded assets require provenance and permission.",
@@ -8776,17 +9278,39 @@
         "referenceSources": [
           "gx-mods",
           "firefox-settings",
-          "edge-productivity"
+          "edge-productivity",
+          "noxviola-preferences",
+          "noxviola-main-integration",
+          "noxviola-renderer-controls"
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
         "nativeRuntime": "not-run",
-        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
+        "workingTreeReview": "2026-11-15 implementation continuation from d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source-reviewed, new native and packaged-executable acceptance pending",
+        "currentImplementation": {
+          "inventoryVersion": "2026-11-15.4",
+          "baseSourceRevision": "d2c347a5bfc8a07725abf9562f0869a51f6d3b74",
+          "sourcePaths": [
+            "browser/preferences.cjs",
+            "browser/state.cjs",
+            "browser/main.cjs",
+            "browser/renderer.js",
+            "browser/index.html",
+            "browser/style.css"
+          ],
+          "portableContractPaths": [
+            "tests/preferences.test.cjs",
+            "tests/renderer-product.test.cjs"
+          ],
+          "nativeAcceptance": "pending",
+          "packagedRuntimeAcceptance": "pending",
+          "qualification": "These source/test paths do not promote the complete capability or replace earlier source-bound native receipts."
+        }
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Add versioned preferences over one action registry.",
+      "nextAction": "Qualify saved visibility/density with native bounds and keyboard access, then add arrangement controls without hiding essential browser actions.",
       "priority": "P2",
       "updatedAt": "2026-11-15"
     },
@@ -8851,7 +9375,10 @@
       "sourceIds": [
         "gx-mods",
         "firefox-settings",
-        "edge-productivity"
+        "edge-productivity",
+        "noxviola-preferences",
+        "noxviola-main-integration",
+        "noxviola-renderer-controls"
       ],
       "configuration": {
         "knownOptions": [
@@ -8859,10 +9386,14 @@
           "colors",
           "fonts",
           "import",
-          "reset"
+          "reset",
+          "system appearance",
+          "violet/blue/teal/rose/amber accents",
+          "compact/comfortable density",
+          "preference preset preview"
         ],
         "coverage": "partial",
-        "remaining": "Inspect every relevant setting and interaction in a synthetic profile of each exact reference build; record defaults, range, persistence and platform conditions."
+        "remaining": "Custom fonts/assets, high-contrast and reduced-motion native accessibility, all mixed-module combinations and richer themes remain unqualified. Full reference-browser configuration, default and platform auditing also remains open."
       },
       "dependencies": [
         "versioned settings",
@@ -8872,12 +9403,15 @@
         "status": "partial",
         "codeOwner": "optional chrome settings",
         "paths": [
+          "browser/preferences.cjs",
+          "browser/state.cjs",
+          "browser/main.cjs",
+          "browser/renderer.js",
           "browser/index.html",
-          "browser/style.css",
-          "browser/renderer.js"
+          "browser/style.css"
         ],
-        "integrationStrategy": "Compose independent options over canonical services, with conflict handling and reset.",
-        "note": "Baseline provides a fixed visual theme; full customization is absent."
+        "integrationStrategy": "Use canonical services and existing durable storage; keep independent preferences and identity ownership explicit, preserve unknown metadata and require explicit recovery.",
+        "note": "Independent saved dark/light/system appearance, five accents and compact/comfortable density use local CSS variables. Preferences can be reviewed/imported/exported separately from browsing data and extension grants. Custom fonts, downloadable theme assets and rich modular visual effects remain open."
       },
       "performance": "Disabled modules must create no ongoing work; pause decorative media when hidden.",
       "privacy": "Keep customization local; downloaded assets require provenance and permission.",
@@ -8894,17 +9428,39 @@
         "referenceSources": [
           "gx-mods",
           "firefox-settings",
-          "edge-productivity"
+          "edge-productivity",
+          "noxviola-preferences",
+          "noxviola-main-integration",
+          "noxviola-renderer-controls"
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
         "nativeRuntime": "not-run",
-        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
+        "workingTreeReview": "2026-11-15 implementation continuation from d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source-reviewed, new native and packaged-executable acceptance pending",
+        "currentImplementation": {
+          "inventoryVersion": "2026-11-15.4",
+          "baseSourceRevision": "d2c347a5bfc8a07725abf9562f0869a51f6d3b74",
+          "sourcePaths": [
+            "browser/preferences.cjs",
+            "browser/state.cjs",
+            "browser/main.cjs",
+            "browser/renderer.js",
+            "browser/index.html",
+            "browser/style.css"
+          ],
+          "portableContractPaths": [
+            "tests/preferences.test.cjs",
+            "tests/renderer-product.test.cjs"
+          ],
+          "nativeAcceptance": "pending",
+          "packagedRuntimeAcceptance": "pending",
+          "qualification": "These source/test paths do not promote the complete capability or replace earlier source-bound native receipts."
+        }
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Reuse CSS variables and scoped assets without privileged theme code.",
+      "nextAction": "Render and operate the saved appearance combinations on both native platforms, then add independent font/asset modules with accessibility and provenance.",
       "priority": "P2",
       "updatedAt": "2026-11-15"
     },
@@ -9562,32 +10118,41 @@
         }
       ],
       "sourceIds": [
-        "firefox-shortcuts"
+        "firefox-shortcuts",
+        "noxviola-preferences",
+        "noxviola-main-integration",
+        "noxviola-renderer-controls"
       ],
       "configuration": {
         "knownOptions": [
           "change",
           "clear",
           "reset",
-          "search bindings"
+          "search bindings",
+          "individual disable",
+          "restore defaults",
+          "platform alias conflict validation"
         ],
         "coverage": "partial",
-        "remaining": "Inspect every relevant setting and interaction in a synthetic profile of each exact reference build; record defaults, range, persistence and platform conditions."
+        "remaining": "Shortcut search, extension-command conflicts, QWERTY/non-US layouts, IME and native focus/accessibility interactions remain unqualified. Full reference-browser configuration, default and platform auditing also remains open."
       },
       "dependencies": [
         "versioned settings",
         "accessible defaults"
       ],
       "noxviola": {
-        "status": "absent",
+        "status": "partial",
         "codeOwner": "optional chrome settings",
         "paths": [
+          "browser/preferences.cjs",
+          "browser/state.cjs",
+          "browser/main.cjs",
+          "browser/renderer.js",
           "browser/index.html",
-          "browser/style.css",
-          "browser/renderer.js"
+          "browser/style.css"
         ],
-        "integrationStrategy": "Compose independent options over canonical services, with conflict handling and reset.",
-        "note": "No accepted end-to-end Noxviola evidence for this complete capability."
+        "integrationStrategy": "Use canonical services and existing durable storage; keep independent preferences and identity ownership explicit, preserve unknown metadata and require explicit recovery.",
+        "note": "The canonical browser shortcut registry supports per-command editing, disabling, reset and platform-normalized duplicate rejection. Saved bindings drive the application menu, including page-focus actions. Shortcut search, extension command registration and full international keyboard/IME behavior remain open."
       },
       "performance": "Disabled modules must create no ongoing work; pause decorative media when hidden.",
       "privacy": "Keep customization local; downloaded assets require provenance and permission.",
@@ -9602,17 +10167,39 @@
       "evidence": {
         "level": "documentation-and-source-review",
         "referenceSources": [
-          "firefox-shortcuts"
+          "firefox-shortcuts",
+          "noxviola-preferences",
+          "noxviola-main-integration",
+          "noxviola-renderer-controls"
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
         "nativeRuntime": "not-run",
-        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
+        "workingTreeReview": "2026-11-15 implementation continuation from d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source-reviewed, new native and packaged-executable acceptance pending",
+        "currentImplementation": {
+          "inventoryVersion": "2026-11-15.4",
+          "baseSourceRevision": "d2c347a5bfc8a07725abf9562f0869a51f6d3b74",
+          "sourcePaths": [
+            "browser/preferences.cjs",
+            "browser/state.cjs",
+            "browser/main.cjs",
+            "browser/renderer.js",
+            "browser/index.html",
+            "browser/style.css"
+          ],
+          "portableContractPaths": [
+            "tests/preferences.test.cjs",
+            "tests/renderer-product.test.cjs"
+          ],
+          "nativeAcceptance": "pending",
+          "packagedRuntimeAcceptance": "pending",
+          "qualification": "These source/test paths do not promote the complete capability or replace earlier source-bound native receipts."
+        }
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Build a shared command registry and retain platform reserved shortcuts.",
+      "nextAction": "Exercise custom and cleared bindings with native page focus and non-US/IME input, then integrate extension commands with the same conflict resolver.",
       "priority": "P2",
       "updatedAt": "2026-11-15"
     },
@@ -10280,7 +10867,10 @@
       ],
       "sourceIds": [
         "gx-control",
-        "firefox-keys"
+        "firefox-keys",
+        "noxviola-resource-monitor",
+        "noxviola-main-integration",
+        "noxviola-renderer-controls"
       ],
       "configuration": {
         "knownOptions": [
@@ -10289,26 +10879,32 @@
           "activity",
           "refresh",
           "inspect",
-          "stop selected process"
+          "stop selected process",
+          "explicit refresh",
+          "first-sample CPU unknown",
+          "shared-process ownership labels"
         ],
         "coverage": "partial",
-        "remaining": "Inspect every relevant setting and interaction in a synthetic profile of each exact reference build; record defaults, range, persistence and platform conditions."
+        "remaining": "Native OS correlation, observer overhead, GPU/disk/network details, worker attribution, selected-process inspection/termination and resource limits remain open. Full reference-browser configuration, default and platform auditing also remains open."
       },
       "dependencies": [
         "whole-process measurements",
         "tab lifecycle contracts"
       ],
       "noxviola": {
-        "status": "absent",
+        "status": "partial",
         "codeOwner": "resource and lifecycle service",
         "paths": [
-          "browser/main.cjs"
+          "browser/resources.cjs",
+          "browser/main.cjs",
+          "browser/renderer.js",
+          "browser/index.html"
         ],
-        "integrationStrategy": "Measure first; apply user-selected controls without changing necessary work silently.",
-        "note": "No accepted end-to-end Noxviola evidence for this complete capability."
+        "integrationStrategy": "Use canonical services and existing durable storage; keep independent preferences and identity ownership explicit, preserve unknown metadata and require explicit recovery.",
+        "note": "An explicitly requested native process sample exposes available CPU, working/peak memory, sandbox state and existing tab/extension-view ownership. The first CPU interval is unknown; missing metrics remain unknown. Shared process attribution is disclosed and no polling, process kill, limit or performance advantage is claimed."
       },
-      "performance": "Record CPU, RSS, GPU, disk, network, latency and quality on equivalent full workloads.",
-      "privacy": "Resource observations stay local and should not record URLs by default.",
+      "performance": "Sampling calls native metrics only on explicit panel open/refresh. Working-set totals can count shared pages more than once; missing values are not zero and no whole-workload speed/resource improvement is established.",
+      "privacy": "Diagnostics stay local and can display tab titles and identity labels. Only available native contexts are attributed; no background activity recorder or telemetry upload is added.",
       "acceptanceTests": [
         {
           "id": "accept-resource-monitor",
@@ -10321,17 +10917,36 @@
         "level": "documentation-and-source-review",
         "referenceSources": [
           "gx-control",
-          "firefox-keys"
+          "firefox-keys",
+          "noxviola-resource-monitor",
+          "noxviola-main-integration",
+          "noxviola-renderer-controls"
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
         "nativeRuntime": "not-run",
-        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
+        "workingTreeReview": "2026-11-15 implementation continuation from d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source-reviewed, new native and packaged-executable acceptance pending",
+        "currentImplementation": {
+          "inventoryVersion": "2026-11-15.4",
+          "baseSourceRevision": "d2c347a5bfc8a07725abf9562f0869a51f6d3b74",
+          "sourcePaths": [
+            "browser/resources.cjs",
+            "browser/main.cjs",
+            "browser/renderer.js",
+            "browser/index.html"
+          ],
+          "portableContractPaths": [
+            "tests/resources.test.cjs"
+          ],
+          "nativeAcceptance": "pending",
+          "packagedRuntimeAcceptance": "pending",
+          "qualification": "These source/test paths do not promote the complete capability or replace earlier source-bound native receipts."
+        }
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Build whole-process accounting before resource limits or superiority claims.",
+      "nextAction": "Compare explicit samples with the actual process tree on both platforms and measure overhead before adding controls or performance claims.",
       "priority": "P4",
       "updatedAt": "2026-11-15"
     },
@@ -14975,7 +15590,10 @@
       ],
       "sourceIds": [
         "mdn-background",
-        "mdn-incompatibilities"
+        "mdn-incompatibilities",
+        "noxviola-extension-bridge",
+        "noxviola-extension-preload",
+        "extension-adapter-410"
       ],
       "configuration": {
         "knownOptions": [
@@ -14985,7 +15603,7 @@
           "CSP"
         ],
         "coverage": "partial",
-        "remaining": "Inspect every relevant setting and interaction in a synthetic profile of each exact reference build; record defaults, range, persistence and platform conditions."
+        "remaining": "Real MV3 worker startup, suspension/wake, preload transport, event delivery and full manifest/runtime compatibility remain open. Full reference-browser configuration, default and platform auditing also remains open."
       },
       "dependencies": [
         "manifest inspection",
@@ -14996,12 +15614,14 @@
         "status": "partial",
         "codeOwner": "canonical extension-management service",
         "paths": [
+          "browser/extension-bridge.cjs",
+          "browser/extension-policy.cjs",
+          "browser/extension-api.preload.cjs",
           "browser/extensions.cjs",
-          "browser/main.cjs",
-          "docs/browser/EXTENSION-ARCHITECTURE.md"
+          "browser/main.cjs"
         ],
-        "integrationStrategy": "Use the canonical extension-management service; evaluate and harden the pinned maintained adapter, then bind actual APIs to canonical browser services with per-member functional tests.",
-        "note": "Local extension lifecycle delegates execution to the actual Electron44.11.3 engine. Its documented API subset is not full compatibility and remains functionally unqualified here. Required members, contexts, lifecycle and browser-specific differences are open."
+        "integrationStrategy": "Bind the authenticated native extension principal to existing identity-first browser services; use selected maintained source with retained licenses and reject unsupported options explicitly.",
+        "note": "Existing historical receipts cover a generated MV3 content-only package. The new bridge registers extension preloads and authenticates actually observed worker objects, but does not create, retain, wake or replay workers; native MV3 background startup remains unqualified."
       },
       "performance": "Observe actual background lifetimes and cleanup; do not replace semantics with no-op APIs.",
       "privacy": "Extension code stays untrusted; permissions, storage and messaging are identity-scoped.",
@@ -15017,12 +15637,15 @@
         "level": "documentation-source-and-scoped-native-evidence",
         "referenceSources": [
           "mdn-background",
-          "mdn-incompatibilities"
+          "mdn-incompatibilities",
+          "noxviola-extension-bridge",
+          "noxviola-extension-preload",
+          "extension-adapter-410"
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
         "nativeRuntime": "Recorded generated workflows passed on Windows and Linux; the complete declared capability remains unverified.",
-        "workingTreeReview": "2026-11-15 inventory.3; last verified source snapshot ac3a92f6 with prior failed receipts retained.",
+        "workingTreeReview": "2026-11-15 implementation continuation from d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source-reviewed, new native and packaged-executable acceptance pending",
         "nativeReceipts": [
           {
             "sourceRevision": "6fccdd2382cd36bcdaefb58a41ef898c35aadb87",
@@ -15047,12 +15670,31 @@
             "fullGatePassed": false,
             "qualification": "This receipt covers the stated synthetic workflow only; the complete acceptanceTests, capability status and master product gates are unchanged."
           }
-        ]
+        ],
+        "currentImplementation": {
+          "inventoryVersion": "2026-11-15.4",
+          "baseSourceRevision": "d2c347a5bfc8a07725abf9562f0869a51f6d3b74",
+          "sourcePaths": [
+            "browser/extension-bridge.cjs",
+            "browser/extension-policy.cjs",
+            "browser/extension-api.preload.cjs",
+            "browser/extensions.cjs",
+            "browser/main.cjs"
+          ],
+          "portableContractPaths": [
+            "tests/extension-bridge.test.cjs",
+            "tests/extension-preload.test.cjs",
+            "tests/extension-runtime.test.cjs"
+          ],
+          "nativeAcceptance": "pending",
+          "packagedRuntimeAcceptance": "pending",
+          "qualification": "These source/test paths do not promote the complete capability or replace earlier source-bound native receipts."
+        }
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Run a real MV3 service-worker lifecycle fixture on Electron44.11.3; its pinned support document only names background ManifestV2, so neither modern Chrome support nor a load success proves MV3 lifecycle parity.",
+      "nextAction": "Run an actual pinned-runtime MV3 worker lifecycle fixture; portable worker-object checks and content-only package passes cannot qualify background behavior.",
       "priority": "P1",
       "updatedAt": "2026-11-15"
     },
@@ -15125,7 +15767,10 @@
       ],
       "sourceIds": [
         "mdn-api-index",
-        "mdn-incompatibilities"
+        "mdn-incompatibilities",
+        "noxviola-extension-bridge",
+        "noxviola-extension-preload",
+        "extension-adapter-410"
       ],
       "configuration": {
         "knownOptions": [
@@ -15135,7 +15780,7 @@
           "lastError"
         ],
         "coverage": "partial",
-        "remaining": "Inspect every relevant setting and interaction in a synthetic profile of each exact reference build; record defaults, range, persistence and platform conditions."
+        "remaining": "Actual extension-document/native execution, content-world exposure, Gecko-only members, optional grant synchronization and MV3 wake/lifetime remain unqualified. Full reference-browser configuration, default and platform auditing also remains open."
       },
       "dependencies": [
         "manifest inspection",
@@ -15143,15 +15788,17 @@
         "per-identity extension context"
       ],
       "noxviola": {
-        "status": "absent",
+        "status": "partial",
         "codeOwner": "canonical extension-management service",
         "paths": [
+          "browser/extension-bridge.cjs",
+          "browser/extension-policy.cjs",
+          "browser/extension-api.preload.cjs",
           "browser/extensions.cjs",
-          "browser/main.cjs",
-          "docs/browser/EXTENSION-ARCHITECTURE.md"
+          "browser/main.cjs"
         ],
-        "integrationStrategy": "Use the canonical extension-management service; evaluate and harden the pinned maintained adapter, then bind actual APIs to canonical browser services with per-member functional tests.",
-        "note": "Target contract. Electron support and any wrapper are partial and must be recorded per member, context, option and exact version; no complete ecosystem support is claimed."
+        "integrationStrategy": "Bind the authenticated native extension principal to existing identity-first browser services; use selected maintained source with retained licenses and reject unsupported options explicitly.",
+        "note": "The isolated extension preload embeds the unmodified Mozilla webextension-polyfill 0.12.0 distribution with MPL 2.0 notice and uses it over real callback/host methods. Promise/error and async-message semantics are portable-tested; this is not a namespace-only success shim or Firefox API equivalence."
       },
       "performance": "Observe actual background lifetimes and cleanup; do not replace semantics with no-op APIs.",
       "privacy": "Extension code stays untrusted; permissions, storage and messaging are identity-scoped.",
@@ -15167,17 +15814,38 @@
         "level": "documentation-and-source-review",
         "referenceSources": [
           "mdn-api-index",
-          "mdn-incompatibilities"
+          "mdn-incompatibilities",
+          "noxviola-extension-bridge",
+          "noxviola-extension-preload",
+          "extension-adapter-410"
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
         "nativeRuntime": "not-run",
-        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
+        "workingTreeReview": "2026-11-15 implementation continuation from d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source-reviewed, new native and packaged-executable acceptance pending",
+        "currentImplementation": {
+          "inventoryVersion": "2026-11-15.4",
+          "baseSourceRevision": "d2c347a5bfc8a07725abf9562f0869a51f6d3b74",
+          "sourcePaths": [
+            "browser/extension-bridge.cjs",
+            "browser/extension-policy.cjs",
+            "browser/extension-api.preload.cjs",
+            "browser/extensions.cjs",
+            "browser/main.cjs"
+          ],
+          "portableContractPaths": [
+            "tests/extension-bridge.test.cjs",
+            "tests/extension-preload.test.cjs"
+          ],
+          "nativeAcceptance": "pending",
+          "packagedRuntimeAcceptance": "pending",
+          "qualification": "These source/test paths do not promote the complete capability or replace earlier source-bound native receipts."
+        }
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Test the exact embedded runtime before adapting namespaces. Chrome148+ documentation is not evidence that Electron44.11.3 implements browser.*; a namespace alias cannot implement missing APIs.",
+      "nextAction": "Run the new native bridge fixture and pinned upstream packages against callback and Promise behavior before adding further namespace/member support.",
       "priority": "P1",
       "updatedAt": "2026-11-15"
     },
@@ -15249,7 +15917,10 @@
         }
       ],
       "sourceIds": [
-        "mdn-incompatibilities"
+        "mdn-incompatibilities",
+        "noxviola-extension-bridge",
+        "noxviola-extension-preload",
+        "extension-adapter-410"
       ],
       "configuration": {
         "knownOptions": [
@@ -15260,7 +15931,7 @@
           "serialization"
         ],
         "coverage": "partial",
-        "remaining": "Inspect every relevant setting and interaction in a synthetic profile of each exact reference build; record defaults, range, persistence and platform conditions."
+        "remaining": "Native Port and worker lifetimes, serialization differences, content-world API expansion, MV3 wake behavior and real upstream package coverage remain open. Full reference-browser configuration, default and platform auditing also remains open."
       },
       "dependencies": [
         "manifest inspection",
@@ -15271,12 +15942,14 @@
         "status": "partial",
         "codeOwner": "canonical extension-management service",
         "paths": [
+          "browser/extension-bridge.cjs",
+          "browser/extension-policy.cjs",
+          "browser/extension-api.preload.cjs",
           "browser/extensions.cjs",
-          "browser/main.cjs",
-          "docs/browser/EXTENSION-ARCHITECTURE.md"
+          "browser/main.cjs"
         ],
-        "integrationStrategy": "Use the canonical extension-management service; evaluate and harden the pinned maintained adapter, then bind actual APIs to canonical browser services with per-member functional tests.",
-        "note": "Local extension lifecycle delegates execution to the actual Electron44.11.3 engine. Its documented API subset is not full compatibility and remains functionally unqualified here. Required members, contexts, lifecycle and browser-specific differences are open."
+        "integrationStrategy": "Bind the authenticated native extension principal to existing identity-first browser services; use selected maintained source with retained licenses and reject unsupported options explicitly.",
+        "note": "Native runtime messaging and Ports are preserved while wrapper sender/target IDs translate between canonical browser tabs and existing native WebContents. Authenticated synchronous weak event registration prevents first-event subscription races; Mozilla Promise and callback-lastError behavior is tested without keepalive or replay shims."
       },
       "performance": "Observe actual background lifetimes and cleanup; do not replace semantics with no-op APIs.",
       "privacy": "Extension code stays untrusted; permissions, storage and messaging are identity-scoped.",
@@ -15291,12 +15964,15 @@
       "evidence": {
         "level": "documentation-source-and-scoped-native-evidence",
         "referenceSources": [
-          "mdn-incompatibilities"
+          "mdn-incompatibilities",
+          "noxviola-extension-bridge",
+          "noxviola-extension-preload",
+          "extension-adapter-410"
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
         "nativeRuntime": "Recorded generated workflows passed on Windows and Linux; the complete declared capability remains unverified.",
-        "workingTreeReview": "2026-11-15 inventory.3; last verified source snapshot ac3a92f6 with prior failed receipts retained.",
+        "workingTreeReview": "2026-11-15 implementation continuation from d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source-reviewed, new native and packaged-executable acceptance pending",
         "nativeReceipts": [
           {
             "sourceRevision": "6fccdd2382cd36bcdaefb58a41ef898c35aadb87",
@@ -15321,12 +15997,30 @@
             "fullGatePassed": false,
             "qualification": "This receipt covers the stated synthetic workflow only; the complete acceptanceTests, capability status and master product gates are unchanged."
           }
-        ]
+        ],
+        "currentImplementation": {
+          "inventoryVersion": "2026-11-15.4",
+          "baseSourceRevision": "d2c347a5bfc8a07725abf9562f0869a51f6d3b74",
+          "sourcePaths": [
+            "browser/extension-bridge.cjs",
+            "browser/extension-policy.cjs",
+            "browser/extension-api.preload.cjs",
+            "browser/extensions.cjs",
+            "browser/main.cjs"
+          ],
+          "portableContractPaths": [
+            "tests/extension-bridge.test.cjs",
+            "tests/extension-preload.test.cjs"
+          ],
+          "nativeAcceptance": "pending",
+          "packagedRuntimeAcceptance": "pending",
+          "qualification": "These source/test paths do not promote the complete capability or replace earlier source-bound native receipts."
+        }
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Qualify long-lived ports, authenticated sender boundaries, iframe navigation, worker death and source-browser serialization beyond the passing one-shot MV2 fixture.",
+      "nextAction": "Run native one-shot/Port and both-direction ID translation workflows with revocation and restart, retaining earlier scoped MV2 receipts.",
       "priority": "P1",
       "updatedAt": "2026-11-15"
     },
@@ -15403,7 +16097,10 @@
       ],
       "sourceIds": [
         "mdn-incompatibilities",
-        "mdn-manifest"
+        "mdn-manifest",
+        "noxviola-extension-bridge",
+        "noxviola-extension-preload",
+        "extension-adapter-410"
       ],
       "configuration": {
         "knownOptions": [
@@ -15414,7 +16111,7 @@
           "CSS"
         ],
         "coverage": "partial",
-        "remaining": "Inspect every relevant setting and interaction in a synthetic profile of each exact reference build; record defaults, range, persistence and platform conditions."
+        "remaining": "Firefox execution-world/Xray differences, content-script access to additional host APIs, native injection grants and full package behavior remain open. Full reference-browser configuration, default and platform auditing also remains open."
       },
       "dependencies": [
         "manifest inspection",
@@ -15425,12 +16122,14 @@
         "status": "partial",
         "codeOwner": "canonical extension-management service",
         "paths": [
+          "browser/extension-bridge.cjs",
+          "browser/extension-policy.cjs",
+          "browser/extension-api.preload.cjs",
           "browser/extensions.cjs",
-          "browser/main.cjs",
-          "docs/browser/EXTENSION-ARCHITECTURE.md"
+          "browser/main.cjs"
         ],
-        "integrationStrategy": "Use the canonical extension-management service; evaluate and harden the pinned maintained adapter, then bind actual APIs to canonical browser services with per-member functional tests.",
-        "note": "Local extension lifecycle delegates execution to the actual Electron44.11.3 engine. Its documented API subset is not full compatibility and remains functionally unqualified here. Required members, contexts, lifecycle and browser-specific differences are open."
+        "integrationStrategy": "Bind the authenticated native extension principal to existing identity-first browser services; use selected maintained source with retained licenses and reject unsupported options explicitly.",
+        "note": "Engine-supported content scripts remain native; the new host transport is restricted to committed extension documents and observed extension workers, not ordinary website/content-script worlds. Native injection/message wrappers translate canonical IDs and preserve native engine permission enforcement."
       },
       "performance": "Observe actual background lifetimes and cleanup; do not replace semantics with no-op APIs.",
       "privacy": "Extension code stays untrusted; permissions, storage and messaging are identity-scoped.",
@@ -15446,12 +16145,15 @@
         "level": "documentation-source-and-scoped-native-evidence",
         "referenceSources": [
           "mdn-incompatibilities",
-          "mdn-manifest"
+          "mdn-manifest",
+          "noxviola-extension-bridge",
+          "noxviola-extension-preload",
+          "extension-adapter-410"
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
         "nativeRuntime": "Recorded generated workflows passed on Windows and Linux; the complete declared capability remains unverified.",
-        "workingTreeReview": "2026-11-15 inventory.3; last verified source snapshot ac3a92f6 with prior failed receipts retained.",
+        "workingTreeReview": "2026-11-15 implementation continuation from d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source-reviewed, new native and packaged-executable acceptance pending",
         "nativeReceipts": [
           {
             "sourceRevision": "6fccdd2382cd36bcdaefb58a41ef898c35aadb87",
@@ -15476,12 +16178,30 @@
             "fullGatePassed": false,
             "qualification": "This receipt covers the stated synthetic workflow only; the complete acceptanceTests, capability status and master product gates are unchanged."
           }
-        ]
+        ],
+        "currentImplementation": {
+          "inventoryVersion": "2026-11-15.4",
+          "baseSourceRevision": "d2c347a5bfc8a07725abf9562f0869a51f6d3b74",
+          "sourcePaths": [
+            "browser/extension-bridge.cjs",
+            "browser/extension-policy.cjs",
+            "browser/extension-api.preload.cjs",
+            "browser/extensions.cjs",
+            "browser/main.cjs"
+          ],
+          "portableContractPaths": [
+            "tests/extension-bridge.test.cjs",
+            "tests/extension-preload.test.cjs"
+          ],
+          "nativeAcceptance": "pending",
+          "packagedRuntimeAcceptance": "pending",
+          "qualification": "These source/test paths do not promote the complete capability or replace earlier source-bound native receipts."
+        }
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Prefer engine-supported injection; test Firefox Xray/world differences explicitly.",
+      "nextAction": "Verify absence of the new transport in webpages and content worlds, then qualify native injection and required browser-specific world semantics.",
       "priority": "P1",
       "updatedAt": "2026-11-15"
     },
@@ -15562,7 +16282,10 @@
       ],
       "sourceIds": [
         "api-action",
-        "extension-adapter"
+        "extension-adapter",
+        "noxviola-extension-bridge",
+        "noxviola-extension-preload",
+        "extension-adapter-410"
       ],
       "configuration": {
         "knownOptions": [
@@ -15574,7 +16297,7 @@
           "pin"
         ],
         "coverage": "partial",
-        "remaining": "Inspect every relevant setting and interaction in a synthetic profile of each exact reference build; record defaults, range, persistence and platform conditions."
+        "remaining": "Dynamic icons, programmatic popup opening, pageAction, complete CSS colors, popup accessibility/lifecycle and real/native package behavior remain open. Full reference-browser configuration, default and platform auditing also remains open."
       },
       "dependencies": [
         "manifest inspection",
@@ -15585,12 +16308,16 @@
         "status": "partial",
         "codeOwner": "canonical extension-management service",
         "paths": [
+          "browser/extension-bridge.cjs",
+          "browser/extension-policy.cjs",
+          "browser/extension-api.preload.cjs",
           "browser/extensions.cjs",
           "browser/main.cjs",
+          "browser/renderer.js",
           "browser/index.html"
         ],
-        "integrationStrategy": "Use the canonical extension-management service; evaluate and harden the pinned maintained adapter, then bind actual APIs to canonical browser services with per-member functional tests.",
-        "note": "Declared popup/options pages can be opened through validated extension-local resources in secure hosts. Full action API state, dynamic badges/icons, click semantics, pinning and native UI behavior remain open."
+        "integrationStrategy": "Bind the authenticated native extension principal to existing identity-first browser services; use selected maintained source with retained licenses and reject unsupported options explicitly.",
+        "note": "Actual toolbar state supports action/browserAction title, badge text/color, enablement, per-tab overrides, same-loaded-origin popup routing and click events. A real click may grant activeTab metadata visibility; it does not assert a native scripting grant."
       },
       "performance": "Observe actual background lifetimes and cleanup; do not replace semantics with no-op APIs.",
       "privacy": "Extension code stays untrusted; permissions, storage and messaging are identity-scoped.",
@@ -15606,23 +16333,46 @@
         "level": "documentation-and-source-review",
         "referenceSources": [
           "api-action",
-          "extension-adapter"
+          "extension-adapter",
+          "noxviola-extension-bridge",
+          "noxviola-extension-preload",
+          "extension-adapter-410"
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
         "nativeRuntime": "not-run",
-        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established",
+        "workingTreeReview": "2026-11-15 implementation continuation from d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source-reviewed, new native and packaged-executable acceptance pending",
         "contractTests": {
           "paths": [
             "tests/extensions.test.cjs"
           ],
           "result": "available; separate from the unrun end-to-end acceptance contract"
+        },
+        "currentImplementation": {
+          "inventoryVersion": "2026-11-15.4",
+          "baseSourceRevision": "d2c347a5bfc8a07725abf9562f0869a51f6d3b74",
+          "sourcePaths": [
+            "browser/extension-bridge.cjs",
+            "browser/extension-policy.cjs",
+            "browser/extension-api.preload.cjs",
+            "browser/extensions.cjs",
+            "browser/main.cjs",
+            "browser/renderer.js",
+            "browser/index.html"
+          ],
+          "portableContractPaths": [
+            "tests/extension-bridge.test.cjs",
+            "tests/extension-preload.test.cjs"
+          ],
+          "nativeAcceptance": "pending",
+          "packagedRuntimeAcceptance": "pending",
+          "qualification": "These source/test paths do not promote the complete capability or replace earlier source-bound native receipts."
         }
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Harden the maintained adapter before binding action state and events into browser chrome; test per-tab and per-identity action isolation.",
+      "nextAction": "Verify action controls and popup/click behavior in the native bridge fixture, then implement remaining icon/pageAction and accessibility contracts.",
       "priority": "P1",
       "updatedAt": "2026-11-15"
     },
@@ -15863,7 +16613,10 @@
       ],
       "sourceIds": [
         "api-tabs",
-        "extension-adapter"
+        "extension-adapter",
+        "noxviola-extension-bridge",
+        "noxviola-extension-preload",
+        "extension-adapter-410"
       ],
       "configuration": {
         "knownOptions": [
@@ -15876,7 +16629,7 @@
           "events"
         ],
         "coverage": "partial",
-        "remaining": "Inspect every relevant setting and interaction in a synthetic profile of each exact reference build; record defaults, range, persistence and platform conditions."
+        "remaining": "Multiple-window/group/multiselection/capture/opener behavior, extension-page tab navigation, complete argument/event semantics and real-package/native coverage remain open. Full reference-browser configuration, default and platform auditing also remains open."
       },
       "dependencies": [
         "manifest inspection",
@@ -15887,12 +16640,14 @@
         "status": "partial",
         "codeOwner": "canonical extension-management service",
         "paths": [
+          "browser/extension-bridge.cjs",
+          "browser/extension-policy.cjs",
+          "browser/extension-api.preload.cjs",
           "browser/extensions.cjs",
-          "browser/main.cjs",
-          "docs/browser/EXTENSION-ARCHITECTURE.md"
+          "browser/main.cjs"
         ],
-        "integrationStrategy": "Use the canonical extension-management service; evaluate and harden the pinned maintained adapter, then bind actual APIs to canonical browser services with per-member functional tests.",
-        "note": "Local extension lifecycle delegates execution to the actual Electron44.11.3 engine. Its documented API subset is not full compatibility and remains functionally unqualified here. Required members, contexts, lifecycle and browser-specific differences are open."
+        "integrationStrategy": "Bind the authenticated native extension principal to existing identity-first browser services; use selected maintained source with retained licenses and reject unsupported options explicitly.",
+        "note": "Authenticated extension documents/observed workers use identity-filtered get/current/query/create/update/remove/move/reload and events over canonical browser tabs. Stable browser IDs translate to existing native IDs for native messaging/injection; lazy lookup never creates a view. Unsupported options reject before mutations."
       },
       "performance": "Observe actual background lifetimes and cleanup; do not replace semantics with no-op APIs.",
       "privacy": "Extension code stays untrusted; permissions, storage and messaging are identity-scoped.",
@@ -15908,17 +16663,38 @@
         "level": "documentation-and-source-review",
         "referenceSources": [
           "api-tabs",
-          "extension-adapter"
+          "extension-adapter",
+          "noxviola-extension-bridge",
+          "noxviola-extension-preload",
+          "extension-adapter-410"
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
         "nativeRuntime": "not-run",
-        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
+        "workingTreeReview": "2026-11-15 implementation continuation from d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source-reviewed, new native and packaged-executable acceptance pending",
+        "currentImplementation": {
+          "inventoryVersion": "2026-11-15.4",
+          "baseSourceRevision": "d2c347a5bfc8a07725abf9562f0869a51f6d3b74",
+          "sourcePaths": [
+            "browser/extension-bridge.cjs",
+            "browser/extension-policy.cjs",
+            "browser/extension-api.preload.cjs",
+            "browser/extensions.cjs",
+            "browser/main.cjs"
+          ],
+          "portableContractPaths": [
+            "tests/extension-bridge.test.cjs",
+            "tests/extension-preload.test.cjs"
+          ],
+          "nativeAcceptance": "pending",
+          "packagedRuntimeAcceptance": "pending",
+          "qualification": "These source/test paths do not promote the complete capability or replace earlier source-bound native receipts."
+        }
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Connect a maintained adapter to the canonical tab service; record support per member and option.",
+      "nextAction": "Qualify real tab mutations/events, lazy/native ID translation, identity denial and cleanup using the new native bridge fixture, then implement the remaining members.",
       "priority": "P1",
       "updatedAt": "2026-11-15"
     },
@@ -15994,7 +16770,10 @@
         }
       ],
       "sourceIds": [
-        "api-windows"
+        "api-windows",
+        "noxviola-extension-bridge",
+        "noxviola-extension-preload",
+        "extension-adapter-410"
       ],
       "configuration": {
         "knownOptions": [
@@ -16006,7 +16785,7 @@
           "focus events"
         ],
         "coverage": "partial",
-        "remaining": "Inspect every relevant setting and interaction in a synthetic profile of each exact reference build; record defaults, range, persistence and platform conditions."
+        "remaining": "Complete multi-window creation/removal/transfers, event ordering, unsupported mutations and native OS behavior remain open. Full reference-browser configuration, default and platform auditing also remains open."
       },
       "dependencies": [
         "manifest inspection",
@@ -16014,15 +16793,17 @@
         "per-identity extension context"
       ],
       "noxviola": {
-        "status": "absent",
+        "status": "partial",
         "codeOwner": "canonical extension-management service",
         "paths": [
+          "browser/extension-bridge.cjs",
+          "browser/extension-policy.cjs",
+          "browser/extension-api.preload.cjs",
           "browser/extensions.cjs",
-          "browser/main.cjs",
-          "docs/browser/EXTENSION-ARCHITECTURE.md"
+          "browser/main.cjs"
         ],
-        "integrationStrategy": "Use the canonical extension-management service; evaluate and harden the pinned maintained adapter, then bind actual APIs to canonical browser services with per-member functional tests.",
-        "note": "Target contract. Electron support and any wrapper are partial and must be recorded per member, context, option and exact version; no complete ecosystem support is claimed."
+        "integrationStrategy": "Bind the authenticated native extension principal to existing identity-first browser services; use selected maintained source with retained licenses and reject unsupported options explicitly.",
+        "note": "The bridge reads the actual single browser window, returns requested identity-filtered populated tabs and applies supported focus/bounds/state changes. Creation/removal, draw-attention and defocusing explicitly reject; identity partitions are not fabricated as separate windows."
       },
       "performance": "Observe actual background lifetimes and cleanup; do not replace semantics with no-op APIs.",
       "privacy": "Extension code stays untrusted; permissions, storage and messaging are identity-scoped.",
@@ -16037,17 +16818,38 @@
       "evidence": {
         "level": "documentation-and-source-review",
         "referenceSources": [
-          "api-windows"
+          "api-windows",
+          "noxviola-extension-bridge",
+          "noxviola-extension-preload",
+          "extension-adapter-410"
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
         "nativeRuntime": "not-run",
-        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
+        "workingTreeReview": "2026-11-15 implementation continuation from d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source-reviewed, new native and packaged-executable acceptance pending",
+        "currentImplementation": {
+          "inventoryVersion": "2026-11-15.4",
+          "baseSourceRevision": "d2c347a5bfc8a07725abf9562f0869a51f6d3b74",
+          "sourcePaths": [
+            "browser/extension-bridge.cjs",
+            "browser/extension-policy.cjs",
+            "browser/extension-api.preload.cjs",
+            "browser/extensions.cjs",
+            "browser/main.cjs"
+          ],
+          "portableContractPaths": [
+            "tests/extension-bridge.test.cjs",
+            "tests/extension-preload.test.cjs"
+          ],
+          "nativeAcceptance": "pending",
+          "packagedRuntimeAcceptance": "pending",
+          "qualification": "These source/test paths do not promote the complete capability or replace earlier source-bound native receipts."
+        }
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Complete a real window model before declaring windows API support.",
+      "nextAction": "Verify the real single-window subset natively, then extend the canonical window/session model before exposing complete windows APIs.",
       "priority": "P1",
       "updatedAt": "2026-11-15"
     },
@@ -16115,7 +16917,13 @@
         }
       ],
       "sourceIds": [
-        "api-tabGroups"
+        "api-tabGroups",
+        "noxviola-extension-bridge",
+        "noxviola-extension-preload",
+        "extension-adapter-410",
+        "noxviola-workspace-service",
+        "noxviola-local-data-contracts",
+        "noxviola-main-integration"
       ],
       "configuration": {
         "knownOptions": [
@@ -16125,7 +16933,7 @@
           "group/ungroup"
         ],
         "coverage": "partial",
-        "remaining": "Inspect every relevant setting and interaction in a synthetic profile of each exact reference build; record defaults, range, persistence and platform conditions."
+        "remaining": "The tabGroups API, native events and browser-specific IDs, operations and field semantics are not implemented. Full reference-browser configuration, default and platform auditing also remains open."
       },
       "dependencies": [
         "manifest inspection",
@@ -16136,12 +16944,16 @@
         "status": "absent",
         "codeOwner": "canonical extension-management service",
         "paths": [
+          "browser/extension-bridge.cjs",
+          "browser/extension-policy.cjs",
+          "browser/extension-api.preload.cjs",
           "browser/extensions.cjs",
           "browser/main.cjs",
-          "docs/browser/EXTENSION-ARCHITECTURE.md"
+          "browser/workspaces.cjs",
+          "browser/state.cjs"
         ],
-        "integrationStrategy": "Use the canonical extension-management service; evaluate and harden the pinned maintained adapter, then bind actual APIs to canonical browser services with per-member functional tests.",
-        "note": "Target contract. Electron support and any wrapper are partial and must be recorded per member, context, option and exact version; no complete ecosystem support is claimed."
+        "integrationStrategy": "Bind the authenticated native extension principal to existing identity-first browser services; use selected maintained source with retained licenses and reject unsupported options explicitly.",
+        "note": "Canonical local workspace/group definitions and saved tab membership now exist in the browser UI, but no extension tabGroups methods are exposed. The extension compatibility contract remains unimplemented."
       },
       "performance": "Observe actual background lifetimes and cleanup; do not replace semantics with no-op APIs.",
       "privacy": "Extension code stays untrusted; permissions, storage and messaging are identity-scoped.",
@@ -16156,17 +16968,42 @@
       "evidence": {
         "level": "documentation-and-source-review",
         "referenceSources": [
-          "api-tabGroups"
+          "api-tabGroups",
+          "noxviola-extension-bridge",
+          "noxviola-extension-preload",
+          "extension-adapter-410",
+          "noxviola-workspace-service",
+          "noxviola-local-data-contracts",
+          "noxviola-main-integration"
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
         "nativeRuntime": "not-run",
-        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
+        "workingTreeReview": "2026-11-15 implementation continuation from d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source-reviewed, new native and packaged-executable acceptance pending",
+        "currentImplementation": {
+          "inventoryVersion": "2026-11-15.4",
+          "baseSourceRevision": "d2c347a5bfc8a07725abf9562f0869a51f6d3b74",
+          "sourcePaths": [
+            "browser/extension-bridge.cjs",
+            "browser/extension-policy.cjs",
+            "browser/extension-api.preload.cjs",
+            "browser/extensions.cjs",
+            "browser/main.cjs",
+            "browser/workspaces.cjs",
+            "browser/state.cjs"
+          ],
+          "portableContractPaths": [
+            "tests/workspaces.test.cjs"
+          ],
+          "nativeAcceptance": "pending",
+          "packagedRuntimeAcceptance": "pending",
+          "qualification": "These source/test paths do not promote the complete capability or replace earlier source-bound native receipts."
+        }
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Build on the same durable group service used by browser UI.",
+      "nextAction": "Adapt tabGroups to the existing canonical group definitions after native UI/group acceptance; do not create a second extension-only group store.",
       "priority": "P1",
       "updatedAt": "2026-11-15"
     },
@@ -16324,7 +17161,13 @@
         }
       ],
       "sourceIds": [
-        "api-bookmarks"
+        "api-bookmarks",
+        "noxviola-extension-bridge",
+        "noxviola-extension-preload",
+        "extension-adapter-410",
+        "noxviola-bookmarks-service",
+        "noxviola-local-data-contracts",
+        "noxviola-main-integration"
       ],
       "configuration": {
         "knownOptions": [
@@ -16336,7 +17179,7 @@
           "events"
         ],
         "coverage": "partial",
-        "remaining": "Inspect every relevant setting and interaction in a synthetic profile of each exact reference build; record defaults, range, persistence and platform conditions."
+        "remaining": "Native extension event ordering, unsupported URL schemes, upstream field/edge semantics, package corpus and complete Firefox/Chrome behavior remain unqualified. Full reference-browser configuration, default and platform auditing also remains open."
       },
       "dependencies": [
         "manifest inspection",
@@ -16344,15 +17187,19 @@
         "per-identity extension context"
       ],
       "noxviola": {
-        "status": "absent",
+        "status": "partial",
         "codeOwner": "canonical extension-management service",
         "paths": [
+          "browser/extension-bridge.cjs",
+          "browser/extension-policy.cjs",
+          "browser/extension-api.preload.cjs",
           "browser/extensions.cjs",
           "browser/main.cjs",
-          "docs/browser/EXTENSION-ARCHITECTURE.md"
+          "browser/bookmarks.cjs",
+          "browser/service-store.cjs"
         ],
-        "integrationStrategy": "Use the canonical extension-management service; evaluate and harden the pinned maintained adapter, then bind actual APIs to canonical browser services with per-member functional tests.",
-        "note": "Target contract. Electron support and any wrapper are partial and must be recorded per member, context, option and exact version; no complete ecosystem support is claimed."
+        "integrationStrategy": "Bind the authenticated native extension principal to existing identity-first browser services; use selected maintained source with retained licenses and reject unsupported options explicitly.",
+        "note": "Required bookmarks permission gates the same identity-owned tree/children/subtree/recent/search/create/update/move/remove/removeTree service used by the UI. Events follow durable writes; internal identity metadata is removed and tag-only changes do not masquerade as Chrome title/URL changes."
       },
       "performance": "Observe actual background lifetimes and cleanup; do not replace semantics with no-op APIs.",
       "privacy": "Extension code stays untrusted; permissions, storage and messaging are identity-scoped.",
@@ -16367,17 +17214,44 @@
       "evidence": {
         "level": "documentation-and-source-review",
         "referenceSources": [
-          "api-bookmarks"
+          "api-bookmarks",
+          "noxviola-extension-bridge",
+          "noxviola-extension-preload",
+          "extension-adapter-410",
+          "noxviola-bookmarks-service",
+          "noxviola-local-data-contracts",
+          "noxviola-main-integration"
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
         "nativeRuntime": "not-run",
-        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
+        "workingTreeReview": "2026-11-15 implementation continuation from d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source-reviewed, new native and packaged-executable acceptance pending",
+        "currentImplementation": {
+          "inventoryVersion": "2026-11-15.4",
+          "baseSourceRevision": "d2c347a5bfc8a07725abf9562f0869a51f6d3b74",
+          "sourcePaths": [
+            "browser/extension-bridge.cjs",
+            "browser/extension-policy.cjs",
+            "browser/extension-api.preload.cjs",
+            "browser/extensions.cjs",
+            "browser/main.cjs",
+            "browser/bookmarks.cjs",
+            "browser/service-store.cjs"
+          ],
+          "portableContractPaths": [
+            "tests/extension-bridge.test.cjs",
+            "tests/extension-preload.test.cjs",
+            "tests/bookmarks.test.cjs"
+          ],
+          "nativeAcceptance": "pending",
+          "packagedRuntimeAcceptance": "pending",
+          "qualification": "These source/test paths do not promote the complete capability or replace earlier source-bound native receipts."
+        }
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Extend canonical local data and then adapt API operations; flat vault matching is insufficient.",
+      "nextAction": "Exercise durable bookmark mutation/event/readback and denial in the native fixture, then qualify real packages and remaining tree/field edge cases.",
       "priority": "P1",
       "updatedAt": "2026-11-15"
     },
@@ -16449,7 +17323,13 @@
         }
       ],
       "sourceIds": [
-        "api-history"
+        "api-history",
+        "noxviola-extension-bridge",
+        "noxviola-extension-preload",
+        "extension-adapter-410",
+        "noxviola-history-service",
+        "noxviola-local-data-contracts",
+        "noxviola-main-integration"
       ],
       "configuration": {
         "knownOptions": [
@@ -16460,7 +17340,7 @@
           "events"
         ],
         "coverage": "partial",
-        "remaining": "Inspect every relevant setting and interaction in a synthetic profile of each exact reference build; record defaults, range, persistence and platform conditions."
+        "remaining": "Native package behavior, field/transition edge cases and complete browser-specific search/removal semantics remain unqualified. Full reference-browser configuration, default and platform auditing also remains open."
       },
       "dependencies": [
         "manifest inspection",
@@ -16468,15 +17348,19 @@
         "per-identity extension context"
       ],
       "noxviola": {
-        "status": "absent",
+        "status": "partial",
         "codeOwner": "canonical extension-management service",
         "paths": [
+          "browser/extension-bridge.cjs",
+          "browser/extension-policy.cjs",
+          "browser/extension-api.preload.cjs",
           "browser/extensions.cjs",
           "browser/main.cjs",
-          "docs/browser/EXTENSION-ARCHITECTURE.md"
+          "browser/history.cjs",
+          "browser/service-store.cjs"
         ],
-        "integrationStrategy": "Use the canonical extension-management service; evaluate and harden the pinned maintained adapter, then bind actual APIs to canonical browser services with per-member functional tests.",
-        "note": "Target contract. Electron support and any wrapper are partial and must be recorded per member, context, option and exact version; no complete ecosystem support is claimed."
+        "integrationStrategy": "Bind the authenticated native extension principal to existing identity-first browser services; use selected maintained source with retained licenses and reject unsupported options explicitly.",
+        "note": "Required history permission gates canonical identity-owned search/getVisits/addUrl/deleteUrl/deleteRange/deleteAll and visited/final-page-removal events. Adapter search applies the documented 24-hour/100-result defaults without capping the UI service; paused recording rejects addUrl."
       },
       "performance": "Observe actual background lifetimes and cleanup; do not replace semantics with no-op APIs.",
       "privacy": "Extension code stays untrusted; permissions, storage and messaging are identity-scoped.",
@@ -16491,17 +17375,44 @@
       "evidence": {
         "level": "documentation-and-source-review",
         "referenceSources": [
-          "api-history"
+          "api-history",
+          "noxviola-extension-bridge",
+          "noxviola-extension-preload",
+          "extension-adapter-410",
+          "noxviola-history-service",
+          "noxviola-local-data-contracts",
+          "noxviola-main-integration"
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
         "nativeRuntime": "not-run",
-        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
+        "workingTreeReview": "2026-11-15 implementation continuation from d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source-reviewed, new native and packaged-executable acceptance pending",
+        "currentImplementation": {
+          "inventoryVersion": "2026-11-15.4",
+          "baseSourceRevision": "d2c347a5bfc8a07725abf9562f0869a51f6d3b74",
+          "sourcePaths": [
+            "browser/extension-bridge.cjs",
+            "browser/extension-policy.cjs",
+            "browser/extension-api.preload.cjs",
+            "browser/extensions.cjs",
+            "browser/main.cjs",
+            "browser/history.cjs",
+            "browser/service-store.cjs"
+          ],
+          "portableContractPaths": [
+            "tests/extension-bridge.test.cjs",
+            "tests/extension-preload.test.cjs",
+            "tests/history.test.cjs"
+          ],
+          "nativeAcceptance": "pending",
+          "packagedRuntimeAcceptance": "pending",
+          "qualification": "These source/test paths do not promote the complete capability or replace earlier source-bound native receipts."
+        }
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Implement canonical history first with permission-aware API access.",
+      "nextAction": "Qualify the actual native history bridge and per-identity events, including paused recording, partial visit deletion and restart.",
       "priority": "P1",
       "updatedAt": "2026-11-15"
     },
@@ -16569,7 +17480,10 @@
         }
       ],
       "sourceIds": [
-        "api-cookies"
+        "api-cookies",
+        "noxviola-extension-bridge",
+        "noxviola-extension-preload",
+        "extension-adapter-410"
       ],
       "configuration": {
         "knownOptions": [
@@ -16579,7 +17493,7 @@
           "partition keys"
         ],
         "coverage": "partial",
-        "remaining": "Inspect every relevant setting and interaction in a synthetic profile of each exact reference build; record defaults, range, persistence and platform conditions."
+        "remaining": "Partitioned-cookie fields, optional host grants, full first-party/store semantics, complete same-name selection and real/native package coverage remain open. Full reference-browser configuration, default and platform auditing also remains open."
       },
       "dependencies": [
         "manifest inspection",
@@ -16587,15 +17501,17 @@
         "per-identity extension context"
       ],
       "noxviola": {
-        "status": "absent",
+        "status": "partial",
         "codeOwner": "canonical extension-management service",
         "paths": [
+          "browser/extension-bridge.cjs",
+          "browser/extension-policy.cjs",
+          "browser/extension-api.preload.cjs",
           "browser/extensions.cjs",
-          "browser/main.cjs",
-          "docs/browser/EXTENSION-ARCHITECTURE.md"
+          "browser/main.cjs"
         ],
-        "integrationStrategy": "Use the canonical extension-management service; evaluate and harden the pinned maintained adapter, then bind actual APIs to canonical browser services with per-member functional tests.",
-        "note": "Target contract. Electron support and any wrapper are partial and must be recorded per member, context, option and exact version; no complete ecosystem support is claimed."
+        "integrationStrategy": "Bind the authenticated native extension principal to existing identity-first browser services; use selected maintained source with retained licenses and reject unsupported options explicitly.",
+        "note": "Cookie reads/writes/removal/change events use the authenticated identity’s native jar and require both cookies permission and accepted host access. Store 0 names only that identity; writes are read back. Broader domains, unsupported fields and ambiguous same-name removal at multiple paths reject."
       },
       "performance": "Observe actual background lifetimes and cleanup; do not replace semantics with no-op APIs.",
       "privacy": "Extension code stays untrusted; permissions, storage and messaging are identity-scoped.",
@@ -16610,17 +17526,38 @@
       "evidence": {
         "level": "documentation-and-source-review",
         "referenceSources": [
-          "api-cookies"
+          "api-cookies",
+          "noxviola-extension-bridge",
+          "noxviola-extension-preload",
+          "extension-adapter-410"
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
         "nativeRuntime": "not-run",
-        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
+        "workingTreeReview": "2026-11-15 implementation continuation from d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source-reviewed, new native and packaged-executable acceptance pending",
+        "currentImplementation": {
+          "inventoryVersion": "2026-11-15.4",
+          "baseSourceRevision": "d2c347a5bfc8a07725abf9562f0869a51f6d3b74",
+          "sourcePaths": [
+            "browser/extension-bridge.cjs",
+            "browser/extension-policy.cjs",
+            "browser/extension-api.preload.cjs",
+            "browser/extensions.cjs",
+            "browser/main.cjs"
+          ],
+          "portableContractPaths": [
+            "tests/extension-bridge.test.cjs",
+            "tests/extension-preload.test.cjs"
+          ],
+          "nativeAcceptance": "pending",
+          "packagedRuntimeAcceptance": "pending",
+          "qualification": "These source/test paths do not promote the complete capability or replace earlier source-bound native receipts."
+        }
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Harden the audited4.10.0 adapter: bind sender identity and require cookies plus effective host grants for methods and events before exposing its cookie bridge.",
+      "nextAction": "Run native host-filtered method/event and cross-identity denial tests, then implement remaining cookie fields and selection semantics without broadening grants.",
       "priority": "P1",
       "updatedAt": "2026-11-15"
     },
@@ -17611,7 +18548,10 @@
         }
       ],
       "sourceIds": [
-        "api-contextMenus"
+        "api-contextMenus",
+        "noxviola-extension-bridge",
+        "noxviola-extension-preload",
+        "extension-adapter-410"
       ],
       "configuration": {
         "knownOptions": [
@@ -17622,7 +18562,7 @@
           "visibility"
         ],
         "coverage": "partial",
-        "remaining": "Inspect every relevant setting and interaction in a synthetic profile of each exact reference build; record defaults, range, persistence and platform conditions."
+        "remaining": "Actual native context clicks, complete contexts/options, accessibility and source-browser menu semantics remain unqualified. Full reference-browser configuration, default and platform auditing also remains open."
       },
       "dependencies": [
         "manifest inspection",
@@ -17630,15 +18570,18 @@
         "per-identity extension context"
       ],
       "noxviola": {
-        "status": "absent",
+        "status": "partial",
         "codeOwner": "canonical extension-management service",
         "paths": [
+          "browser/extension-bridge.cjs",
+          "browser/extension-policy.cjs",
+          "browser/extension-api.preload.cjs",
           "browser/extensions.cjs",
           "browser/main.cjs",
-          "docs/browser/EXTENSION-ARCHITECTURE.md"
+          "browser/extension-menus.cjs"
         ],
-        "integrationStrategy": "Use the canonical extension-management service; evaluate and harden the pinned maintained adapter, then bind actual APIs to canonical browser services with per-member functional tests.",
-        "note": "Target contract. Electron support and any wrapper are partial and must be recorded per member, context, option and exact version; no complete ecosystem support is claimed."
+        "integrationStrategy": "Bind the authenticated native extension principal to existing identity-first browser services; use selected maintained source with retained licenses and reject unsupported options explicitly.",
+        "note": "Selected MIT adapter rules now create actual native hierarchical menu templates with supported contexts/patterns, selection substitution, visibility, checkbox/radio state and click events. Generated IDs are unique across extension documents and a captured click after tab removal is denied."
       },
       "performance": "Observe actual background lifetimes and cleanup; do not replace semantics with no-op APIs.",
       "privacy": "Extension code stays untrusted; permissions, storage and messaging are identity-scoped.",
@@ -17653,17 +18596,39 @@
       "evidence": {
         "level": "documentation-and-source-review",
         "referenceSources": [
-          "api-contextMenus"
+          "api-contextMenus",
+          "noxviola-extension-bridge",
+          "noxviola-extension-preload",
+          "extension-adapter-410"
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
         "nativeRuntime": "not-run",
-        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
+        "workingTreeReview": "2026-11-15 implementation continuation from d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source-reviewed, new native and packaged-executable acceptance pending",
+        "currentImplementation": {
+          "inventoryVersion": "2026-11-15.4",
+          "baseSourceRevision": "d2c347a5bfc8a07725abf9562f0869a51f6d3b74",
+          "sourcePaths": [
+            "browser/extension-bridge.cjs",
+            "browser/extension-policy.cjs",
+            "browser/extension-api.preload.cjs",
+            "browser/extensions.cjs",
+            "browser/main.cjs",
+            "browser/extension-menus.cjs"
+          ],
+          "portableContractPaths": [
+            "tests/extension-bridge.test.cjs",
+            "tests/extension-preload.test.cjs"
+          ],
+          "nativeAcceptance": "pending",
+          "packagedRuntimeAcceptance": "pending",
+          "qualification": "These source/test paths do not promote the complete capability or replace earlier source-bound native receipts."
+        }
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Integrate maintained menu support with trusted contextual payloads.",
+      "nextAction": "Exercise the actual native menu controls and click payloads; extend unsupported contexts only with explicit semantic tests.",
       "priority": "P1",
       "updatedAt": "2026-11-15"
     },
@@ -17855,7 +18820,10 @@
         }
       ],
       "sourceIds": [
-        "api-permissions"
+        "api-permissions",
+        "noxviola-extension-bridge",
+        "noxviola-extension-preload",
+        "extension-adapter-410"
       ],
       "configuration": {
         "knownOptions": [
@@ -17865,7 +18833,7 @@
           "revoke"
         ],
         "coverage": "partial",
-        "remaining": "Inspect every relevant setting and interaction in a synthetic profile of each exact reference build; record defaults, range, persistence and platform conditions."
+        "remaining": "Dynamic optional grant request/removal/synchronization, full extension-origin site permissions and complete native revocation/lifecycle acceptance remain open. Full reference-browser configuration, default and platform auditing also remains open."
       },
       "dependencies": [
         "manifest inspection",
@@ -17876,12 +18844,15 @@
         "status": "partial",
         "codeOwner": "canonical extension-management service",
         "paths": [
+          "browser/extension-bridge.cjs",
+          "browser/extension-policy.cjs",
+          "browser/extension-api.preload.cjs",
           "browser/extensions.cjs",
-          "browser/permissions.cjs",
-          "docs/browser/EXTENSION-ARCHITECTURE.md"
+          "browser/main.cjs",
+          "browser/permissions.cjs"
         ],
-        "integrationStrategy": "Use the canonical extension-management service; evaluate and harden the pinned maintained adapter, then bind actual APIs to canonical browser services with per-member functional tests.",
-        "note": "Install-time permission disclosure and explicit identity enrollment exist; local-file access is off. Complete optional/host grant enforcement, revocation and authenticated adapter dispatch are still required. Site permissions are a distinct service, not a substitute for extension permissions."
+        "integrationStrategy": "Bind the authenticated native extension principal to existing identity-first browser services; use selected maintained source with retained licenses and reject unsupported options explicitly.",
+        "note": "The host authenticates the committed native extension frame or observed worker object, actual Session and manager enrollment epoch. Required manifest and accepted host scopes gate methods/events; stale epochs, navigation before reply and revoked grants reject. Optional permissions are not silently accepted."
       },
       "performance": "Observe actual background lifetimes and cleanup; do not replace semantics with no-op APIs.",
       "privacy": "Extension code stays untrusted; permissions, storage and messaging are identity-scoped.",
@@ -17896,23 +18867,46 @@
       "evidence": {
         "level": "documentation-and-source-review",
         "referenceSources": [
-          "api-permissions"
+          "api-permissions",
+          "noxviola-extension-bridge",
+          "noxviola-extension-preload",
+          "extension-adapter-410"
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
         "nativeRuntime": "not-run",
-        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established",
+        "workingTreeReview": "2026-11-15 implementation continuation from d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source-reviewed, new native and packaged-executable acceptance pending",
         "contractTests": {
           "paths": [
             "tests/extensions.test.cjs"
           ],
           "result": "available; separate from the unrun end-to-end acceptance contract"
+        },
+        "currentImplementation": {
+          "inventoryVersion": "2026-11-15.4",
+          "baseSourceRevision": "d2c347a5bfc8a07725abf9562f0869a51f6d3b74",
+          "sourcePaths": [
+            "browser/extension-bridge.cjs",
+            "browser/extension-policy.cjs",
+            "browser/extension-api.preload.cjs",
+            "browser/extensions.cjs",
+            "browser/main.cjs",
+            "browser/permissions.cjs"
+          ],
+          "portableContractPaths": [
+            "tests/extension-bridge.test.cjs",
+            "tests/extension-preload.test.cjs",
+            "tests/extensions.test.cjs"
+          ],
+          "nativeAcceptance": "pending",
+          "packagedRuntimeAcceptance": "pending",
+          "qualification": "These source/test paths do not promote the complete capability or replace earlier source-bound native receipts."
         }
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Fix the audited adapter grant/removal/caller-authentication gaps before promotion; test per-host methods and events after revocation.",
+      "nextAction": "Qualify native principal, host and revocation boundaries before implementing optional grants with explicit consent and durable scope changes.",
       "priority": "P1",
       "updatedAt": "2026-11-15"
     },
@@ -19689,17 +20683,23 @@
       ],
       "sourceIds": [
         "master-goal",
-        "extension-adapter"
+        "extension-adapter",
+        "noxviola-resource-monitor",
+        "noxviola-main-integration",
+        "noxviola-renderer-controls"
       ],
       "configuration": {
         "knownOptions": [
           "on-demand metrics",
           "process attribution",
           "logs local",
-          "disable cleanup"
+          "disable cleanup",
+          "explicit refresh",
+          "first-sample CPU unknown",
+          "shared-process ownership labels"
         ],
         "coverage": "partial",
-        "remaining": "Inspect every relevant setting and interaction in a synthetic profile of each exact reference build; record defaults, range, persistence and platform conditions."
+        "remaining": "Native OS correlation, observer overhead, GPU/disk/network details, worker attribution, selected-process inspection/termination and resource limits remain open. Full reference-browser configuration, default and platform auditing also remains open."
       },
       "dependencies": [
         "manifest inspection",
@@ -19707,18 +20707,19 @@
         "per-identity extension context"
       ],
       "noxviola": {
-        "status": "absent",
+        "status": "partial",
         "codeOwner": "canonical extension-management service",
         "paths": [
-          "browser/extensions.cjs",
+          "browser/resources.cjs",
           "browser/main.cjs",
-          "docs/browser/EXTENSION-ARCHITECTURE.md"
+          "browser/renderer.js",
+          "browser/index.html"
         ],
-        "integrationStrategy": "Use the canonical extension-management service; evaluate and harden the pinned maintained adapter, then bind actual APIs to canonical browser services with per-member functional tests.",
-        "note": "Target contract. Electron support and any wrapper are partial and must be recorded per member, context, option and exact version; no complete ecosystem support is claimed."
+        "integrationStrategy": "Bind the authenticated native extension principal to existing identity-first browser services; use selected maintained source with retained licenses and reject unsupported options explicitly.",
+        "note": "An explicitly requested native process sample exposes available CPU, working/peak memory, sandbox state and existing tab/extension-view ownership. The first CPU interval is unknown; missing metrics remain unknown. Shared process attribution is disclosed and no polling, process kill, limit or performance advantage is claimed."
       },
-      "performance": "Observe actual background lifetimes and cleanup; do not replace semantics with no-op APIs.",
-      "privacy": "Extension code stays untrusted; permissions, storage and messaging are identity-scoped.",
+      "performance": "Sampling calls native metrics only on explicit panel open/refresh. Working-set totals can count shared pages more than once; missing values are not zero and no whole-workload speed/resource improvement is established.",
+      "privacy": "Diagnostics stay local and can display tab titles and identity labels. Only available native contexts are attributed; no background activity recorder or telemetry upload is added.",
       "acceptanceTests": [
         {
           "id": "accept-extension-resource-monitor",
@@ -19731,17 +20732,36 @@
         "level": "documentation-and-source-review",
         "referenceSources": [
           "master-goal",
-          "extension-adapter"
+          "extension-adapter",
+          "noxviola-resource-monitor",
+          "noxviola-main-integration",
+          "noxviola-renderer-controls"
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
         "nativeRuntime": "not-run",
-        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
+        "workingTreeReview": "2026-11-15 implementation continuation from d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source-reviewed, new native and packaged-executable acceptance pending",
+        "currentImplementation": {
+          "inventoryVersion": "2026-11-15.4",
+          "baseSourceRevision": "d2c347a5bfc8a07725abf9562f0869a51f6d3b74",
+          "sourcePaths": [
+            "browser/resources.cjs",
+            "browser/main.cjs",
+            "browser/renderer.js",
+            "browser/index.html"
+          ],
+          "portableContractPaths": [
+            "tests/resources.test.cjs"
+          ],
+          "nativeAcceptance": "pending",
+          "packagedRuntimeAcceptance": "pending",
+          "qualification": "These source/test paths do not promote the complete capability or replace earlier source-bound native receipts."
+        }
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Add optional inexpensive diagnostics after the canonical lifecycle works.",
+      "nextAction": "Compare explicit samples with the actual process tree on both platforms and measure overhead before adding controls or performance claims.",
       "priority": "P1",
       "updatedAt": "2026-11-15"
     }

@@ -1,5 +1,6 @@
 'use strict';
-// Explicit native gate. This is deliberately absent from npm test and packaging.
+// Explicit native gates. npm test never launches an engine; packaging alone
+// never counts as native acceptance.
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -10,8 +11,8 @@ const ROOT = path.resolve(__dirname, '..');
 const MARKER = 'noxviola-synthetic-native-fixture-v1';
 
 function preflight({ platform = process.platform, env = process.env, uid = process.getuid?.() } = {}) {
-  if (env.ELECTRON_RUN_AS_NODE || env.ELECTRON_DISABLE_SANDBOX || env.NODE_OPTIONS) {
-    return 'Native acceptance refuses ELECTRON_RUN_AS_NODE, ELECTRON_DISABLE_SANDBOX or NODE_OPTIONS overrides.';
+  if (env.ELECTRON_RUN_AS_NODE || env.ELECTRON_DISABLE_SANDBOX || env.NODE_OPTIONS || env.NODE_PATH) {
+    return 'Native acceptance refuses ELECTRON_RUN_AS_NODE, ELECTRON_DISABLE_SANDBOX, NODE_OPTIONS or NODE_PATH overrides.';
   }
   if (platform === 'linux' && uid === 0) return 'Sandboxed Electron acceptance must run as an ordinary user.';
   if (platform === 'linux' && !env.DISPLAY && !env.WAYLAND_DISPLAY) {
@@ -65,7 +66,7 @@ function sourceEvidence(root = ROOT) {
       files.push({ path: relative, bytes: bytes.length, sha256: crypto.createHash('sha256').update(bytes).digest('hex') });
     } else throw new Error(`Unexpected special file in native acceptance inputs: ${relative}`);
   }
-  for (const relative of ['browser', 'package.json', 'package-lock.json', 'scripts/native-smoke.cjs', 'tests/native']) record(relative);
+  for (const relative of ['browser', 'package.json', 'package-lock.json', 'scripts/native-smoke.cjs', 'scripts/package-preview.cjs', 'tests/native']) record(relative);
   files.sort((left, right) => left.path.localeCompare(right.path));
   let commit = null;
   let dirty = null;
@@ -121,50 +122,108 @@ async function runPhase(executable, context, phase) {
   } finally { fs.closeSync(log); }
 }
 
-async function main(argv = process.argv.slice(2)) {
-  let output = path.join(ROOT, 'native-results');
+function nativeOptions(argv = process.argv.slice(2)) {
+  const result = { output: path.join(ROOT, 'native-results'), packageReceipt: null, publicHttps: false };
+  const seen = new Set();
   for (let index = 0; index < argv.length; index++) {
-    if (argv[index] === '--output' && argv[index + 1]) output = path.resolve(argv[++index]);
-    else if (argv[index] === '--help') {
-      console.log('node scripts/native-smoke.cjs [--output DIRECTORY]\nRuns actual sandboxed Electron against fresh synthetic fixtures. Exit 0 = tested workflows passed; 1 = failure; 2 = environment blocked. Never disables the sandbox.');
-      return 0;
-    } else throw new Error(`Unknown native-gate argument: ${argv[index]}`);
+    const option = argv[index];
+    if (option === '--help') return null;
+    if (seen.has(option)) throw new Error(`Repeated native-gate argument: ${option}`);
+    seen.add(option);
+    if (option === '--public-https') result.publicHttps = true;
+    else if (['--output', '--package-receipt'].includes(option) && argv[index + 1] && !argv[index + 1].startsWith('--')) {
+      result[option === '--output' ? 'output' : 'packageReceipt'] = path.resolve(argv[++index]);
+    } else throw new Error(`Unknown or incomplete native-gate argument: ${option}`);
   }
+  if (result.publicHttps && !result.packageReceipt) throw new Error('--public-https requires the packaged executable gate.');
+  return result;
+}
+
+async function main(argv = process.argv.slice(2)) {
+  const options = nativeOptions(argv);
+  if (!options) {
+    console.log('node scripts/native-smoke.cjs [--output DIRECTORY] [--package-receipt FILE] [--public-https]\nWithout a package receipt, runs the deep actual source-app fixture gate. With a receipt from package:preview, launches the exact packaged executable through its unchanged production entry. --public-https adds two declared public pages to the packaged gate. Exit 0 = recorded workflows passed; 1 = failure; 2 = environment blocked. Never disables the sandbox.');
+    return 0;
+  }
+  let { output } = options;
+  const { packageReceipt, publicHttps } = options;
   fs.mkdirSync(output, { recursive: true });
   output = fs.mkdtempSync(path.join(output, 'run-'));
   console.log(`Native evidence directory: ${output}`);
   const report = {
     schema: 1, startedAt: new Date().toISOString(), platform: process.platform, arch: process.arch,
     electron: require('../package.json').devDependencies.electron, source: sourceEvidence(),
-    scope: 'Sandboxed legacy fromPartition seed followed by two actual source-app processes, one loopback origin and fresh synthetic profile',
+    scope: packageReceipt ? 'Two launches of the manifest-verified packaged executable and unchanged production ASAR entry, fresh synthetic profile, loopback fixtures and declared HTTPS cases when requested' : 'Sandboxed legacy fromPartition seed followed by two actual source-app processes, one loopback origin and fresh synthetic profile',
+    executionMode: packageReceipt ? 'packaged-executable' : 'source-app',
     status: 'blocked', runtimeAttempted: false, runtimeStarted: false, legacySeed: null, phases: [],
-    unverified: ['Native OS file-picker interaction', 'Real Internet sites and authenticated accounts', 'Cross-browser extension compatibility beyond the recorded synthetic extensions', 'Full first-party and engine network/telemetry audit', 'Full security, accessibility, performance and release qualification'],
+    unverified: ['Native OS file-picker interaction', 'Authenticated accounts and Internet compatibility beyond the explicitly recorded public pages', 'Cross-browser extension compatibility beyond the recorded synthetic extensions', 'Full first-party and engine network/telemetry audit', 'Full security, accessibility, performance and release qualification'],
   };
+  if (packageReceipt) report.unverified.push('Packaged extension import and lifecycle; the synthetic extension workflows have a separate source-app gate');
   let context;
   let fixture;
+  let packaged;
+  let packagedSource;
   try {
     const reason = preflight();
     if (reason) { report.reason = reason; console.error(`BLOCKED: ${reason}`); return 2; }
     let executable;
-    try { executable = electronExecutable(); } catch (error) { report.reason = error.message; console.error(`BLOCKED: ${report.reason}`); return 2; }
+    if (packageReceipt) {
+      const receipt = JSON.parse(fs.readFileSync(packageReceipt, 'utf8'));
+      if (receipt.schema !== 1 || receipt.packages?.length !== 1 || !path.isAbsolute(receipt.packages[0].directory)) throw new Error('The package build receipt must identify exactly one absolute package directory.');
+      const { verifyPackagedApplication } = require('./package-preview.cjs');
+      packaged = await verifyPackagedApplication(receipt.packages[0].directory);
+      if (packaged.platform !== process.platform || packaged.arch !== process.arch) throw new Error('The packaged runtime gate only launches the matching host platform and architecture.');
+      if (packaged.commit !== report.source.commit || report.source.dirty !== false || receipt.commit !== packaged.commit || receipt.packages[0].manifest.sha256 !== packaged.manifest.sha256) throw new Error('Package and native source must identify the same clean checkpoint and exact package manifest.');
+      report.package = { directory: packaged.directory, executable: packaged.executable, archive: packaged.archive, entry: packaged.entry, manifest: packaged.manifest, commit: packaged.commit, applicationManifestSha256: packaged.applicationManifestSha256, electron: packaged.electron, platform: packaged.platform, arch: packaged.arch };
+      executable = packaged.executable;
+    } else {
+      try { executable = electronExecutable(); } catch (error) { report.reason = error.message; console.error(`BLOCKED: ${report.reason}`); return 2; }
+    }
     fixture = createFixtureServer();
     let origin;
     try { origin = await fixture.listen(); } catch (error) { report.reason = `Loopback fixture server unavailable: ${error.message}`; console.error(`BLOCKED: ${report.reason}`); return 2; }
     context = createContext(origin, output);
+    if (packaged) {
+      packagedSource = packaged;
+      // A package under the checkout could accidentally resolve a missing module
+      // from the checkout's ancestor node_modules. Execute a byte-identical copy
+      // in the owned temp fixture, outside the checkout, with its own working dir.
+      const executionDirectory = path.join(context.directory, 'application', path.basename(packaged.directory));
+      fs.cpSync(packaged.directory, executionDirectory, { recursive: true, dereference: false, preserveTimestamps: true, errorOnExist: true });
+      packaged = await require('./package-preview.cjs').verifyPackagedApplication(executionDirectory);
+      if (packaged.manifest.sha256 !== packagedSource.manifest.sha256) throw new Error('Isolated executable copy differs from the built package.');
+      report.package.executionDirectory = executionDirectory;
+      report.package.executedOutsideCheckout = true;
+      report.package.copyManifestSha256 = packaged.manifest.sha256;
+    }
     report.runtimeAttempted = true;
     report.status = 'failed';
-    report.legacySeed = await runPhase(executable, context, 'legacy-seed');
-    report.runtimeStarted ||= report.legacySeed.runtimeReady;
+    if (!packaged) {
+      report.legacySeed = await runPhase(executable, context, 'legacy-seed');
+      report.runtimeStarted ||= report.legacySeed.runtimeReady;
+    }
     for (const phase of [1, 2]) {
-      const completed = await runPhase(executable, context, phase);
+      const completed = packaged ? await require('../tests/native/packaged-driver.cjs').runPackagedPhase(packaged, context, phase, { publicHttps }) : await runPhase(executable, context, phase);
+      if (!completed.passed || !completed.processExitedCleanly) {
+        const error = new Error(`Native phase ${phase} did not finish with a passing receipt and clean process exit.`);
+        error.phaseResult = completed;
+        throw error;
+      }
       report.phases.push(completed);
       report.runtimeStarted ||= completed.runtimeReady;
     }
     report.sourceAfter = sourceEvidence();
     if (report.sourceAfter.manifestSha256 !== report.source.manifestSha256) throw new Error('Application or native fixture sources changed during execution; the run cannot qualify a single source snapshot.');
+    if (packaged) {
+      const after = await require('./package-preview.cjs').verifyPackagedApplication(packaged.directory);
+      if (after.manifest.sha256 !== packaged.manifest.sha256) throw new Error('The package manifest changed during packaged execution.');
+      const originalAfter = await require('./package-preview.cjs').verifyPackagedApplication(packagedSource.directory);
+      if (originalAfter.manifest.sha256 !== packagedSource.manifest.sha256) throw new Error('The original distribution changed during packaged execution.');
+      report.packageVerifiedAfterExecution = true;
+    }
     report.fixtureRequests = fixture.requests.length;
     report.status = 'passed';
-    console.log('PASS: A sandboxed legacy seed and two actual source-app launches completed. This is scoped store-transition/restart evidence, not complete browser or release qualification.');
+    console.log(packaged ? 'PASS: Two actual packaged executable launches completed with unchanged package bytes. See the recorded workflow, HTTPS, network and resource scope; this is not complete release qualification.' : 'PASS: A sandboxed legacy seed and two actual source-app launches completed. This is scoped store-transition/restart evidence, not complete browser or release qualification.');
     return 0;
   } catch (error) {
     report.status = 'failed';
@@ -198,4 +257,4 @@ async function main(argv = process.argv.slice(2)) {
 }
 
 if (require.main === module) main().then(code => { process.exitCode = code; }).catch(error => { console.error(error); process.exitCode = 1; });
-module.exports = { preflight, createContext, readContext, sourceEvidence, electronExecutable, main };
+module.exports = { preflight, createContext, readContext, sourceEvidence, electronExecutable, nativeOptions, main };

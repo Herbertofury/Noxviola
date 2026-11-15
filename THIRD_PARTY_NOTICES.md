@@ -30,6 +30,10 @@ The lockfile is the authoritative version graph. The current preview packages El
 
 This inventory supplements the complete notices shipped with those components; it does not replace them or relicense their code. Build manifests record the actual packaged files and hashes.
 
-## Evaluated but not bundled
+## Extension-host architecture and Promise adapter
 
-`electron-chrome-extensions` **4.10.0** was inspected as a maintained integration candidate. The exact inspected artifact is MIT-licensed, and its digests and source findings are recorded in [the extension architecture audit](docs/browser/EXTENSION-ARCHITECTURE.md). It is not a dependency or runtime included in this checkpoint. CEF, CefSharp, WebView2, Servo and Hermes research does not imply they are bundled into the Electron application.
+The isolated/main-world extension preload architecture is adapted from `electron-chrome-extensions` **4.10.0**, MIT. Its notice is retained in [extension-adapter-LICENSE.txt](browser/extension-adapter-LICENSE.txt). Noxviola supplies its own authenticated dispatch, permission checks and canonical service hooks; the upstream package is not installed wholesale as a dependency. The original inspected artifact and source findings remain recorded in [the extension architecture audit](docs/browser/EXTENSION-ARCHITECTURE.md).
+
+Mozilla's **webextension-polyfill 0.12.0** distribution is embedded byte-for-byte in the extension preload to implement the `browser.*` Promise facade and asynchronous message semantics. Its MPL-2.0 license and provenance are retained in [extension-browser-polyfill-LICENSE.txt](browser/extension-browser-polyfill-LICENSE.txt); the enclosing source identifies the unchanged vendored block. It adds no downloaded-at-runtime script or package dependency. The facade does not create missing browser-host API implementations or grant additional permissions.
+
+CEF, CefSharp, WebView2, Servo and Hermes research does not imply they are bundled into the Electron application.

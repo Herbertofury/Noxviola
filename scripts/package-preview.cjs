@@ -11,6 +11,10 @@ const APP_FILES = [
   'browser/capabilities.json', 'browser/state.cjs',
   'browser/storage.cjs', 'browser/session-writer.cjs', 'browser/session-path.cjs',
   'browser/permissions.cjs', 'browser/downloads.cjs', 'browser/extensions.cjs', 'browser/extension-runtime.cjs',
+  'browser/extension-api.preload.cjs', 'browser/extension-bridge.cjs', 'browser/extension-policy.cjs',
+  'browser/extension-menus.cjs', 'browser/extension-adapter-LICENSE.txt', 'browser/extension-browser-polyfill-LICENSE.txt',
+  'browser/preferences.cjs', 'browser/resources.cjs', 'browser/service-store.cjs',
+  'browser/history.cjs', 'browser/bookmarks.cjs', 'browser/workspaces.cjs',
   'browser/vault.cjs', 'browser/accounts.cjs', 'LICENSE', 'THIRD_PARTY_NOTICES.md',
 ];
 
@@ -60,6 +64,68 @@ function manifest(directory) {
   return records.sort((a, b) => a.path.localeCompare(b.path));
 }
 
+function verifyPackageFiles(directory) {
+  const file = path.join(directory, 'PACKAGE-MANIFEST.json');
+  if (!fs.lstatSync(directory).isDirectory() || !fs.lstatSync(file).isFile()) throw new Error('Package and manifest must be ordinary filesystem entries.');
+  const bytes = fs.readFileSync(file);
+  const recorded = JSON.parse(bytes);
+  if (!Array.isArray(recorded.files) || !Array.isArray(recorded.applicationFiles) ||
+      !/^[a-f0-9]{40}$/.test(recorded.commit || '')) throw new Error('Invalid package manifest.');
+  for (const entries of [recorded.files, recorded.applicationFiles]) {
+    const names = new Set();
+    for (const entry of entries) {
+      if (typeof entry.path !== 'string' || entry.path.includes('\\') || path.posix.isAbsolute(entry.path) ||
+          entry.path.split('/').some(part => !part || part === '.' || part === '..') || names.has(entry.path) ||
+          !Number.isSafeInteger(entry.bytes) || entry.bytes < 0 || !/^[a-f0-9]{64}$/.test(entry.sha256 || '')) throw new Error('Invalid or duplicate package file record.');
+      names.add(entry.path);
+    }
+  }
+  const actual = manifest(directory).filter(entry => entry.path !== 'PACKAGE-MANIFEST.json');
+  if (JSON.stringify(actual) !== JSON.stringify(recorded.files)) {
+    throw new Error('The package file set or bytes do not match PACKAGE-MANIFEST.json.');
+  }
+  if (actual.reduce((sum, entry) => sum + entry.bytes, 0) !== recorded.totalBytes) throw new Error('Package byte total mismatch.');
+  const applicationDigest = crypto.createHash('sha256').update(JSON.stringify(recorded.applicationFiles)).digest('hex');
+  if (applicationDigest !== recorded.applicationManifestSha256) throw new Error('Application manifest digest mismatch.');
+  return {
+    ...recorded, directory: path.resolve(directory),
+    manifest: { path: file, bytes: bytes.length, sha256: crypto.createHash('sha256').update(bytes).digest('hex') },
+  };
+}
+
+async function verifyPackagedApplication(directory, { root = path.resolve(__dirname, '..'), requireClean = true } = {}) {
+  const packaged = verifyPackageFiles(directory);
+  if (requireClean && packaged.worktreeDirty) throw new Error('Packaged runtime acceptance requires a clean source checkpoint.');
+  const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  if (packaged.electron !== pkg.devDependencies.electron) throw new Error('Packaged Electron pin differs from the acceptance source.');
+  const { listPackage, extractFile, uncache } = await import('@electron/asar');
+  const resources = packaged.platform === 'darwin' ? path.join(directory, 'Noxviola.app', 'Contents', 'Resources') : path.join(directory, 'resources');
+  const archive = path.join(resources, 'app.asar');
+  uncache(archive); // Verification always reads the current header bytes.
+  const allowed = new Map(packaged.applicationFiles.map(entry => [entry.path, entry]));
+  for (const entry of listPackage(archive).map(name => name.replace(/^[/\\]+/, '').split('\\').join('/'))) {
+    if (!allowed.has(entry) && ![...allowed.keys()].some(file => file.startsWith(entry + '/'))) throw new Error(`Unexpected packaged application entry: ${entry}`);
+  }
+  for (const [name, expected] of allowed) {
+    const bytes = extractFile(archive, name);
+    if (bytes.length !== expected.bytes || crypto.createHash('sha256').update(bytes).digest('hex') !== expected.sha256) throw new Error(`Packaged source mismatch: ${name}`);
+  }
+  for (const name of APP_FILES) {
+    const bytes = fs.readFileSync(path.join(root, name));
+    if (crypto.createHash('sha256').update(bytes).digest('hex') !== allowed.get(name)?.sha256) throw new Error(`Packaged application differs from the current acceptance source: ${name}`);
+  }
+  const entry = JSON.parse(extractFile(archive, 'package.json').toString('utf8'));
+  if (entry.main !== 'browser/main.cjs') throw new Error('Native acceptance must execute the unchanged production package entry point.');
+  const build = JSON.parse(extractFile(archive, 'BUILD.json').toString('utf8'));
+  for (const key of ['commit', 'worktreeDirty', 'electron', 'packager']) {
+    if (build[key] !== packaged[key]) throw new Error(`Embedded build provenance differs from the package manifest: ${key}`);
+  }
+  const relativeExecutable = packaged.platform === 'win32' ? 'Noxviola.exe' : packaged.platform === 'linux' ? 'Noxviola' : 'Noxviola.app/Contents/MacOS/Noxviola';
+  const executable = path.join(directory, relativeExecutable);
+  if (!packaged.files.some(file => file.path === relativeExecutable)) throw new Error('Packaged executable is missing from its manifest.');
+  return { ...packaged, executable, archive, entry: entry.main };
+}
+
 function stageDependencies(root, destination, temporary) {
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   if (!Object.keys(pkg.dependencies || {}).length) return [];
@@ -91,7 +157,7 @@ function packageTarget(argv = process.argv.slice(2)) {
   for (let index = 0; index < argv.length; index++) {
     const option = argv[index];
     if (option === '--help') return null;
-    if (!['--platform', '--arch'].includes(option) || !argv[index + 1] || argv[index + 1].startsWith('--')) {
+    if (!['--platform', '--arch', '--receipt'].includes(option) || !argv[index + 1] || argv[index + 1].startsWith('--')) {
       throw new Error(`Unknown or incomplete packaging argument: ${option}`);
     }
     target[option.slice(2)] = argv[++index];
@@ -102,11 +168,12 @@ function packageTarget(argv = process.argv.slice(2)) {
 }
 
 async function main(argv = process.argv.slice(2)) {
-  const target = packageTarget(argv);
-  if (!target) {
-    console.log('node scripts/package-preview.cjs [--platform linux|win32|darwin] [--arch x64|arm64]\nPackages and verifies the actual ASAR without launching it. Defaults to the current host. A preview is not native acceptance.');
+  const options = packageTarget(argv);
+  if (!options) {
+    console.log('node scripts/package-preview.cjs [--platform linux|win32|darwin] [--arch x64|arm64] [--receipt FILE]\nPackages and verifies the actual ASAR without launching it. Defaults to the current host. A preview is not native acceptance.');
     return;
   }
+  const { receipt, ...target } = options;
   const root = path.resolve(__dirname, '..');
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'noxviola-package-'));
   try {
@@ -125,6 +192,7 @@ async function main(argv = process.argv.slice(2)) {
       asar: true, prune: false, overwrite: false,
     });
     if (output.length !== 1) throw new Error('No unique preview was produced. An existing output is preserved; move it aside before packaging again.');
+    const packages = [];
     for (const directory of output) {
       const { listPackage, extractFile } = await import('@electron/asar');
       const resources = target.platform === 'darwin' ? path.join(directory, 'Noxviola.app', 'Contents', 'Resources') : path.join(directory, 'resources');
@@ -143,10 +211,18 @@ async function main(argv = process.argv.slice(2)) {
         ...info, ...target, applicationManifestSha256, applicationFiles: expected,
         totalBytes: files.reduce((sum, file) => sum + file.bytes, 0), files,
       }, null, 2) + '\n');
+      const verified = await verifyPackagedApplication(directory, { root, requireClean: false });
+      packages.push({ directory, executable: verified.executable, archive: verified.archive, manifest: verified.manifest, applicationManifestSha256 });
       console.log(`Verified ${expected.length} application/dependency files and ${files.length} complete package files.`);
+    }
+    if (receipt) {
+      const receiptFile = path.resolve(receipt);
+      fs.mkdirSync(path.dirname(receiptFile), { recursive: true });
+      fs.writeFileSync(receiptFile, JSON.stringify({ schema: 1, ...info, ...target, packages }, null, 2) + '\n', { flag: 'wx' });
+      console.log(`Package receipt: ${receiptFile}`);
     }
     console.log('Packaged UNVERIFIED previews only:', output.join(', '));
   } finally { fs.rmSync(temporary, { recursive: true, force: true }); }
 }
 if (require.main === module) main().catch(error => { console.error(error); process.exitCode = 1; });
-module.exports = { APP_FILES, stageApp, stageDependencies, manifest, packageTarget };
+module.exports = { APP_FILES, stageApp, stageDependencies, manifest, packageTarget, verifyPackageFiles, verifyPackagedApplication };

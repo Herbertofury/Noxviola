@@ -40,18 +40,31 @@ and session-data directory, forces `app.enableSandbox()`, and imports the actual
 preload and trusted IPC handler. No test command or debugger server is added to
 the application, and the driver/fixtures are excluded from preview packages.
 
-Two actual Electron processes exercise:
+One separate sandboxed Electron process first writes generated personal-identity
+cookies, localStorage, IndexedDB, CacheStorage and service-worker data using the
+original `fromPartition` factory and the same profile and loopback origin. It
+creates no compact alias, uses no production resolver and performs no test-only
+storage flush. Its receipt must report normal window close and quit, and the
+wrapper requires a successful process exit. The first production process then
+verifies those values and their original physical directory before writing its
+own fixtures. This covers the factory transition on the pinned engine; it does
+not certify every historical engine version or existing user profile.
+
+Two subsequent actual Noxviola processes exercise:
 
 - Navigation, redirects, back/forward and real fixture documents.
 - More than twelve instantiated tabs, duplicate URLs, close/reopen and split
   view bounds.
 - The same loopback origin in two identities: cookies, localStorage, IndexedDB,
-  caches and service-worker registrations, including restart.
+  caches and service-worker registrations, including restart. A cookie with
+  `Max-Age=86400` must persist, while a separate session-only cookie must expire;
+  actual native cookie attributes are checked before close and after restart.
 - A denied geolocation request through application permission handling.
 - Actual DownloadItem completion, bytes, pause/resume and cancellation through
   the application's download commands.
 - MV3 content-script execution and `chrome.storage.local` across identities,
-  disable/re-enable and process restart.
+  disable/re-enable and process restart. Installation uses the actual renderer's
+  identity choices, consent checkbox and Install button before the runtime checks.
 - A separate MV2 background page responding through `runtime.sendMessage`,
   destruction on disable and restoration on re-enable/restart.
 - Uninstall followed by fresh navigation, proving future injection and the
@@ -64,10 +77,10 @@ uses its original persistent partition where the pinned cache lifecycle path
 budget permits it, or a verified compact junction to that unchanged physical
 directory. Both phases record the actual Session path and compare physical
 file IDs (or exact canonical paths when IDs are unavailable). The generated
-profile stays at its original long location. The gate exercises fresh profiles
-and restart; it does not yet qualify migration from every legacy browser
-profile, remote filesystem or arbitrarily long root. Linux keeps its original
-partition behavior.
+profile stays at its original long location. The original-factory seed,
+production readback and production restart exercise generated profiles; they
+do not qualify every legacy browser profile, remote filesystem or arbitrarily
+long root. Linux keeps its original partition behavior.
 
 Only generated fixture sites, extensions and data are used. The test supplies
 the file-picker result for its extension folder, selects a synthetic download

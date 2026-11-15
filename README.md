@@ -39,7 +39,7 @@ npm run test:native
 npm run package:preview
 ```
 
-`test:native` uses the actual source application, sandboxed Electron, a fresh synthetic profile, local fixtures and two process launches. Exit 0 means the recorded fixture workflows passed, exit 1 means failure and exit 2 means the environment blocked execution. It never disables the sandbox or substitutes a mock for native success. The current workspace lacks a supported desktop display, so native acceptance remains blocked here. The earlier socket-denied launch route is preserved and has not been bypassed.
+`test:native` uses sandboxed Electron, a fresh synthetic profile and local fixtures. A separate process first seeds site data through the original identity storage route; two actual Noxviola processes then exercise readback, browsing and restart. Exit 0 means the recorded fixture workflows passed, exit 1 means failure and exit 2 means the environment blocked execution. It never disables the sandbox or substitutes a mock for native success. The current workspace lacks a supported desktop display, so native acceptance remains blocked here. Actual hosted results and their limits are recorded in the [continuation checkpoint](docs/browser/CHECKPOINT-2026-11-15.md). The earlier socket-denied launch route is preserved and has not been bypassed.
 
 ## Workflows present in source
 

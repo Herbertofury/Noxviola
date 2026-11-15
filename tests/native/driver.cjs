@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { performance } = require('node:perf_hooks');
 const { app, BrowserWindow, dialog, session, webContents } = require('electron');
-const { readContext, preflight } = require('../../scripts/native-smoke.cjs');
+const { readContext, preflight, sourceEvidence } = require('../../scripts/native-smoke.cjs');
 const { createIdentitySessionResolver, identityStoragePaths } = require('../../browser/session-path.cjs');
 const { DOWNLOAD } = require('./fixture-server.cjs');
 const context = readContext(process.argv[2]);
@@ -343,15 +343,75 @@ async function fixtureValue(view, expression, operation) {
 }
 async function identityData(view) { return fixtureValue(view, 'window.fixture.readIdentity()', 'readIdentity'); }
 async function writeIdentity(view, value) { return fixtureValue(view, `window.fixture.writeIdentity(${JSON.stringify(value)})`, `writeIdentity(${value})`); }
-function assertIdentity(data, expected) {
+function assertIdentity(data, expected, {sessionCookieExpected = true} = {}) {
   assert.equal(data.localStorage, expected);
   assert.equal(data.indexedDB, expected);
   assert.equal(data.cache, expected);
   assert.match(data.cookie, new RegExp(`(?:^|;\\s*)noxviola_fixture=${expected}(?:;|$)`));
+  if (sessionCookieExpected) assert.match(data.cookie, new RegExp(`(?:^|;\\s*)noxviola_session_fixture=${expected}(?:;|$)`));
+  else assert.doesNotMatch(data.cookie, /(?:^|;\s*)noxviola_session_fixture=/, 'A session-only cookie must end with the previous process session');
   assert.equal(data.serviceWorkers, 1);
   assert.equal(data.privilegedBridge, 'undefined');
   assert.equal(data.nodeRequire, 'undefined');
   assert.equal(data.nodeProcess, 'undefined');
+}
+async function assertCookieLifetimes(identity, expected, stage, {sessionCookieExpected = true} = {}) {
+  // Read only the real cookie jar for this generated loopback fixture. Do not
+  // flush, rewrite expiration dates, or change production cookie policy.
+  const cookies = await partitionFor(identity).cookies.get({url: context.origin});
+  const selected = cookies.filter(cookie => ['noxviola_fixture', 'noxviola_session_fixture'].includes(cookie.name));
+  result.cookieLifetimes ||= [];
+  result.cookieLifetimes.push({identity, stage, cookies: selected.map(cookie => ({
+    name: cookie.name, value: cookie.value, session: cookie.session,
+    expirationDate: cookie.expirationDate ?? null, domain: cookie.domain, path: cookie.path,
+  }))});
+  const persistent = selected.filter(cookie => cookie.name === 'noxviola_fixture');
+  assert.equal(persistent.length, 1, 'Exactly one persistent fixture cookie must exist in this identity');
+  assert.equal(persistent[0].value, expected);
+  assert.equal(persistent[0].session, false, 'The restart cookie must have an explicit persistent lifetime');
+  assert.ok(Number.isFinite(persistent[0].expirationDate) && persistent[0].expirationDate > Date.now() / 1000, 'The persistent fixture cookie must have a future expiration');
+  const transient = selected.filter(cookie => cookie.name === 'noxviola_session_fixture');
+  assert.equal(transient.length, sessionCookieExpected ? 1 : 0, 'Session-only cookie presence must match the process lifetime');
+  if (sessionCookieExpected) {
+    assert.equal(transient[0].value, expected);
+    assert.equal(transient[0].session, true);
+    assert.equal(transient[0].expirationDate, undefined, 'The session-only fixture must not have a persistent expiration');
+  }
+}
+async function verifyLegacyStorage(view, identity) {
+  const seed = JSON.parse(fs.readFileSync(path.join(context.output, 'legacy-seed.json'), 'utf8'));
+  assert.equal(seed.phase, 'legacy-seed');
+  for (const field of ['passed', 'runtimeReady', 'normalCloseRequested', 'normalQuitObserved', 'windowClosed', 'sandboxForced', 'fixtureOnly', 'aliasDirectoryAbsent']) assert.equal(seed[field], true, `Legacy seed must establish ${field}`);
+  assert.deepEqual(seed.fixture, { marker: context.marker, token: context.token, origin: context.origin, profile: context.profile, sessionData: originalSessionData });
+  const source = sourceEvidence();
+  assert.deepEqual(seed.source, { commit: source.commit, dirty: source.dirty, manifestSha256: source.manifestSha256 }, 'Legacy writer and production reader must use the same exact source inputs');
+  assert.equal(seed.identity, identity);
+  assert.equal(seed.identity, 'personal');
+  assert.equal(seed.value, 'legacy-personal');
+  assert.equal(seed.factory, 'fromPartition');
+  assert.equal(seed.partition, 'persist:noxviola-identity-personal');
+  assert.equal(seed.versions.electron, process.versions.electron);
+  const original = identityStoragePaths(originalSessionData, identity).original;
+  assert.equal(seed.storage.configured, original);
+  assert.equal(seed.storage.original, original);
+  assert.equal(seed.storage.physicalDirectoryPreserved, true);
+  const retained = await identityData(view);
+  assertIdentity(retained, seed.value, { sessionCookieExpected: false });
+  await assertCookieLifetimes(identity, seed.value, 'legacy-store-before-fixture-overwrite', { sessionCookieExpected: false });
+  assertIdentityStorageLocations();
+  const current = result.identitySessionPaths.find(record => record.identity === identity);
+  assert.ok(current, 'The live legacy identity must have a verified physical directory');
+  const reliableId = value => value && /^[1-9]\d*$/.test(value.device) && /^[1-9]\d*$/.test(value.inode);
+  if (reliableId(seed.storage.fileId) && reliableId(current.configuredFileId)) {
+    assert.deepEqual(current.configuredFileId, seed.storage.fileId, 'The original legacy directory inode must survive the Session factory transition');
+  } else assert.equal(current.resolved, seed.storage.resolved, 'The legacy directory must retain its exact canonical path');
+  result.legacyUpgrade = {
+    passed: true, identity, value: seed.value, source: seed.source,
+    fixtureBindingVerified: true, observedBeforeFirstFixtureStoreOverwrite: true,
+    fromFactory: seed.factory, toFactory: current.factory,
+    original: seed.storage, current, retainedStores: retained,
+    scope: 'The generated Personal identity web stores survive the original factory close and production reopen; no legacy extension or arbitrary-profile migration claim',
+  };
 }
 async function extensionData(view, field = 'noxviolaExtension') {
   const outcome = await until(async () => {
@@ -365,12 +425,49 @@ async function extensionData(view, field = 'noxviolaExtension') {
   return JSON.parse(outcome.raw);
 }
 async function previewFixture(name) {
+  if ((await state()).panel !== 'extensions') await command('extensions');
   assert.equal(selection, null);
   selection = path.join(__dirname, 'fixtures', name);
   const preview = await command('extension-preview-dialog', 'directory');
   assert.equal(selection, null, 'Production extension preview must use its selected path');
   assert.ok(preview?.token && preview?.permissions, 'Actual package inspection and consent preview required');
   return preview;
+}
+async function installPreviewThroughRenderer(preview, identity) {
+  await until(() => window.webContents.executeJavaScript(`(() => {
+    return !document.getElementById('extensions').hidden &&
+      !document.getElementById('extension-preview').hidden &&
+      document.getElementById('extension-preview-title').textContent === ${JSON.stringify(`${preview.name} · ${preview.version}`)} &&
+      !document.getElementById('extension-cancel').disabled;
+  })()`), 'the real extension consent preview');
+  const selected = await window.webContents.executeJavaScript(`(() => {
+    const identity = ${JSON.stringify(identity)};
+    const choices = [...document.querySelectorAll('#extension-preview-identities input')];
+    if (!choices.some(input => input.value === identity)) throw new Error('The intended fixture identity is not available in the real preview');
+    for (const input of choices) if (input.checked !== (input.value === identity)) input.click();
+    const consent = document.getElementById('extension-accept');
+    if (consent.checked) throw new Error('The real preview must require fresh permission consent');
+    consent.click();
+    return { identities: choices.filter(input => input.checked).map(input => input.value), permissionsAccepted: consent.checked, installEnabled: !document.getElementById('extension-install').disabled };
+  })()`);
+  assert.deepEqual(selected.identities, [identity]);
+  assert.equal(selected.permissionsAccepted, true);
+  assert.equal(selected.installEnabled, true, 'The actual Install control must become enabled after fixture consent');
+  await window.webContents.executeJavaScript("void document.getElementById('extension-install').click()");
+  const installed = await until(async () => {
+    const hidden = await window.webContents.executeJavaScript("document.getElementById('extension-preview').hidden");
+    if (!hidden) return null;
+    return (await command('extension-list')).find(item => item.packageDigest === preview.packageDigest) || null;
+  }, 'real renderer installation, cleared consent preview and matching installed package');
+  assert.deepEqual(installed.identities.map(grant => grant.identity), [identity]);
+  await until(() => window.webContents.executeJavaScript(`(() => {
+    const items = document.getElementById('extension-items');
+    if (document.getElementById('extensions').hidden || items.hasAttribute('aria-busy')) return false;
+    return [...items.querySelectorAll('article')].some(card => card.querySelector('h2')?.textContent === ${JSON.stringify(`${installed.name} · ${installed.version}`)} && card.textContent.includes(${JSON.stringify(installed.packageDigest)}));
+  })()`), 'the actual installed package card rendered by the production shell');
+  result.extensionRendererInstalls ||= [];
+  result.extensionRendererInstalls.push({ name: installed.name, id: installed.id, packageDigest: installed.packageDigest, selectedIdentities: selected.identities, permissionsAccepted: true, previewCleared: true, installedCardRendered: true });
+  return installed;
 }
 function nativeExtension(id, identity) {
   return partitionFor(identity).extensions.getExtension(id);
@@ -447,6 +544,7 @@ async function firstLaunch() {
     const personal = await navigate(`${context.origin}/page?identity=personal`);
     expected.personalTab = (await state()).activeId;
     expected.personalIdentity = (await state()).currentIdentity;
+    await verifyLegacyStorage(personal, expected.personalIdentity);
     assertIdentity(await writeIdentity(personal, 'personal'), 'personal');
     await command('identity-add', 'Synthetic second identity');
     const secondState = await state();
@@ -503,7 +601,7 @@ async function firstLaunch() {
   });
   await check('MV3 content script executes with persistent, per-identity extension storage and real enable/disable', async () => {
     const preview = await previewFixture('extension');
-    const record = await command('extension-install', { token: preview.token, identities: [expected.personalIdentity], permissionsAccepted: true });
+    const record = await installPreviewThroughRenderer(preview, expected.personalIdentity);
     expected.extensionId = record.id;
     const grant = record.identities.find(item => item.identity === expected.personalIdentity);
     assert.equal(grant.status, 'loaded');
@@ -536,7 +634,7 @@ async function firstLaunch() {
   });
   await check('documented MV2 background messaging runs and disabling destroys its native background context', async () => {
     const preview = await previewFixture('background-extension');
-    const record = await command('extension-install', { token: preview.token, identities: [expected.personalIdentity], permissionsAccepted: true });
+    const record = await installPreviewThroughRenderer(preview, expected.personalIdentity);
     expected.backgroundId = record.id;
     expected.backgroundRuntimeId = record.identities.find(item => item.identity === expected.personalIdentity).runtimeId;
     let view = await navigate(`${context.origin}/page?background=first`);
@@ -592,8 +690,27 @@ async function firstLaunch() {
   });
   await check('capture installed synthetic extension status at narrow and desktop widths', async () => {
     await command('extensions');
+    const cards = await until(() => window.webContents.executeJavaScript(`(() => {
+      const panel = document.getElementById('extensions'), items = document.getElementById('extension-items');
+      if (panel.hidden || !document.getElementById('extension-preview').hidden || items.hasAttribute('aria-busy')) return null;
+      const cards = [...items.querySelectorAll('article')].map(card => ({title: card.querySelector('h2')?.textContent, grants: [...card.querySelectorAll('.identity-grant > p')].map(row => row.textContent)}));
+      return cards.length === 2 ? cards : null;
+    })()`), 'actual installed extension cards after the consent previews are cleared');
+    const current = await state();
+    const personalName = current.profiles.find(profile => profile.id === expected.personalIdentity).name;
+    const secondName = current.profiles.find(profile => profile.id === expected.secondIdentity).name;
+    const storageCard = cards.find(card => card.title.startsWith('Noxviola synthetic storage fixture ·'));
+    const backgroundCard = cards.find(card => card.title.startsWith('Noxviola synthetic background fixture ·'));
+    assert.ok(storageCard && backgroundCard, 'Both actual installed fixture packages must be rendered');
+    assert.deepEqual(storageCard.grants.sort(), [`${personalName} · loaded`, `${secondName} · loaded`].sort());
+    assert.deepEqual(backgroundCard.grants, [`${personalName} · loaded`]);
+    result.extensionStatusUi = { previewHidden: true, cards };
     for (const [width, height] of [[700, 600], [1320, 860]]) await captureShell('synthetic-extensions', width, height);
     await command('panel-close');
+  });
+  await check('persistent and session-only cookies have distinct native lifetimes before normal close', async () => {
+    await assertCookieLifetimes(expected.personalIdentity, 'personal', 'before-normal-close');
+    await assertCookieLifetimes(expected.secondIdentity, 'second', 'before-normal-close');
   });
   expected.extensionVisits = (await extensionData(await site())).visits;
   const final = await state();
@@ -610,8 +727,12 @@ async function secondLaunch() {
     assert.deepEqual(restored.tabs.map(({ id, url, identity }) => ({ id, url, identity })), expected.tabs);
     assert.deepEqual(restored.profiles, expected.profiles);
     assert.equal(restored.activeId, expected.activeId);
-    assertIdentity(await identityData(await activate(expected.personalTab)), 'personal');
-    assertIdentity(await identityData(await activate(expected.secondTab)), 'second');
+    const personal = await activate(expected.personalTab);
+    await assertCookieLifetimes(expected.personalIdentity, 'personal', 'after-restart', {sessionCookieExpected: false});
+    assertIdentity(await identityData(personal), 'personal', {sessionCookieExpected: false});
+    const second = await activate(expected.secondTab);
+    await assertCookieLifetimes(expected.secondIdentity, 'second', 'after-restart', {sessionCookieExpected: false});
+    assertIdentity(await identityData(second), 'second', {sessionCookieExpected: false});
     assertIdentityStorageLocations();
     result.storageLayouts = fixtureStorageLayout();
   });

@@ -89,10 +89,15 @@ function electronExecutable() {
 }
 
 async function runPhase(executable, context, phase) {
-  const log = fs.openSync(path.join(context.output, `electron-phase-${phase}.log`), 'w', 0o600);
+  if (!['legacy-seed', 1, 2].includes(phase)) throw new Error('Only the legacy seed and two production fixture phases may launch.');
+  const label = phase === 'legacy-seed' ? phase : `phase-${phase}`;
+  const entry = phase === 'legacy-seed' ? 'legacy-seed.cjs' : 'driver.cjs';
+  const arguments_ = [path.join(ROOT, 'tests/native', entry), context.configFile];
+  if (phase !== 'legacy-seed') arguments_.push(String(phase));
+  const log = fs.openSync(path.join(context.output, `electron-${label}.log`), 'w', 0o600);
   try {
     return await new Promise((resolve, reject) => {
-      const child = spawn(executable, [path.join(ROOT, 'tests/native/driver.cjs'), context.configFile, String(phase)], {
+      const child = spawn(executable, arguments_, {
         cwd: ROOT, stdio: ['ignore', log, log], windowsHide: false,
       });
       const timeout = setTimeout(() => {
@@ -103,7 +108,7 @@ async function runPhase(executable, context, phase) {
       child.once('exit', (code, signal) => {
         clearTimeout(timeout);
         try {
-          const resultFile = path.join(context.output, `phase-${phase}.json`);
+          const resultFile = path.join(context.output, `${label}.json`);
           const result = fs.existsSync(resultFile) ? JSON.parse(fs.readFileSync(resultFile, 'utf8')) : null;
           if (code !== 0 || !result?.passed) {
             const error = new Error(`Electron phase ${phase} failed (exit ${code}, signal ${signal || 'none'}). ${result?.error || 'See the retained runtime log.'}`);
@@ -131,8 +136,8 @@ async function main(argv = process.argv.slice(2)) {
   const report = {
     schema: 1, startedAt: new Date().toISOString(), platform: process.platform, arch: process.arch,
     electron: require('../package.json').devDependencies.electron, source: sourceEvidence(),
-    scope: 'Actual source app, sandboxed Electron, loopback fixtures, fresh synthetic profile, two process launches',
-    status: 'blocked', runtimeAttempted: false, runtimeStarted: false, phases: [],
+    scope: 'Sandboxed legacy fromPartition seed followed by two actual source-app processes, one loopback origin and fresh synthetic profile',
+    status: 'blocked', runtimeAttempted: false, runtimeStarted: false, legacySeed: null, phases: [],
     unverified: ['Native OS file-picker interaction', 'Real Internet sites and authenticated accounts', 'Cross-browser extension compatibility beyond the recorded synthetic extensions', 'Full first-party and engine network/telemetry audit', 'Full security, accessibility, performance and release qualification'],
   };
   let context;
@@ -148,6 +153,8 @@ async function main(argv = process.argv.slice(2)) {
     context = createContext(origin, output);
     report.runtimeAttempted = true;
     report.status = 'failed';
+    report.legacySeed = await runPhase(executable, context, 'legacy-seed');
+    report.runtimeStarted ||= report.legacySeed.runtimeReady;
     for (const phase of [1, 2]) {
       const completed = await runPhase(executable, context, phase);
       report.phases.push(completed);
@@ -157,12 +164,13 @@ async function main(argv = process.argv.slice(2)) {
     if (report.sourceAfter.manifestSha256 !== report.source.manifestSha256) throw new Error('Application or native fixture sources changed during execution; the run cannot qualify a single source snapshot.');
     report.fixtureRequests = fixture.requests.length;
     report.status = 'passed';
-    console.log('PASS: Actual sandboxed Electron fixture workflows completed across two launches. This is not complete browser or release qualification.');
+    console.log('PASS: A sandboxed legacy seed and two actual source-app launches completed. This is scoped store-transition/restart evidence, not complete browser or release qualification.');
     return 0;
   } catch (error) {
     report.status = 'failed';
     if (error.phaseResult) {
-      report.phases.push(error.phaseResult);
+      if (error.phaseResult.phase === 'legacy-seed') report.legacySeed = error.phaseResult;
+      else report.phases.push(error.phaseResult);
       report.runtimeStarted ||= error.phaseResult.runtimeReady;
     }
     report.reason = error.stack || error.message;

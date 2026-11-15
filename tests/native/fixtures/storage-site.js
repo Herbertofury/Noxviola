@@ -38,7 +38,13 @@ window.fixture = {
   lastFailure: null,
   async writeIdentity(value) {
     this.lastFailure = null;
-    await storageStep('cookie.write', () => { document.cookie = `noxviola_fixture=${encodeURIComponent(value)}; Path=/; SameSite=Strict`; });
+    await storageStep('cookie.write', () => {
+      // Exercise both lifetimes explicitly. A cookie without Max-Age/Expires is
+      // session-only; it must not stand in for the persistent restart fixture.
+      // https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie
+      document.cookie = `noxviola_fixture=${encodeURIComponent(value)}; Max-Age=86400; Path=/; SameSite=Strict`;
+      document.cookie = `noxviola_session_fixture=${encodeURIComponent(value)}; Path=/; SameSite=Strict`;
+    });
     await storageStep('localStorage.write', () => localStorage.setItem('noxviola-fixture', value));
     const db = await openFixtureDatabase();
     try {

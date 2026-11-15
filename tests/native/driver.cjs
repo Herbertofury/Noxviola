@@ -18,8 +18,10 @@ for (const name of ['no-sandbox', 'disable-setuid-sandbox', 'disable-seccomp-fil
 }
 app.enableSandbox();
 app.setPath('userData', context.profile);
-fs.mkdirSync(path.join(context.profile, 'engine'), { recursive: true });
-app.setPath('sessionData', path.join(context.profile, 'engine'));
+const originalSessionData = path.join(context.profile, 'engine');
+fs.mkdirSync(originalSessionData, { recursive: true });
+const originalResolvedSessionData = fs.realpathSync.native(originalSessionData);
+app.setPath('sessionData', originalSessionData);
 app.setPath('downloads', path.join(context.directory, 'downloads'));
 app.setPath('logs', path.join(context.directory, 'logs'));
 app.setPath('crashDumps', path.join(context.directory, 'crash'));
@@ -134,6 +136,71 @@ function errorDetails(error) {
     stack: String(error?.stack || ''),
   };
 }
+function ordinaryPath(value) {
+  if (process.platform !== 'win32') return path.normalize(value);
+  // An extended path is another spelling of this same generated directory.
+  // Normalize only for comparison/length reporting; keep the actual configured
+  // path for all Electron and filesystem operations.
+  return path.win32.normalize(value.replace(/^\\\\\?\\UNC\\/i, '\\\\').replace(/^\\\\\?\\/, ''));
+}
+function comparablePath(value) {
+  const normalized = ordinaryPath(value);
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
+}
+function expectedCachePathLengths(root) {
+  const cache = path.join(ordinaryPath(root), 'Service Worker', 'CacheStorage', 'a'.repeat(40), '12345678-1234-1234-1234-123456789012');
+  return {
+    basis: 'Derived from the pinned Chromium first-party default cache layout using a 40-character origin hash and 36-character cache UUID; these sample names are not observations',
+    source: 'https://github.com/chromium/chromium/tree/152.0.7977.169/content/browser/cache_storage',
+    directory: cache.length,
+    indexDirectory: path.join(cache, 'index-dir').length,
+    indexFile: path.join(cache, 'index-dir', 'the-real-index').length,
+    entryFile: path.join(cache, 'a'.repeat(16) + '_0').length,
+    units: 'characters in the ordinary path spelling, without a Windows extended-path prefix or trailing NUL',
+  };
+}
+function fixtureStorageLayout() {
+  const profile = fs.realpathSync.native(context.profile);
+  return [...partitionIdentities].map(([partition, identity]) => {
+    const diagnostic = { identity, storagePath: partition.getStoragePath(), entries: [] };
+    try {
+      const root = fs.realpathSync.native(diagnostic.storagePath);
+      const relative = path.relative(comparablePath(profile), comparablePath(root));
+      if (relative.startsWith('..') || path.isAbsolute(relative)) {
+        diagnostic.inspection = 'Skipped: session path is outside the generated fixture profile';
+        return diagnostic;
+      }
+      diagnostic.realStoragePath = root;
+      diagnostic.storagePathLength = diagnostic.storagePath.length;
+      diagnostic.realStoragePathLength = root.length;
+      diagnostic.ordinaryStoragePathLength = ordinaryPath(diagnostic.storagePath).length;
+      diagnostic.ordinaryRealStoragePathLength = ordinaryPath(root).length;
+      diagnostic.expectedCachePathLengths = expectedCachePathLengths(root);
+      function walk(directory) {
+        let entries;
+        try { entries = fs.readdirSync(directory, { withFileTypes: true }); }
+        catch (error) { diagnostic.entries.push({ relative: path.relative(root, directory), error: errorDetails(error) }); return; }
+        for (const entry of entries) {
+          const file = path.join(directory, entry.name);
+          const relativePath = path.relative(root, file);
+          diagnostic.entries.push({
+            relative: relativePath.split(path.sep).join('/'),
+            type: entry.isSymbolicLink() ? 'symlink-not-followed' : entry.isDirectory() ? 'directory' : entry.isFile() ? 'file' : 'special-not-followed',
+            reportedPathLength: path.join(diagnostic.storagePath, relativePath).length,
+            canonicalPathLength: file.length,
+            ordinaryCanonicalPathLength: ordinaryPath(file).length,
+          });
+          if (entry.isDirectory() && !entry.isSymbolicLink()) walk(file);
+        }
+      }
+      walk(root);
+      diagnostic.entries.sort((left, right) => left.relative.localeCompare(right.relative));
+      diagnostic.cacheEntries = diagnostic.entries.filter(entry => entry.relative === 'Service Worker/CacheStorage' || entry.relative.startsWith('Service Worker/CacheStorage/'));
+      diagnostic.scope = 'Generated fixture path metadata only; no profile file contents are read or retained';
+    } catch (error) { diagnostic.inspectionError = errorDetails(error); }
+    return diagnostic;
+  });
+}
 async function until(predicate, description, timeout = 15_000) {
   const end = performance.now() + timeout;
   let lastError;
@@ -228,6 +295,8 @@ async function fixtureValue(view, expression, operation) {
       diagnostic.realStoragePath = diagnostic.storagePath ? fs.realpathSync.native(diagnostic.storagePath) : null;
     } catch (error) { diagnostic.storagePathInspectionError = errorDetails(error); }
     result.storageFailure = diagnostic;
+    try { result.storageLayouts = fixtureStorageLayout(); }
+    catch (error) { result.storageLayoutInspectionError = errorDetails(error); }
     throw new Error(`${operation} failed: ${JSON.stringify(outcome.fixtureFailure || outcome.error)}`);
   }
   return outcome.value;
@@ -351,6 +420,7 @@ async function firstLaunch() {
     assert.equal(empty.serviceWorkers, 0);
     assertIdentity(await writeIdentity(second, 'second'), 'second');
     assertIdentity(await identityData(await activate(expected.personalTab)), 'personal');
+    result.storageLayouts = fixtureStorageLayout();
   });
   await check('site geolocation request is denied through production permission handling', async () => {
     const view = await site();
@@ -501,6 +571,7 @@ async function secondLaunch() {
     assert.equal(restored.activeId, expected.activeId);
     assertIdentity(await identityData(await activate(expected.personalTab)), 'personal');
     assertIdentity(await identityData(await activate(expected.secondTab)), 'second');
+    result.storageLayouts = fixtureStorageLayout();
   });
   await check('extension identity, storage and background execution survive a real process restart', async () => {
     const entries = await command('extension-list');
@@ -549,6 +620,13 @@ app.on('session-created', observePartition);
 app.on('web-contents-created', (_event, contents) => observeBackground(contents));
 require('../../browser/main.cjs');
 app.whenReady().then(async () => {
+  await check('configured session storage resolves to the original generated directory without relocation', async () => {
+    const configured = app.getPath('sessionData');
+    const resolved = fs.realpathSync.native(configured);
+    result.sessionDataPath = { original: originalSessionData, originalResolved: originalResolvedSessionData, configured, resolved };
+    assert.equal(comparablePath(resolved), comparablePath(originalResolvedSessionData), 'The production path configuration must preserve the physical fixture directory');
+    if (process.platform === 'win32') assert.ok(configured.startsWith('\\\\?\\'), 'Production must configure the extended Windows path before creating identity sessions');
+  });
   window = await until(() => BrowserWindow.getAllWindows().find(value => !value.isDestroyed()), 'production BrowserWindow');
   await until(() => !window.webContents.isLoading() && window.webContents.getURL().startsWith('file:'), 'trusted shell document');
   await until(() => window.webContents.executeJavaScript('typeof window.browser?.command === "function"'), 'production preload bridge');

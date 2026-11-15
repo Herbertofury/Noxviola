@@ -451,7 +451,7 @@ test('identity-scoped startup opens only the requested runtime and repeats witho
   assert.equal(fresh.calls.length, 2);
 });
 
-test('native unload/reload notifications update status and observers are removed on dispose', async t => {
+test('native registration observes a runtime without bypassing managed readiness and dispose removes observers', async t => {
   const {manager, root, fake} = await setup(t);
   const item = await install(manager, await fixture(root));
   const adapter = fake.getSession('personal').extensions;
@@ -460,6 +460,11 @@ test('native unload/reload notifications update status and observers are removed
   assert.equal(manager.list()[0].identities[0].status, 'not-loaded');
   fake.getSession('personal').loaded.set(extension.id, extension);
   adapter.emit('extension-loaded', {}, extension);
+  assert.equal(manager.list()[0].identities[0].status, 'not-loaded');
+  await manager.setEnabled(item.id, 'personal', true);
+  assert.equal(manager.list()[0].identities[0].status, 'disable-failed');
+  await manager.setEnabled(item.id, 'personal', false);
+  await manager.setEnabled(item.id, 'personal', true);
   assert.equal(manager.list()[0].identities[0].status, 'loaded');
   assert.equal(adapter.listenerCount('extension-unloaded'), 1);
   await manager.dispose();

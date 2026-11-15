@@ -1,6 +1,8 @@
 # Browser capability audit and implementation ledger
 
-**Inventory version: 2026-11-15.1. This is an initial documentation and source audit, not a completed four-browser audit.** The target is the complete applicable union in the [unchanged master goal](browser/MASTER-GOAL.md). There is no feature-count ceiling and no acceptance gate is closed by this inventory.
+**Inventory version: 2026-11-15.2. This is an initial documented inventory with scoped native evidence, not a completed four-browser audit.** The target is the complete applicable union in the [unchanged master goal](browser/MASTER-GOAL.md). There is no feature-count ceiling and no acceptance gate is closed by this inventory.
+
+The ledger now retains [actual Windows/Linux runtime evidence at `6fccdd2`](https://github.com/Herbertofury/Noxviola/actions/runs/43766771107), including the exact failures. Twelve affected capabilities name their scoped passing or failing workflows. The complete acceptance procedures and statuses remain open: the Linux MV2 background-start ordering and Windows second-identity cache write failures prevented restart and later workflows in that run. A synthetic fixture result does not qualify an entire extension ecosystem or the user's installed browsers.
 
 The canonical, searchable data is [browser/capabilities.json](../browser/capabilities.json). Its [Markdown index](browser-capabilities-index.md) is a reading aid; the browser's explicitly opened Capabilities panel reads the same JSON. This checkpoint expands **183 behavior records and 100 source records**, with further discovery queues. Counts describe the work recorded so far, not the final scope.
 

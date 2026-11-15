@@ -9,8 +9,8 @@ const APP_FILES = [
   'browser/main.cjs', 'browser/preload.cjs', 'browser/renderer.js',
   'browser/index.html', 'browser/style.css', 'browser/assets/noxviola.png',
   'browser/capabilities.json', 'browser/state.cjs',
-  'browser/storage.cjs', 'browser/session-writer.cjs',
-  'browser/permissions.cjs', 'browser/downloads.cjs', 'browser/extensions.cjs',
+  'browser/storage.cjs', 'browser/session-writer.cjs', 'browser/session-path.cjs',
+  'browser/permissions.cjs', 'browser/downloads.cjs', 'browser/extensions.cjs', 'browser/extension-runtime.cjs',
   'browser/vault.cjs', 'browser/accounts.cjs', 'LICENSE', 'THIRD_PARTY_NOTICES.md',
 ];
 

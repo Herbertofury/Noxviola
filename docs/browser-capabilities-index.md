@@ -1,6 +1,6 @@
 # Browser capability index
 
-Inventory version **2026-11-15.1**; reviewed 2026-11-15. **Initial documented inventory; incomplete.**
+Inventory version **2026-11-15.2**; reviewed 2026-11-15. **Initial documented inventory; incomplete.** Scoped hosted-runtime evidence is retained in the JSON ledger; no complete capability or product gate is promoted by the partial runs.
 
 This checkpoint expands 183 capability records and 100 source records. These are discovered records, not a scope limit. The complete union and configuration audit remains open. Direct inspection of installed Windows browsers has not occurred.
 

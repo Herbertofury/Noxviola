@@ -393,11 +393,15 @@ function validateRegistry(state) {
 }
 
 class ExtensionManager {
-  constructor({directory, getSession, getIdentities, electronVersion = process.versions.electron} = {}) {
+  constructor({directory, getSession, getIdentities, loadExtension = (session, directory, options) => session.extensions.loadExtension(directory, options), electronVersion = process.versions.electron} = {}) {
     if (!directory || typeof getSession !== 'function' || typeof getIdentities !== 'function') throw new TypeError('directory, getSession and getIdentities are required');
+    if (typeof loadExtension !== 'function') throw new TypeError('loadExtension must be a function');
     this.directory = path.resolve(directory);
     this.getSession = getSession;
     this.getIdentities = getIdentities;
+    // Production injects extension-runtime.cjs. The raw default keeps isolated
+    // contract adapters independent of Electron's native background events.
+    this.loadExtension = loadExtension;
     this.electronVersion = electronVersion;
     this._state = {version: 1, items: []};
     this._disk = null;
@@ -405,6 +409,7 @@ class ExtensionManager {
     this._runtime = new Map();
     this._previews = new Map();
     this._adapters = new Map();
+    this._sessions = new Map();
     this._observers = new Map();
     this._tail = Promise.resolve();
     this._opened = false;
@@ -453,6 +458,7 @@ class ExtensionManager {
     const adapter = session?.extensions;
     if (!adapter || ['loadExtension', 'removeExtension', 'getExtension', 'getAllExtensions'].some(method => typeof adapter[method] !== 'function')) fail('RUNTIME_UNAVAILABLE', 'This Electron session does not expose the required extension lifecycle API.');
     this._adapters.set(identity, adapter);
+    this._sessions.set(identity, session);
     if (typeof adapter.on === 'function') {
       const unloaded = (_event, extension) => {
         for (const item of this._state.items) {
@@ -467,7 +473,9 @@ class ExtensionManager {
         for (const item of this._state.items) {
           const key = this._key(item.id, identity);
           const runtime = this._runtime.get(key);
-          if (runtime?.runtimeId === extension.id && item.identities.some(grant => grant.identity === identity && grant.enabled)) this._runtime.set(key, {...runtime, status: 'loaded', error: null});
+          // Registration alone cannot attest that a persistent background page
+          // finished loading. Only the managed load operation confirms ready.
+          if (runtime?.runtimeId === extension.id && runtime.status !== 'disable-failed') this._runtime.set(key, {...runtime, status: 'not-loaded', error: 'The runtime registered this extension without confirmed managed readiness. Disable it before loading again.'});
         }
       };
       adapter.on('extension-unloaded', unloaded);
@@ -620,14 +628,14 @@ class ExtensionManager {
       adapter = this._adapter(grant.identity);
       const existing = this._runtime.get(key);
       if (existing?.runtimeId && adapter.getExtension(existing.runtimeId)) {
-        this._runtime.set(key, {...existing, status: 'loaded', error: null});
+        if (existing.status !== 'loaded') this._runtime.set(key, {...existing, status: 'disable-failed', error: existing.error || 'Extension code may still be running without confirmed readiness. Disable it before loading again.'});
         return;
       }
       if ((verifiedDigest || (await inspectTree(packagePath, this.electronVersion)).packageDigest) !== item.packageDigest) fail('INSTALLED_PACKAGE_CHANGED', 'Installed bytes differ from the package whose permissions were accepted. The extension was not loaded.');
       const expectedId = item.sourceIdentity?.startsWith('chromium-key:') ? item.sourceIdentity.slice('chromium-key:'.length, 'chromium-key:'.length + 32).replace(/[0-9a-f]/g, char => String.fromCharCode(97 + parseInt(char, 16))) : null;
       if (expectedId && adapter.getExtension(expectedId)) fail('RUNTIME_ID_CONFLICT', 'An extension with this publisher identity is already running outside this manager. It was not replaced.');
       previousIds = new Set(adapter.getAllExtensions().map(extension => extension.id));
-      const extension = await adapter.loadExtension(packagePath, {allowFileAccess: grant.allowFileAccess});
+      const extension = await this.loadExtension(this._sessions.get(grant.identity), packagePath, {allowFileAccess: grant.allowFileAccess});
       loadedId = extension?.id;
       if (!extension || !/^[a-p]{32}$/.test(extension.id) || !adapter.getExtension(extension.id)) fail('RUNTIME_LOAD_UNCONFIRMED', 'The extension runtime did not confirm a loaded extension identity.');
       this._runtime.set(key, {status: 'loaded', runtimeId: extension.id, error: null, functionalVerification: 'not-tested'});

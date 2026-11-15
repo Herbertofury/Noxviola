@@ -1,6 +1,6 @@
 'use strict';
 // Browser lifecycle adapted from Herbertofury/Enderloom main.js (GPL-3.0-only).
-const {app, BrowserWindow, WebContentsView, ipcMain, session, dialog, Menu, shell} = require('electron');
+const {app, BrowserWindow, WebContentsView, ipcMain, session, dialog, Menu, shell, webContents} = require('electron');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const {address, httpUrl, cleanState, inspectState, recoverState, SEARCH} = require('./state.cjs');
@@ -8,10 +8,13 @@ const storage = require('./storage.cjs');
 const {SessionWriter} = require('./session-writer.cjs');
 const {DownloadManager} = require('./downloads.cjs');
 const {ExtensionManager} = require('./extensions.cjs');
+const {createExtensionLoader} = require('./extension-runtime.cjs');
+const {configureSessionDataPath} = require('./session-path.cjs');
 const {PermissionManager} = require('./permissions.cjs');
 const accountStore = require('./accounts.cjs');
 const vaultStore = require('./vault.cjs');
 app.enableSandbox();
+configureSessionDataPath(app);
 
 let win, tabs = [], profiles = [{id:'personal', name:'Personal'}], activeId, currentIdentity = 'personal';
 let originalSession = cleanState({}), preferences = originalSession.preferences;
@@ -351,7 +354,7 @@ async function start() {
   try {permissionOpening = permissions.open();} catch (error) {permissionOpening = {status:'blocked',error:error.message};}
   downloads = new DownloadManager({directory:app.getPath('downloads'),reveal:file => shell.showItemInFolder(file)});
   downloads.on('change', rows => { if (panel === 'downloads') send('downloads',rows); });
-  extensions = new ExtensionManager({directory:path.join(dataDirectory,'extensions'),getSession:identitySession,getIdentities:() => profiles.map(profile => profile.id)});
+  extensions = new ExtensionManager({directory:path.join(dataDirectory,'extensions'),getSession:identitySession,getIdentities:() => profiles.map(profile => profile.id),loadExtension:createExtensionLoader({app,webContents})});
   try {await extensions.open();} catch (error) {extensionError = error.message;}
   session.defaultSession.setPermissionCheckHandler(() => false); session.defaultSession.setPermissionRequestHandler((_wc,_permission,callback) => callback(false));
   writer = new SessionWriter(sessionFile); writer.on('result',result => {saveError = result.error || '';if (result.error) notice(`Session not saved: ${result.error}`);publish(false);});

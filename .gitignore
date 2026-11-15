@@ -3,3 +3,4 @@ node_modules/
 private-vault*.json
 browser-session*.json
 private-accounts*.json
+dist-preview/

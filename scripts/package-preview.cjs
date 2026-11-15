@@ -1,0 +1,18 @@
+'use strict';
+const fs=require('node:fs');const path=require('node:path');const os=require('node:os');const crypto=require('node:crypto');const {execFileSync}=require('node:child_process');
+const APP_FILES=['browser/main.cjs','browser/preload.cjs','browser/renderer.js','browser/index.html','browser/style.css','browser/state.cjs','browser/vault.cjs','browser/accounts.cjs','LICENSE'];
+function stageApp(root,destination,commit){
+ fs.mkdirSync(destination,{recursive:true});
+ for(const rel of APP_FILES){const from=path.join(root,rel),to=path.join(destination,rel);if(!fs.lstatSync(from).isFile())throw new Error(`Not a regular application source: ${rel}`);fs.mkdirSync(path.dirname(to),{recursive:true});fs.copyFileSync(from,to);}
+ const pkg=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
+ const runtime={name:pkg.name,productName:pkg.productName,version:pkg.version,description:pkg.description,main:pkg.main,license:pkg.license};
+ fs.writeFileSync(path.join(destination,'package.json'),JSON.stringify(runtime,null,2));
+ const provenance={project:'Noxviola',commit,electron:pkg.devDependencies.electron,packager:pkg.devDependencies['@electron/packager'],acceptance:'UNVERIFIED PREVIEW: packaged, not native-accepted or signed',source:`https://github.com/Herbertofury/Noxviola/tree/${commit}`};
+ fs.writeFileSync(path.join(destination,'BUILD.json'),JSON.stringify(provenance,null,2));
+ fs.writeFileSync(path.join(destination,'PREVIEW-NOTICE.txt'),'Unverified preview. No native browser/security/performance acceptance. Do not use for sensitive accounts. No auto-update, signing or release qualification. Private data is never included in this package.\n');
+ return provenance;
+}
+function manifest(dir){const records=[];function walk(base){for(const entry of fs.readdirSync(base,{withFileTypes:true})){const f=path.join(base,entry.name);if(entry.isSymbolicLink())throw new Error('Unexpected symbolic link in package');if(entry.isDirectory())walk(f);else if(entry.isFile())records.push({path:path.relative(dir,f).split(path.sep).join('/'),bytes:fs.statSync(f).size,sha256:crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex')});}}walk(dir);return records.sort((a,b)=>a.path.localeCompare(b.path));}
+async function main(){const root=path.resolve(__dirname,'..'),temporary=fs.mkdtempSync(path.join(os.tmpdir(),'noxviola-package-'));try{const commit=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();const stage=path.join(temporary,'app');const info=stageApp(root,stage,commit);const {packager}=await import('@electron/packager');const output=await packager({dir:stage,name:'Noxviola',platform:process.platform,arch:process.arch,electronVersion:info.electron,out:path.join(root,'dist-preview'),asar:true,prune:false,overwrite:false});for(const dir of output){const files=manifest(dir);fs.writeFileSync(path.join(dir,'PACKAGE-MANIFEST.json'),JSON.stringify({ ...info,platform:process.platform,arch:process.arch,totalBytes:files.reduce((n,f)=>n+f.bytes,0),files},null,2));}console.log('Packaged UNVERIFIED previews only:',output.join(', '));}finally{fs.rmSync(temporary,{recursive:true,force:true});}}
+if(require.main===module)main().catch(e=>{console.error(e);process.exitCode=1;});
+module.exports={APP_FILES,stageApp,manifest};

@@ -2,12 +2,18 @@
 
 A customizable purple browser and private favorites vault, beginning with Enderloom's working Chromium browser model. **Experimental 0.1 baseline, not a production-security or performance-qualified browser.**
 
+## Browser hub
+
+[Source and roadmap](docs/browser/README.md) · [Builds and release gates](docs/browser/RELEASES.md) · [Privacy boundaries](docs/browser/PRIVACY.md) · [Contract checks](https://github.com/Herbertofury/Noxviola/actions/workflows/browser-contracts.yml) · [Preview build jobs](https://github.com/Herbertofury/Noxviola/actions/workflows/preview-builds.yml) · [Releases](https://github.com/Herbertofury/Noxviola/releases)
+
+No production release is currently qualified. CI preview artifacts, when a build succeeds, are unsigned and explicitly **UNVERIFIED**. A built package is not a browser acceptance result.
+
 ## Try the source
 
-Node 22+ and the pinned Electron dependency are required:
+Node 22.12+ and the pinned Electron dependency are required:
 
 ```sh
-npm install
+npm ci
 npm start
 npm test
 ```

@@ -73,6 +73,67 @@ dialog.showMessageBox = async (_window, options) => {
 dialog.showErrorBox = (title, message) => { throw new Error(`${title}: ${message}`); };
 
 let window;
+let lastState = null;
+const partitionIdentities = new Map();
+const observedPartitions = new WeakSet();
+const lifecyclePartitions = new WeakMap();
+result.extensionLifecycle = [];
+function partitionFor(identity) {
+  const partition = session.fromPartition(`persist:noxviola-identity-${identity}`);
+  partitionIdentities.set(partition, identity);
+  for (const event of result.extensionLifecycle) if (lifecyclePartitions.get(event) === partition) event.identity = identity;
+  observePartition(partition);
+  return partition;
+}
+function isFixtureExtension(extension) {
+  if (!extension || typeof extension.path !== 'string' || !['Noxviola synthetic storage fixture', 'Noxviola synthetic background fixture'].includes(extension.name)) return false;
+  const relative = path.relative(path.join(context.profile, 'extensions', 'packages'), extension.path);
+  return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
+}
+function lifecycleEvent(partition, event, fields) {
+  const record = { event, capturedAt: new Date().toISOString(), identity: partitionIdentities.get(partition) || null, storagePath: partition.getStoragePath(), ...fields };
+  lifecyclePartitions.set(record, partition);
+  result.extensionLifecycle.push(record);
+}
+function observePartition(partition) {
+  if (observedPartitions.has(partition)) return;
+  observedPartitions.add(partition);
+  for (const event of ['extension-loaded', 'extension-ready', 'extension-unloaded']) {
+    partition.extensions.on(event, (_event, extension) => {
+      if (isFixtureExtension(extension)) lifecycleEvent(partition, event, { runtimeId: extension.id, name: extension.name });
+    });
+  }
+}
+function observeBackground(contents) {
+  if (contents.getType() !== 'backgroundPage') return;
+  const partition = contents.session;
+  let observedExtension = null;
+  function record(event, fields = {}, candidate = contents.getURL()) {
+    try {
+      for (const address of [candidate, contents.getURL()]) {
+        let url;
+        try { url = new URL(address); } catch { continue; }
+        if (url.protocol !== 'chrome-extension:') continue;
+        const extension = partition.extensions.getExtension(url.hostname);
+        if (isFixtureExtension(extension)) observedExtension = extension;
+      }
+      if (!observedExtension) return;
+      lifecycleEvent(partition, event, { webContentsId: contents.id, type: contents.getType(), url: contents.getURL(), runtimeId: observedExtension.id, ...fields });
+    } catch { /* Ignore unrelated or initial empty documents; never probe them. */ }
+  }
+  contents.on('did-start-navigation', details => record('did-start-navigation', { isMainFrame: details.isMainFrame }, details.url));
+  contents.on('console-message', details => record('console-message', { level: details.level, message: details.message, lineNumber: details.lineNumber, sourceId: details.sourceId }, details.sourceId || contents.getURL()));
+  contents.on('did-finish-load', () => record('did-finish-load'));
+  contents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => record('did-fail-load', { errorCode, errorDescription, validatedURL, isMainFrame }, validatedURL));
+  contents.on('render-process-gone', (_event, details) => record('render-process-gone', { reason: details.reason, exitCode: details.exitCode }));
+}
+function errorDetails(error) {
+  return {
+    name: String(error?.name || typeof error),
+    message: String(error?.message || error),
+    stack: String(error?.stack || ''),
+  };
+}
 async function until(predicate, description, timeout = 15_000) {
   const end = performance.now() + timeout;
   let lastError;
@@ -84,9 +145,16 @@ async function until(predicate, description, timeout = 15_000) {
 }
 async function check(name, action) {
   const start = performance.now();
-  await action();
-  result.checks.push({ name, passed: true, milliseconds: Math.round(performance.now() - start) });
-  console.log(`PASS: ${name}`);
+  result.activeCheck = name;
+  try {
+    await action();
+    result.checks.push({ name, passed: true, milliseconds: Math.round(performance.now() - start) });
+    result.activeCheck = null;
+    console.log(`PASS: ${name}`);
+  } catch (error) {
+    result.checks.push({ name, passed: false, milliseconds: Math.round(performance.now() - start), error: errorDetails(error) });
+    throw error;
+  }
 }
 async function captureShell(name, width, height) {
   window.setContentSize(width, height);
@@ -104,6 +172,7 @@ async function command(name, value) {
 async function state() {
   const value = await command('state');
   assert.ok(value && Array.isArray(value.tabs) && Array.isArray(value.profiles), 'Trusted state IPC must return the live browser snapshot');
+  lastState = value;
   return value;
 }
 async function captureMetrics(milestone) {
@@ -123,7 +192,7 @@ function views() {
 async function activeView() {
   const current = await state();
   const tab = current.tabs.find(item => item.id === current.activeId);
-  return views().find(view => view.getVisible() && view.webContents.session === session.fromPartition(`persist:noxviola-identity-${tab.identity}`) && view.webContents.getURL() === tab.url);
+  return views().find(view => view.getVisible() && view.webContents.session === partitionFor(tab.identity) && view.webContents.getURL() === tab.url);
 }
 async function site(url) {
   return until(async () => {
@@ -140,7 +209,31 @@ async function activate(id) {
   await command('activate', id);
   return site();
 }
-async function identityData(view) { return view.webContents.executeJavaScript('window.fixture.readIdentity()'); }
+async function fixtureValue(view, expression, operation) {
+  // Return plain error fields before Electron can serialize a DOMException as {}.
+  const outcome = await view.webContents.executeJavaScript(`(async () => {
+    try { return { ok: true, value: await (${expression}) }; }
+    catch (error) { return { ok: false, error: { name: String(error?.name || typeof error), message: String(error?.message || error), stack: String(error?.stack || '') }, fixtureFailure: window.fixture?.lastFailure || null }; }
+  })()`);
+  if (!outcome.ok) {
+    const diagnostic = {
+      operation, url: view.webContents.getURL(),
+      identity: lastState?.tabs.find(tab => tab.id === lastState.activeId)?.identity || null,
+      sessionData: app.getPath('sessionData'), browserError: outcome.error,
+      fixtureFailure: outcome.fixtureFailure,
+    };
+    try {
+      diagnostic.storagePath = view.webContents.session.getStoragePath();
+      diagnostic.storagePathLength = diagnostic.storagePath?.length ?? null;
+      diagnostic.realStoragePath = diagnostic.storagePath ? fs.realpathSync.native(diagnostic.storagePath) : null;
+    } catch (error) { diagnostic.storagePathInspectionError = errorDetails(error); }
+    result.storageFailure = diagnostic;
+    throw new Error(`${operation} failed: ${JSON.stringify(outcome.fixtureFailure || outcome.error)}`);
+  }
+  return outcome.value;
+}
+async function identityData(view) { return fixtureValue(view, 'window.fixture.readIdentity()', 'readIdentity'); }
+async function writeIdentity(view, value) { return fixtureValue(view, `window.fixture.writeIdentity(${JSON.stringify(value)})`, `writeIdentity(${value})`); }
 function assertIdentity(data, expected) {
   assert.equal(data.localStorage, expected);
   assert.equal(data.indexedDB, expected);
@@ -152,10 +245,15 @@ function assertIdentity(data, expected) {
   assert.equal(data.nodeProcess, 'undefined');
 }
 async function extensionData(view, field = 'noxviolaExtension') {
-  return until(async () => {
-    const raw = await view.webContents.executeJavaScript(`document.documentElement.dataset[${JSON.stringify(field)}] || null`);
-    return raw ? JSON.parse(raw) : null;
+  const outcome = await until(async () => {
+    const data = await view.webContents.executeJavaScript(`({ raw: document.documentElement.dataset[${JSON.stringify(field)}] || null, error: document.documentElement.dataset[${JSON.stringify(field + 'Error')}] || null })`);
+    return data.raw || data.error ? data : null;
   }, `${field} content script and runtime response`);
+  if (outcome.error) {
+    result.extensionResponseFailure = { field, url: view.webContents.getURL(), error: outcome.error };
+    throw new Error(`${field} runtime response failed: ${outcome.error}`);
+  }
+  return JSON.parse(outcome.raw);
 }
 async function previewFixture(name) {
   assert.equal(selection, null);
@@ -166,11 +264,37 @@ async function previewFixture(name) {
   return preview;
 }
 function nativeExtension(id, identity) {
-  return session.fromPartition(`persist:noxviola-identity-${identity}`).extensions.getExtension(id);
+  return partitionFor(identity).extensions.getExtension(id);
 }
 function backgroundPages(runtimeId, identity) {
-  const partition = session.fromPartition(`persist:noxviola-identity-${identity}`);
+  const partition = partitionFor(identity);
   return webContents.getAllWebContents().filter(contents => contents.session === partition && contents.getURL().startsWith(`chrome-extension://${runtimeId}/`) && contents.getType() === 'backgroundPage');
+}
+async function extensionDiagnostics() {
+  const records = await command('extension-list');
+  return Promise.all(records.map(async record => ({
+    id: record.id, name: record.name, manifestVersion: record.manifestVersion,
+    identities: await Promise.all(record.identities.map(async grant => {
+      const details = { identity: grant.identity, enabled: grant.enabled, status: grant.status, runtimeId: grant.runtimeId, error: grant.error };
+      if (!grant.runtimeId) return details;
+      const partition = partitionFor(grant.identity);
+      const registered = partition.extensions.getExtension(grant.runtimeId);
+      details.runtimeRegistered = !!registered;
+      details.backgroundPages = await Promise.all(backgroundPages(grant.runtimeId, grant.identity).map(async contents => {
+        const page = { id: contents.id, type: contents.getType(), url: contents.getURL(), loading: contents.isLoading(), loadingMainFrame: contents.isLoadingMainFrame() };
+        // This is a one-time read only after a failed gate, never a wait for success
+        // or execution in the initial empty background document.
+        if (!page.loadingMainFrame && contents.mainFrame.url.startsWith(`chrome-extension://${grant.runtimeId}/`)) {
+          try {
+            page.committedDocument = await contents.executeJavaScript('({ readyState: document.readyState, runtimeType: typeof chrome === "undefined" ? "undefined" : typeof chrome.runtime, onMessageType: typeof chrome === "undefined" ? "undefined" : typeof chrome.runtime?.onMessage, hasMessageListeners: typeof chrome !== "undefined" && typeof chrome.runtime?.onMessage?.hasListeners === "function" ? chrome.runtime.onMessage.hasListeners() : null })');
+          } catch (error) { page.inspectionError = errorDetails(error); }
+        } else page.inspection = 'Skipped: background document has not committed or is loading';
+        return page;
+      }));
+      details.extensionPages = webContents.getAllWebContents().filter(contents => !contents.isDestroyed() && contents.session === partition && contents.getURL().startsWith(`chrome-extension://${grant.runtimeId}/`)).map(contents => ({ id: contents.id, type: contents.getType(), url: contents.getURL() }));
+      return details;
+    })),
+  })));
 }
 async function selectDownload(view, route, filename) {
   const destination = path.join(context.directory, 'downloads', filename);
@@ -214,7 +338,7 @@ async function firstLaunch() {
     const personal = await navigate(`${context.origin}/page?identity=personal`);
     expected.personalTab = (await state()).activeId;
     expected.personalIdentity = (await state()).currentIdentity;
-    assertIdentity(await personal.webContents.executeJavaScript('window.fixture.writeIdentity("personal")'), 'personal');
+    assertIdentity(await writeIdentity(personal, 'personal'), 'personal');
     await command('identity-add', 'Synthetic second identity');
     const secondState = await state();
     expected.secondIdentity = secondState.currentIdentity;
@@ -225,7 +349,7 @@ async function firstLaunch() {
     for (const field of ['localStorage', 'indexedDB', 'cache']) assert.equal(empty[field], null);
     assert.equal(empty.cookie, '');
     assert.equal(empty.serviceWorkers, 0);
-    assertIdentity(await second.webContents.executeJavaScript('window.fixture.writeIdentity("second")'), 'second');
+    assertIdentity(await writeIdentity(second, 'second'), 'second');
     assertIdentity(await identityData(await activate(expected.personalTab)), 'personal');
   });
   await check('site geolocation request is denied through production permission handling', async () => {
@@ -418,6 +542,11 @@ async function secondLaunch() {
   });
 }
 
+// Observers are attached before production startup, so extension-ready may be
+// recorded even when it precedes loadExtension's resolved promise. They only
+// retain events from the two generated fixture packages under this fresh profile.
+app.on('session-created', observePartition);
+app.on('web-contents-created', (_event, contents) => observeBackground(contents));
 require('../../browser/main.cjs');
 app.whenReady().then(async () => {
   window = await until(() => BrowserWindow.getAllWindows().find(value => !value.isDestroyed()), 'production BrowserWindow');
@@ -446,10 +575,21 @@ app.whenReady().then(async () => {
   result.passed = true;
   fs.writeFileSync(path.join(context.output, `phase-${phase}.json`), JSON.stringify(result, null, 2) + '\n', { mode: 0o600 });
   app.quit(); // Production close/persistence lifecycle must finish successfully.
-}).catch(error => {
+}).catch(async error => {
   result.passed = false;
-  result.error = error.stack || String(error);
-  fs.writeFileSync(path.join(context.output, `phase-${phase}.json`), JSON.stringify(result, null, 2) + '\n', { mode: 0o600 });
+  result.errorDetails = errorDetails(error);
+  result.error = result.errorDetails.stack || `${result.errorDetails.name}: ${result.errorDetails.message}`;
+  const writeFailure = () => fs.writeFileSync(path.join(context.output, `phase-${phase}.json`), JSON.stringify(result, null, 2) + '\n', { mode: 0o600 });
+  writeFailure(); // Preserve the original failure even if diagnostic IPC fails.
+  let timer;
+  try {
+    result.extensionDiagnostics = await Promise.race([
+      extensionDiagnostics(),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Failure-context inspection exceeded 2 seconds')), 2000); }),
+    ]);
+  } catch (diagnosticError) { result.extensionDiagnosticsError = errorDetails(diagnosticError); }
+  finally { clearTimeout(timer); }
+  writeFailure();
   console.error(result.error);
   app.exit(1);
 });

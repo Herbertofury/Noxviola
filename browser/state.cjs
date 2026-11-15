@@ -3,6 +3,22 @@ const crypto = require('node:crypto');
 const storage = require('./storage.cjs');
 const ID = /^[a-zA-Z0-9_-]+$/;
 const SEARCH = Object.freeze({google: 'https://www.google.com/search?q=', duckduckgo: 'https://duckduckgo.com/?q=', bing: 'https://www.bing.com/search?q='});
+function assertDistinctIdentityPartitions(raw) {
+  // Electron44.11.3 MakePartitionName lowercases persistent partition paths on
+  // every OS. Preserve ID spelling, but never treat case aliases as isolated.
+  // Reserve the default identity before validation/inference can insert it.
+  const partitions = new Map([['personal', 'personal']]);
+  function include(id) {
+    if (typeof id !== 'string' || !ID.test(id)) return;
+    const key = id.toLowerCase(), existing = partitions.get(key);
+    if (existing !== undefined && existing !== id) {
+      throw storage.fail(`Browser identities "${existing}" and "${id}" share the same case-insensitive Electron storage partition. Original identities and checkpoints were preserved.`, 'UNSUPPORTED_DATA');
+    }
+    partitions.set(key, id);
+  }
+  for (const profile of Array.isArray(raw.profiles) ? raw.profiles : []) include(profile?.id);
+  for (const tab of Array.isArray(raw.tabs) ? raw.tabs : []) include(tab?.identity);
+}
 function httpUrl(value) {
   if (typeof value !== 'string' || /[\u0000-\u0020\u007f]/.test(value)) return null;
   try { const url = new URL(value); return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password ? url.href : null; }
@@ -21,6 +37,7 @@ function address(value, provider = 'google') {
 function cleanState(raw = {}, {strict = false} = {}) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw storage.fail('Invalid session document.');
   if (raw.version !== undefined && raw.version !== 1) throw storage.fail('Unsupported session version; no checkpoint was replaced.', 'UNSUPPORTED_VERSION');
+  assertDistinctIdentityPartitions(raw);
   if (strict && (!Array.isArray(raw.tabs) || !Array.isArray(raw.profiles))) throw storage.fail('Session tabs and identities must be arrays.');
   const seen = new Set();
   const tabs = (Array.isArray(raw.tabs) ? raw.tabs : []).flatMap(row => {

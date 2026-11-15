@@ -1,0 +1,8 @@
+{
+  "manifest_version": 2,
+  "name": "Noxviola synthetic background fixture",
+  "version": "1.0.0",
+  "description": "Documented MV2 background lifecycle acceptance fixture; no timers or remote requests.",
+  "background": {"scripts": ["background.js"], "persistent": true},
+  "content_scripts": [{"matches": ["http://127.0.0.1/*"], "js": ["content.js"], "run_at": "document_idle"}]
+}

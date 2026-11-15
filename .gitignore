@@ -4,3 +4,4 @@ private-vault*.json
 browser-session*.json
 private-accounts*.json
 dist-preview/
+native-results/

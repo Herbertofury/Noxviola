@@ -1,0 +1,59 @@
+name: Native browser acceptance
+
+on:
+  push:
+    branches: ['browser/enderloom-baseline-20261115']
+    paths:
+      - 'browser/**'
+      - 'tests/native/**'
+      - 'tests/native-harness.test.cjs'
+      - 'scripts/native-smoke.cjs'
+      - 'scripts/check-source.cjs'
+      - 'package*.json'
+      - '.github/workflows/browser-native.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Install pinned application dependencies and official Electron binary
+        run: npm ci --no-audit --no-fund
+      - run: npm test
+      - run: npm run check
+      - name: Install Linux display dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install --yes xvfb libgtk-3-0 libnss3 libasound2
+      - name: Exercise actual sandboxed Electron on Windows
+        if: runner.os == 'Windows'
+        run: npm run test:native
+      - name: Exercise actual sandboxed Electron on Linux
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run test:native
+      - name: Retain exact native gate evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: Noxviola-native-${{ matrix.os }}-${{ github.sha }}
+          path: native-results/
+          if-no-files-found: warn
+          retention-days: 14
+
+# No continue-on-error, sandbox-disable switches, OS security changes, private
+# profiles, publication tokens, GitHub Releases, or automatic merges.

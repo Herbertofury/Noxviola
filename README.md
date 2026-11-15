@@ -1,37 +1,64 @@
 # Noxviola
 
-A customizable purple browser and private favorites vault, beginning with Enderloom's working Chromium browser model. **Experimental 0.1 baseline, not a production-security or performance-qualified browser.**
+A customizable browser and local favorites vault, continuing Enderloom's working Electron/Chromium browser model. The product goal is the complete useful feature union of Opera GX, Chrome, Firefox and Edge, with universal extensions, independent customization, zero first-party telemetry and measured efficiency. **This is an experimental 0.1 browser; those final goals are not yet achieved.**
 
-## Browser hub
+**Electron first. Continue PR #5.** The owner's [master development directive](docs/browser/MASTER-GOAL.md) is preserved unchanged. Rust and other host architectures remain candidates only when complete-work evidence proves an improvement without sacrificing useful behavior. The separate [native PR #6](https://github.com/Herbertofury/Noxviola/pull/6) checkpoint is preserved; it is not the active replacement for this browser.
 
-[Source and roadmap](docs/browser/README.md) · [Builds and release gates](docs/browser/RELEASES.md) · [Privacy boundaries](docs/browser/PRIVACY.md) · [Contract checks](https://github.com/Herbertofury/Noxviola/actions/workflows/browser-contracts.yml) · [Preview build jobs](https://github.com/Herbertofury/Noxviola/actions/workflows/preview-builds.yml) · [Releases](https://github.com/Herbertofury/Noxviola/releases)
+## Project hub
 
-No production release is currently qualified. CI preview artifacts, when a build succeeds, are unsigned and explicitly **UNVERIFIED**. A built package is not a browser acceptance result.
+[Current architecture and provenance](docs/browser/README.md) · [Capability inventory](docs/browser-capabilities.md) · [Searchable capability index](docs/browser-capabilities-index.md) · [Extension architecture](docs/browser/EXTENSION-ARCHITECTURE.md) · [Build and release gates](docs/browser/RELEASES.md) · [Privacy boundaries](docs/browser/PRIVACY.md)
 
-## Try the source
+[Contract checks](https://github.com/Herbertofury/Noxviola/actions/workflows/browser-contracts.yml) · [Native acceptance workflow](https://github.com/Herbertofury/Noxviola/actions/workflows/browser-native.yml) · [Preview build jobs](https://github.com/Herbertofury/Noxviola/actions/workflows/preview-builds.yml) · [Releases](https://github.com/Herbertofury/Noxviola/releases)
 
-Node 22.12+ and the pinned Electron dependency are required:
+No production release is qualified. A workflow link or package build is not evidence that it ran successfully. Successful preview jobs produce unsigned **UNVERIFIED** artifacts; native behavior, security and performance require separate acceptance.
+
+## Run and verify the source
+
+Use a Node version matching `package.json`: **22.22.2 or newer within Node 22, 24.15.0 or newer within Node 24, or Node 26+**. The lockfile pins Electron **44.11.3**, the preview packager and test dependencies.
 
 ```sh
 npm ci
-npm start
 npm test
+npm run check
+npm start
 ```
 
-Named identities with separate persistent browser partitions, side-by-side identity tabs, tabs, address/search, navigation, find, reopen closed tabs, split view, source links and download destination selection are implemented. Use the identity menu to switch; ♙ adds a name (press Enter). The vault is one local app-wide library, not an identity-specific secret store. Actual cookie/storage isolation still needs native acceptance. Sessions preserve duplicate URLs and more than twelve tabs; inactive restored tabs load when selected. The **♡ Vault** saves websites, images, videos, creators and characters locally with collections, names, notes, favorites, search and JSON export. This first vault stores references, not downloaded copyrighted media. It does not upload or sync personal data.
+The native gate is separate from portable tests and packaging:
 
-The **☷ Account atlas** organizes site origins, labels/handles, identity associations and account/password-manager tracking markers. Open routes into the assigned identity; edit and reversible archive are supported. It stores metadata locally in plaintext, **never a password vault**. No credential autofill, manager connection or actual account login is claimed.
+```sh
+npm run test:native
+npm run package:preview
+```
 
-The visual direction is purple, adaptable and Firefox-inspired, with an original purple fox mascot to be designed later. No Firefox logo or mascot assets are copied. Feature Foundry/Athena themes are inspiration, not a mandatory design authority.
+`test:native` uses the actual source application, sandboxed Electron, a fresh synthetic profile, local fixtures and two process launches. Exit 0 means the recorded fixture workflows passed, exit 1 means failure and exit 2 means the environment blocked execution. It never disables the sandbox or substitutes a mock for native success. The current workspace lacks a supported desktop display, so native acceptance remains blocked here. The earlier socket-denied launch route is preserved and has not been bypassed.
 
-## Current boundaries
+## Workflows present in source
 
-- Native packaged acceptance has not run. Current tests cover state/vault behavior and syntax, not full browsing.
-- Site permission requests currently default to deny. Camera/microphone/geolocation need a reviewed permission UI before use.
-- Enderloom's filtering, translation and broader workflows remain extraction work. Chrome/Firefox extension parity, password manager, sync, import, complete media behavior and security review are not yet delivered.
-- Electron/Chromium is the compatibility baseline, **not pure Rust**. Rust and alternative engines must earn promotion through complete-work tests. No claim of being faster/smaller than Chrome, Edge, Firefox or Opera GX.
-- Private vault/session files live in Electron's per-user application-data directory, outside this repository. JSON export is an explicit local action.
+| Area | Current implementation | Remaining boundary |
+| --- | --- | --- |
+| Browsing | Address/search, navigation, stop/reload, find, zoom, duplicate/close/reopen tabs, configurable horizontal/vertical layout and two-page split. | Real desktop navigation, focus, resize, accessibility and compatibility acceptance. |
+| Identities | Named persistent Electron partitions, identity-bound tabs and side-by-side identities. | Native cookie, localStorage, IndexedDB, worker/cache and authenticated-account isolation proof. |
+| Sessions | Complete ordered tab metadata, duplicate URLs, deferred inactive-tab loading, atomic checkpoints, explicit recovery and save-failure close handling. | Native crash/restart and final shutdown-failure acceptance. |
+| Favorites vault | Website/image/video/creator/character references, collections, names, notes, favorite, search, edit, reversible archive, export and reviewed collision-safe JSON import. | Richer bookmark/media workflows, encryption and optional sync remain separate features. |
+| Account atlas | Site origins, labels/handles, identity associations, tracking markers, edit/archive and open in the selected identity. | It is plaintext metadata, not a password manager, login or autofill implementation. |
+| Site permissions | Explicit prompts, document-only or durable decisions, separate camera/microphone grants, identity/requesting/embedding origin scope, review/revoke/reset and recovery. | Device/display pickers, extension-origin grants, OS behavior and native ongoing-capture revocation. |
+| Downloads | Native destination chooser, identity-tagged progress, pause/resume/cancel, completed-file reveal and close handling. | Native transfer acceptance, durable history and terminal retry. |
+| Extensions | Inspected local unpacked/ZIP/XPI imports, explicit permission/identity consent, persistent lifecycle, enable/disable, declared popup/options routes and uninstall. | Publisher signatures, CRX, verified updates, complete API semantics and real cross-browser extension functionality. |
 
-[Browser roadmap and provenance](docs/browser/README.md) · [Assistant's single consolidated backlog](https://github.com/Herbertofury/Noxviola/wiki/Assistant%E2%80%90Backlog)
+Local JSON data lives in Electron's per-user application-data directory, outside this repository. The favorites library is app-wide. It stores references and metadata, without automatic scraping, media copying or cloud uploads. Export and import use explicit local file selection.
 
-Older project-index files are preserved for history while the live wiki becomes their maintained home. Held [PR #4](https://github.com/Herbertofury/Noxviola/pull/4) is untouched; the browser conversion does not approve it.
+## Universal extensions: target and current evidence
+
+Electron's built-in extension API is incomplete. A package loading successfully does not mean its intended features work. The extension manager reports actual load/unload errors and retains explicit unverified compatibility status. CRX is blocked pending signature verification; XPI/ZIP imports are disclosed as unsigned and do not acquire marketplace trust by being extracted.
+
+A maintained `electron-chrome-extensions` candidate was inspected rather than replaced with superficial API shims. Its real services offer a reuse path, but the exact inspected version has permission and dispatch gaps that must be repaired before adoption. See the [host comparison and next gate](docs/browser-capabilities-extension-hosts.md) and [artifact-level audit](docs/browser/EXTENSION-ARCHITECTURE.md).
+
+## Complete feature target, honest progress
+
+The [canonical capability JSON](browser/capabilities.json) currently expands **183 behavior records and 100 sources**, plus discovery queues. It includes unique browser variants, dependencies, ownership, privacy/performance implications and acceptance procedures. This is an initial documented inventory, not an exhaustive audit or a feature cap. The user's installed Windows browser versions and settings remain uninspected. All master-goal gates G001–G012 remain open.
+
+There is no claim that this preview is faster, smaller, more secure or more capable than the reference browsers. Whole-process performance and zero-first-party-telemetry claims need real workload and network evidence. Optional services, themes and future AI features must remain independently controlled; features may not be removed merely to improve a benchmark.
+
+The visual direction is purple and adaptable. The existing owner-supplied fox-and-globe PNG is reused unchanged, with its source and digest recorded in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). No new artwork was generated. Enderloom's source and GPL provenance remain preserved.
+
+[Assistant's consolidated backlog](https://github.com/Herbertofury/Noxviola/wiki/Assistant%E2%80%90Backlog) retains project continuity. Older index files remain historical records. Held [PR #4](https://github.com/Herbertofury/Noxviola/pull/4), its denials and unrelated pauses remain untouched. This continuation does not authorize merging PR #5 or PR #4.

@@ -14,6 +14,15 @@ function normalize(value){
 }
 function upsert(records,input,profiles){const item=normalize(input);if(!profiles.some(p=>p.id===item.identity))throw new Error('Select an existing browser identity');const index=records.findIndex(x=>x.id===item.id);if(index<0)return [...records,item];return records.map((x,i)=>i===index?item:x);}
 function route(record,profiles){const item=normalize(record);if(item.archived)throw new Error('Restore the account record before opening it');if(!profiles.some(p=>p.id===item.identity))throw new Error('Account identity is unavailable; edit the association first');return {url:item.origin,identity:item.identity};}
-function load(file){try{const doc=JSON.parse(fs.readFileSync(file,'utf8'));if(doc.version!==1||!Array.isArray(doc.accounts))throw new Error('Invalid account inventory');const rows=doc.accounts.map(normalize);if(new Set(rows.map(x=>x.id)).size!==rows.length)throw new Error('Duplicate account IDs');return rows;}catch(error){if(error.code==='ENOENT')return [];throw error;}}
-function save(file,records){const output=JSON.stringify({version:1,accounts:records.map(normalize)},null,2);fs.mkdirSync(path.dirname(file),{recursive:true});const temp=`${file}.${crypto.randomUUID()}.tmp`;const fd=fs.openSync(temp,'wx',0o600);try{fs.writeFileSync(fd,output);fs.fsyncSync(fd);}finally{fs.closeSync(fd);}if(fs.existsSync(file))fs.copyFileSync(file,`${file}.previous`);fs.renameSync(temp,file);}
-module.exports={normalize,upsert,route,load,save};
+const storage = require('./storage.cjs');
+function decode(doc) {
+ if(doc.version!==1)throw storage.fail('Unsupported account inventory version','UNSUPPORTED_VERSION');
+ if(!Array.isArray(doc.accounts))throw new Error('Invalid account inventory');
+ const rows=doc.accounts.map(normalize);if(new Set(rows.map(x=>x.id)).size!==rows.length)throw new Error('Duplicate account IDs');
+ return {...doc,accounts:rows};
+}
+function inspect(file){return storage.inspect(file,decode,()=>({version:1,accounts:[]}));}
+function load(file){const result=inspect(file);if(result.status==='recovery')throw new Error('Account inventory needs explicit recovery');return result.value.accounts;}
+function save(file,records,expected){const opened=inspect(file);if(opened.status==='recovery')throw new Error('Restore the account inventory before saving');if(expected&&!require('node:util').isDeepStrictEqual(expected,opened.value.accounts))throw new Error('Account inventory changed outside this window; reopen it before saving');storage.write(file,{...opened.value,accounts:records.map(normalize)},decode);}
+function recover(file,preview){return storage.recover(file,preview,decode);}
+module.exports={normalize,upsert,route,load,save,inspect,recover};

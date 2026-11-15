@@ -1,1 +1,103 @@
-<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; object-src 'none'; base-uri 'none'"><title>Noxviola</title><link rel="stylesheet" href="style.css"></head><body><header><div id="tabs" role="tablist" aria-label="Browser tabs"></div><nav><select id="identity" aria-label="Browser identity"></select><button id="add-identity" title="Add named identity">♙</button><input id="identity-name" placeholder="New identity, Enter to save" aria-label="New identity name" hidden><button id="back" title="Back">←</button><button id="forward" title="Forward">→</button><button data-command="reload" title="Reload">↻</button><form id="navigate"><input id="address" aria-label="Address or search" autocomplete="off" spellcheck="false"></form><button data-command="new" title="New tab">＋</button><button data-command="split" title="Toggle split view">◫</button><button data-command="accounts" title="Account inventory">☷</button><button data-command="vault" title="Private vault">♡</button><input id="find" aria-label="Find in page" placeholder="Find in page"></nav><p id="notice" role="status">Noxviola · Experimental browser · Site permissions currently denied</p></header><section id="vault" hidden><h1>Your private vault</h1><p>Keep websites, videos, images, creators and characters together. Stored only on this computer. Links open at their source; nothing is scraped or uploaded.</p><div class="vault-tools"><input id="vault-search" placeholder="Search title, character, group or notes" aria-label="Search vault"><label><input id="favorites" type="checkbox"> Favorites only</label><button data-command="vault-export">Export JSON</button></div><form id="vault-add"><input name="title" placeholder="Title" required><input name="url" type="url" placeholder="https://source.example" required><select name="kind" aria-label="Item type"><option>website</option><option>image</option><option>video</option><option>creator</option><option>character</option></select><input name="group" placeholder="Collection / group"><input name="characters" placeholder="Character names"><input name="notes" placeholder="Notes and places to find them"><button>Save privately</button></form><div id="vault-items"></div></section><section id="accounts" hidden><h1>Your account atlas</h1><p>Organize accounts and open each site in its assigned browser identity. This stores private metadata on this device in plaintext, <strong>not passwords</strong>. Do not enter passwords, tokens, recovery codes or secret links. “Saved in password manager” is your tracking marker, not a connection or verification.</p><div class="vault-tools"><input id="account-search" aria-label="Search accounts" placeholder="Search label, handle, site or identity"><label><input type="checkbox" id="show-archived"> Include archived</label></div><form id="account-form"><input name="id" type="hidden"><input name="label" placeholder="Account label, e.g. Creator" aria-label="Account label" required><input name="handle" placeholder="Public handle (optional)" aria-label="Account handle" autocomplete="off"><input name="origin" type="url" placeholder="https://example.com (origin only)" aria-label="Site origin" required><select name="identity" id="account-identity" aria-label="Account browser identity"></select><label><input name="created" type="checkbox"> Account created</label><label><input name="inPasswordManager" type="checkbox"> Saved in password manager</label><button>Save metadata</button><button type="button" id="account-reset">Cancel editing</button></form><div id="account-items"></div></section><script src="renderer.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Noxviola</title><link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+ <div id="tabs" role="tablist" aria-label="Browser tabs"></div>
+ <nav aria-label="Browser navigation">
+  <select id="identity" aria-label="Browser identity"></select>
+  <button id="add-identity" title="Add named identity" aria-label="Add named identity">♙</button>
+  <input id="identity-name" placeholder="Identity name · Enter" aria-label="New identity name" hidden>
+  <button id="back" title="Back" aria-label="Back">←</button><button id="forward" title="Forward" aria-label="Forward">→</button>
+  <button data-command="reload" title="Reload" aria-label="Reload">↻</button>
+  <form id="navigate"><input id="address" aria-label="Address or search" placeholder="Search or enter an address" autocomplete="off" spellcheck="false"></form>
+  <button data-command="new" title="New tab" aria-label="New tab">＋</button>
+  <button data-command="split" title="Toggle split view" aria-label="Toggle split view">◫</button>
+  <button data-command="vault" title="Your library" aria-label="Your library">♡</button>
+  <button data-command="extensions" title="Extensions" aria-label="Extensions">⌘</button>
+  <button id="open-tools" title="Browser tools" aria-label="Browser tools">☰</button>
+ </nav>
+ <div class="status-line"><p id="notice" role="status">Noxviola · Experimental browser</p><button id="retry-save" data-command="save-session" hidden>Retry save</button><input id="find" aria-label="Find in page" placeholder="Find in page"></div>
+</header>
+<main id="workspace">
+<section id="start" class="start-page" hidden>
+ <img src="assets/noxviola.png" alt="Noxviola purple fox and globe" width="104" height="104">
+ <h1>Make the web yours.</h1><p>A place for your identities, collections and ideas.</p>
+ <button id="start-search" class="primary">Search or enter an address</button>
+ <div class="start-actions"><button data-command="vault">Your library</button><button data-command="extensions">Extensions</button><button data-command="accounts">Account atlas</button></div>
+ <p class="subtle">This new tab stays on your device. A search contacts your selected search provider.</p>
+</section>
+<section id="tools" class="panel" hidden>
+ <div class="panel-heading"><div><h1>Browser tools</h1><p>Choose how you work, browse and organize.</p></div><button data-command="panel-close">Back to page</button></div>
+ <div class="tool-grid">
+  <button data-command="vault"><strong>Your library</strong><span>Favorites, media references, creators and characters</span></button>
+  <button data-command="accounts"><strong>Account atlas</strong><span>Non-secret account metadata and identity routing</span></button>
+  <button data-command="extensions"><strong>Extensions</strong><span>Inspect local packages and manage each identity</span></button>
+  <button data-command="downloads"><strong>Downloads</strong><span>Progress, pause, resume, cancel and show in folder</span></button>
+  <button data-command="permissions"><strong>Site permissions</strong><span>Review and revoke origin-specific decisions</span></button>
+  <button data-command="settings"><strong>Customize</strong><span>Search provider and horizontal or vertical tabs</span></button>
+  <button data-command="capabilities"><strong>Browser capability tracker</strong><span>Source-backed goals and acceptance gaps</span></button>
+  <button data-command="restore"><strong>Reopen closed tab</strong><span>Restore its identity, position and saved metadata</span></button>
+  <button data-command="duplicate"><strong>Duplicate current tab</strong><span>Keep its identity and source address</span></button>
+ </div>
+</section>
+<section id="vault" class="panel" hidden>
+ <div class="panel-heading"><div><h1>Your library</h1><p>Favorites, media, creators and characters. Kept on this device.</p></div><button data-command="panel-close">Back to page</button></div>
+ <p class="subtle">References and notes are stored in plaintext. Linked content stays at its source; nothing is automatically scraped or uploaded.</p>
+ <p id="vault-error" class="error" hidden></p><button id="vault-recover" data-command="vault-recover" hidden>Restore previous library</button>
+ <div class="controls"><input id="vault-search" placeholder="Search title, source, collection, character or notes" aria-label="Search library"><label><input id="favorites" type="checkbox">Favorites</label><label><input id="vault-archived" type="checkbox">Archived</label><button data-command="vault-import-preview">Import backup</button><button data-command="vault-export">Export backup</button></div>
+ <div id="vault-preview" class="review" hidden><p id="vault-preview-summary"></p><button data-command="vault-import-apply" class="primary">Apply import</button><button data-command="vault-import-cancel">Cancel import</button></div>
+ <details id="vault-editor"><summary>Add or edit an item</summary>
+ <form id="vault-add" class="editor"><input name="id" type="hidden"><label>Title<input name="title" required></label><label>Source link<input name="url" type="url" placeholder="https://example.com" required></label><label>Type<select name="kind"><option>website</option><option>image</option><option>video</option><option>creator</option><option>character</option></select></label><label>Collection<input name="group"></label><label>Characters<input name="characters"></label><label class="wide">Notes<textarea name="notes" rows="3"></textarea></label><div class="form-actions"><button class="primary">Save item</button><button id="vault-reset" type="button">Cancel editing</button></div></form>
+ </details><p id="vault-count" class="subtle"></p><div id="vault-items" class="cards"></div>
+</section>
+<section id="accounts" class="panel" hidden>
+ <div class="panel-heading"><div><h1>Your account atlas</h1><p>Organize accounts and open sites in their assigned browser identities.</p></div><button data-command="panel-close">Back to page</button></div>
+ <p class="subtle">This stores plaintext metadata, never passwords. Do not enter passwords, tokens or recovery codes. Password-manager markers are your notes, not a connection or verification.</p>
+ <p id="account-error" class="error" hidden></p><button id="account-recover" data-command="account-recover" hidden>Restore previous inventory</button>
+ <div class="controls"><input id="account-search" aria-label="Search accounts" placeholder="Search label, handle, site or identity"><label><input type="checkbox" id="show-archived">Include archived</label></div>
+ <form id="account-form" class="editor"><input name="id" type="hidden"><label>Account label<input name="label" required></label><label>Public handle<input name="handle" autocomplete="off"></label><label>Site origin<input name="origin" type="url" placeholder="https://example.com" required></label><label>Browser identity<select name="identity" id="account-identity"></select></label><label><input name="created" type="checkbox">Account created</label><label><input name="inPasswordManager" type="checkbox">Saved in password manager</label><div class="form-actions"><button class="primary">Save metadata</button><button type="button" id="account-reset">Cancel editing</button></div></form>
+ <div id="account-items" class="cards"></div>
+</section>
+<section id="extensions" class="panel" hidden>
+ <div class="panel-heading"><div><h1>Noxviola Extensions</h1><p>Inspect a package. Review its permissions. Choose its browser identities.</p></div><button data-command="panel-close">Back to page</button></div>
+ <p class="subtle">The current Electron host supports part of the WebExtensions APIs. A loaded package is not proof of complete compatibility. Store installation, verified updates and broader API adaptation remain in development.</p>
+ <p id="extension-error" class="error" hidden></p>
+ <div class="controls"><input id="extension-search" aria-label="Search installed extensions" placeholder="Search installed extensions"><select id="extension-format" aria-label="Filter extension source"><option value="">All local sources</option value="unpacked">Unpacked</option><option value="zip">ZIP</option><option value="xpi">XPI</option></select><button id="extension-import-directory">Inspect folder</button><button id="extension-import-package">Inspect ZIP / XPI / CRX</button></div>
+ <section id="extension-preview" class="review" hidden>
+  <h2 id="extension-preview-title"></h2><p id="extension-preview-description"></p>
+  <h3>Requested permissions and site access</h3><pre id="extension-preview-permissions"></pre>
+  <h3>Compatibility and provenance</h3><pre id="extension-preview-compatibility"></pre><p id="extension-preview-provenance"></p>
+  <fieldset><legend>Enable for these identities</legend><div id="extension-preview-identities" class="choices"></div></fieldset>
+  <label class="consent"><input type="checkbox" id="extension-accept">I accept the displayed permissions and compatibility limitations for the selected identities.</label>
+  <label id="extension-unsigned-label" class="consent" hidden><input type="checkbox" id="extension-unsigned">Import this XPI as an unsigned local package; Firefox publisher trust has not been verified.</label>
+  <div class="form-actions"><button id="extension-install" class="primary">Install reviewed package</button><button id="extension-cancel">Cancel</button></div>
+ </section>
+ <p id="extension-count" class="subtle"></p><div id="extension-items" class="cards"></div>
+</section>
+<section id="downloads" class="panel" hidden>
+ <div class="panel-heading"><div><h1>Downloads</h1><p>Choose a destination, then control each transfer.</p></div><button data-command="panel-close">Back to page</button></div>
+ <p class="subtle">Downloaded files are never opened automatically. This transfer list lasts for the current browser run; restart-resume is not implemented.</p><div id="download-items" class="cards"></div>
+</section>
+<section id="permissions" class="panel" hidden>
+ <div class="panel-heading"><div><h1>Site permissions</h1><p>Decisions are scoped to the requesting site, embedding site and browser identity.</p></div><button data-command="panel-close">Back to page</button></div>
+ <p class="subtle">Camera and microphone permissions are separate. Unknown permissions, screen capture and native device access remain blocked until their dedicated controls are implemented. Revoking a decision prevents future permission checks; close the page to stop an already active capture.</p>
+ <p id="permission-error" class="error" hidden></p><button id="permission-recover" data-command="permission-recover" hidden>Review previous permission checkpoint</button>
+ <div class="controls"><button id="permission-reset">Forget decisions for current identity</button></div><div id="permission-items" class="cards"></div>
+</section>
+<section id="settings" class="panel" hidden>
+ <div class="panel-heading"><div><h1>Make it yours</h1><p>Use the same browser capabilities with your preferred layout.</p></div><button data-command="panel-close">Back to page</button></div>
+ <form id="settings-form" class="editor"><label>Search provider<select name="searchEngine"><option value="duckduckgo">DuckDuckGo</option><option value="google">Google</option><option value="bing">Bing</option></select></label><label>Tabs<select name="tabLayout"><option value="horizontal">Horizontal</option><option value="vertical">Vertical</option></select></label><div class="form-actions"><button class="primary">Save preferences</button></div></form>
+ <p class="subtle">A search sends the entered query to this provider. New tabs are local and do not contact it automatically. There is no Noxviola analytics or crash-upload service configured.</p><p id="engine-version" class="subtle"></p>
+</section>
+<section id="capabilities" class="panel" hidden>
+ <div class="panel-heading"><div><h1>Capability tracker</h1><p>The union of browser goals, with source evidence and unfinished acceptance kept visible.</p></div><button data-command="panel-close">Back to page</button></div>
+ <p id="capability-coverage" class="subtle"></p><div class="controls"><input id="capability-search" aria-label="Search capabilities" placeholder="Search feature, browser, behavior or category"><select id="capability-status" aria-label="Filter capability status"><option value="">Every status</option></select></div><p id="capability-count" class="subtle"></p><div id="capability-items" class="cards"></div>
+</section>
+</main>
+<script src="renderer.js"></script>
+</body></html>

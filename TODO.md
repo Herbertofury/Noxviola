@@ -1,5 +1,7 @@
 # Active project work
 
+**Current priority and detailed milestone index:** [Requested work](docs/REQUESTED-WORK.md). The November 7 list below is retained historical context, not the current priority order. Reconcile current owning-project evidence before repeating or closing a task.
+
 Updated 2026-11-07 UTC. This is the maintained Noxviola continuation index. Project-local plans remain authoritative for implementation detail. The earlier checklist and verified checkpoints are preserved below; an old checkpoint does not close a whole project.
 
 ## Current priorities and next actions · 2026-11-07

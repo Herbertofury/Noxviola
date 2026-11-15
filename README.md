@@ -10,7 +10,8 @@ Apex and the external CAS remain unfinished. This record stays visible; plans an
 
 Project memory and to-do index for Herbertofury. This repository stores only project decisions, progress, next actions and links. Actual code, research, art, tests and evidence belong in each project's own repository.
 
-- [Active work](TODO.md)
+- [Current detailed milestones and requested work](docs/REQUESTED-WORK.md)
+- [Preserved active-work checklist and evidence](TODO.md)
 - [Project decisions](DECISIONS.md)
 - [Sims delivery retrospective and corrective checks](SIMS-DELIVERY-RETROSPECTIVE-2026-11.md)
 - [MOST USELESS AI medal and delivery accountability](MOST-USELESS-AI-ACCOUNTABILITY.md)

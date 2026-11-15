@@ -20,13 +20,31 @@ npm run check
 npm run package:preview
 ```
 
-The official `@electron/packager` **20.3.0** downloads pinned Electron **44.11.3** as needed. Packaging does not execute the browser. Output is under `dist-preview/` for the host platform/architecture, with a source/dependency content identity so a later preview does not overwrite a different earlier build. For source development with `npm start`, install normally with `npm ci` so Electron's official installation script supplies its executable.
+The official `@electron/packager` **20.3.0** downloads pinned Electron **44.11.3** as needed. Packaging does not execute the browser. Output is under `dist-preview/` for the host platform/architecture, with a source/dependency content identity so a later preview does not overwrite a different earlier build. `-- --platform win32 --arch x64` explicitly produces a Windows x64 preview, including when packaging from Linux.
+
+For source development or native acceptance, provision the distribution
+explicitly after `npm ci --ignore-scripts`:
+
+```sh
+npm run setup:electron
+npm run check:electron
+npm start
+```
+
+The pinned Electron npm package has no postinstall hook. Its JavaScript loader
+can download lazily, but the native harness deliberately avoids that side
+effect. `setup:electron` calls the pinned package's official `install.js`, using
+its bundled checksums; `check:electron` verifies the version and executable as
+files without launching them. A successful `npm ci` alone is not proof that the
+Electron distribution exists.
 
 Only explicit browser source/assets, capability data, application metadata, the GPL license, [source/artwork notices](../../THIRD_PARTY_NOTICES.md) and the exact production dependency closure enter the staged app. The production closure currently contains `yauzl` and `pend`; DOM testing and packaging dependencies are excluded. Historical backlog, `.env`, profiles and personal vault/account/permission data are not copied. Runtime/dependency licenses are retained. Each output includes `PACKAGE-MANIFEST.json` with source commit/dirty-state evidence, engine/tool versions, platform/architecture, file SHA-256 hashes and packaged bytes. This is reproducibility/integrity metadata, not a security certification or total installed profile/cache footprint. No signing keys, credentials, installer elevation, OS settings or release-write token are needed.
 
 ## Run the separate native gate
 
 ```sh
+npm run setup:electron
+npm run check:electron
 npm run test:native
 ```
 

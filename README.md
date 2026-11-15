@@ -17,11 +17,20 @@ No production release is qualified. A workflow link or package build is not evid
 Use a Node version matching `package.json`: **22.22.2 or newer within Node 22, 24.15.0 or newer within Node 24, or Node 26+**. The lockfile pins Electron **44.11.3**, the preview packager and test dependencies.
 
 ```sh
-npm ci
+npm ci --ignore-scripts
 npm test
 npm run check
+npm run setup:electron
+npm run check:electron
 npm start
 ```
+
+`setup:electron` runs the official installer bundled in the pinned Electron
+package; it downloads and verifies the distribution without launching it.
+`check:electron` checks the installed version and executable file without
+execution. Electron 44.11.3 has no npm postinstall hook, so `npm ci` alone does
+not provision the binary. Keep this setup explicit before source launch or the
+native acceptance gate. Portable tests and packaging do not require this step.
 
 The native gate is separate from portable tests and packaging:
 

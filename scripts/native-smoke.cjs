@@ -77,11 +77,15 @@ function sourceEvidence(root = ROOT) {
 }
 
 function electronExecutable() {
-  const packageDirectory = path.dirname(require.resolve('electron/package.json'));
-  const relative = fs.readFileSync(path.join(packageDirectory, 'path.txt'), 'utf8').trim();
-  const executable = path.resolve(packageDirectory, 'dist', relative);
-  if (!fs.statSync(executable).isFile()) throw new Error('Electron binary was not installed. Run npm ci with its official installation script enabled.');
-  return executable;
+  try {
+    const packageDirectory = path.dirname(require.resolve('electron/package.json'));
+    const relative = fs.readFileSync(path.join(packageDirectory, 'path.txt'), 'utf8').trim();
+    const executable = path.resolve(packageDirectory, 'dist', relative);
+    if (!fs.statSync(executable).isFile()) throw new Error('The executable path is not a regular file.');
+    return executable;
+  } catch (error) {
+    throw new Error(`Electron distribution is unavailable. Run npm run setup:electron, then npm run check:electron. ${error.message}`);
+  }
 }
 
 async function runPhase(executable, context, phase) {
@@ -186,4 +190,4 @@ async function main(argv = process.argv.slice(2)) {
 }
 
 if (require.main === module) main().then(code => { process.exitCode = code; }).catch(error => { console.error(error); process.exitCode = 1; });
-module.exports = { preflight, createContext, readContext, sourceEvidence, main };
+module.exports = { preflight, createContext, readContext, sourceEvidence, electronExecutable, main };

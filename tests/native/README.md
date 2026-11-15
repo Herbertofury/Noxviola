@@ -1,10 +1,20 @@
 # Explicit Electron acceptance gate
 
-Run `npm ci`, `npm test`, `npm run check`, then:
+Run `npm ci --ignore-scripts`, `npm test`, `npm run check`, then:
 
 ```sh
+npm run setup:electron
+npm run check:electron
 npm run test:native
 ```
+
+The pinned Electron 44.11.3 npm package has no postinstall hook. The explicit
+setup command runs its official `install.js` with bundled checksums; the check
+command inspects the downloaded version and executable without starting the
+engine. The harness never requires Electron's lazy downloader to hide a missing
+distribution. Its first hosted Linux run at commit `6012752` stopped before
+launch because `npm ci` had not created `node_modules/electron/path.txt`; that
+provisioning failure remains a blocked result, not native acceptance.
 
 The native command is separate from contract tests and packaging. Exit **0**
 means the recorded real-runtime fixture workflows passed; **1** means a test or

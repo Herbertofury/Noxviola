@@ -9,6 +9,8 @@
     "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
   },
   "scripts": {
+    "setup:electron": "node node_modules/electron/install.js",
+    "check:electron": "node scripts/check-electron.cjs",
     "start": "electron .",
     "test": "node --test tests/*.test.cjs",
     "check": "node scripts/check-source.cjs",

@@ -4,7 +4,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 
 function filename(value) {
-  const clean = path.basename(String(value || 'download')).replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_');
+  const clean = path.posix.basename(path.win32.basename(String(value || 'download'))).replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_');
   return !clean || clean === '.' || clean === '..' ? 'download' : clean;
 }
 class DownloadManager extends EventEmitter {

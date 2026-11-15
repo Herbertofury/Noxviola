@@ -375,13 +375,21 @@ test('archive traversal, links, collisions, encrypted content and CRC corruption
   await assert.rejects(fs.stat(path.join(root, 'escape')), {code: 'ENOENT'});
 });
 
-test('unpacked symlinks and case collisions cannot import unseen bytes', async t => {
+test('unpacked symlinks and Unicode normalization collisions cannot import unseen bytes', async t => {
   const {manager, root} = await setup(t);
   const source = await fixture(root);
   await fs.writeFile(path.join(root, 'outside'), 'private');
   await fs.symlink(path.join(root, 'outside'), path.join(source, 'link'));
   await assert.rejects(manager.preview(source), {code: 'UNSAFE_PACKAGE_FILE'});
-  const collision = await fixture(root, {}, {'Content.js': 'different bytes'});
+  // NTFS cannot represent content.js and Content.js as separate files. The
+  // archive test above covers that collision before extraction on every OS.
+  // NFC-equivalent spellings remain distinct on both supported host filesystems
+  // and exercise the unpacked directory walk's ambiguity rejection as well.
+  const names = ['caf\u00e9.js', 'cafe\u0301.js'];
+  const collision = await fixture(root);
+  for (const [index, name] of names.entries()) await fs.writeFile(path.join(collision, name), `source-${index}`, {flag: 'wx'});
+  const entries = await fs.readdir(collision);
+  for (const name of names) assert.ok(entries.includes(name), 'The collision fixture must contain both distinct spellings');
   await assert.rejects(manager.preview(collision), {code: 'DUPLICATE_PACKAGE_PATH'});
 });
 
@@ -470,15 +478,19 @@ test('a runtime that starts code then rejects is unloaded before load-failed is 
 test('a visible registry rename with failed acknowledgement never rolls its package back', async t => {
   const {manager, root, fake, options} = await setup(t);
   const preview = await manager.preview(await fixture(root));
-  const registry = path.join(options.directory, 'registry.json');
+  // open() canonicalizes its owned path. Windows runner temp paths can use a
+  // short-name alias, so compare with the actual canonical destination.
+  const registry = manager.registryPath;
   const originalRename = fs.rename;
+  let injected = 0;
   fs.rename = async (from, to) => {
     await originalRename(from, to);
-    if (to === registry) { const error = new Error('synthetic post-rename I/O error'); error.code = 'EIO'; throw error; }
+    if (to === registry) { injected++; const error = new Error('synthetic post-rename I/O error'); error.code = 'EIO'; throw error; }
   };
   try {
     await assert.rejects(manager.install(preview.token, {identities: ['personal'], permissionsAccepted: true}), {code: 'REGISTRY_DURABILITY_UNCONFIRMED'});
   } finally { fs.rename = originalRename; }
+  assert.equal(injected, 1, 'The real registry replacement must succeed before exactly one acknowledgement failure');
   assert.equal(fake.calls.length, 0);
   const state = JSON.parse(await fs.readFile(registry));
   assert.equal(state.items.length, 1);

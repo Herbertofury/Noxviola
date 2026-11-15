@@ -34,7 +34,9 @@ test('cancelled chooser is not reported as completed and arbitrary names cannot 
   const item = new Item(); session.emit('will-download', {}, item); manager.action(manager.list()[0].id, 'cancel');
   assert.equal(manager.list()[0].state, 'cancelled'); assert.equal(manager.list()[0].identity, 'creator');
   assert.throws(() => manager.action(manager.list()[0].id, 'reveal'), /completed/);
-  assert.equal(filename('..'), 'download'); assert.equal(filename('..\\private.exe'), '.._private.exe');
+  assert.equal(filename('..'), 'download'); assert.equal(filename('..\\private.exe'), 'private.exe');
+  assert.equal(filename('../../private.exe'),'private.exe');
+  assert.equal(filename('folder\\nested/file.txt'),'file.txt');
 });
 test('resumable interruptions remain active; terminal interrupted items cannot resume', () => {
   const session = new EventEmitter(), manager = new DownloadManager({directory:'/tmp',reveal:()=>{}}); manager.attach(session,'personal');

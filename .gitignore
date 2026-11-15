@@ -1,0 +1,6 @@
+node_modules/
+*.log
+private-vault*.json
+browser-session*.json
+private-accounts*.json
+dist-preview/

@@ -1,0 +1,6 @@
+'use strict';
+const fs=require('node:fs');const path=require('node:path');const crypto=require('node:crypto');const {httpUrl}=require('./state.cjs');
+function normalize(item){const url=httpUrl(item.url);if(!url)throw new Error('A public HTTP(S) source link is required');return{id:typeof item.id==='string'?item.id:crypto.randomUUID(),title:String(item.title||url),url,kind:['website','image','video','creator','character'].includes(item.kind)?item.kind:'website',group:String(item.group||''),characters:String(item.characters||''),notes:String(item.notes||''),favorite:!!item.favorite};}
+function load(file){try{const data=JSON.parse(fs.readFileSync(file,'utf8'));if(!Array.isArray(data.items))throw new Error('Invalid vault');return data.items.map(normalize);}catch(e){if(e.code==='ENOENT')return [];throw e;}}
+function save(file,items){const output=JSON.stringify({version:1,items:items.map(normalize)},null,2);fs.mkdirSync(path.dirname(file),{recursive:true});const temp=`${file}.tmp`;const fd=fs.openSync(temp,'w',0o600);try{fs.writeFileSync(fd,output);fs.fsyncSync(fd);}finally{fs.closeSync(fd);}if(fs.existsSync(file))fs.copyFileSync(file,`${file}.previous`);fs.renameSync(temp,file);}
+module.exports={normalize,load,save};

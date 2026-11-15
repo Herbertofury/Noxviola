@@ -16,6 +16,7 @@ Every row remains open until catalog publication and the separate native gamepla
 | Hellaverse | Loona, Beelzebub, Charlie Morningstar, Vaggie, Angel Dust, Alastor, Husk, Sir Pentious and Niffty; requested rare Honkistas appearances. |
 | Edgerunners gang | Capri and Talia Yang identity/source reconciliation, plus curated Cyberpunk/Edgerunners roster: Lucy, Rebecca, David, Panam, Judy, Johnny, Kerry, Alt and Rogue. Distinguish franchise/series, confirmed identities and proposed roster. |
 | Other favorites | Roku God of Nothing, Shion (exact identity unresolved), Mylar Bezier and Deadlock Vyper. Track requested JetSetCraft appearances without inventing an unspecified gang assignment. |
+| Recovered TikTok Honkistas references | Sav (@ranmaruspov), PESTRiCA (@pestrica.fan.page), Tay and mennah (@smeepycats), Plague (@slimthicccsenpai). Original October 13 requests were recovered; [existing JetSetCraft source index](https://github.com/Herbertofury/JetSetCraft/wiki/Music%E2%80%90Driven-Dances-and-Mob%E2%80%90Themed-Bosses). Track Memories favorite intake separately; do not claim these additional entries published, or X accounts cross-verified, without evidence. |
 | Discreet user / Mylar | Female-only gallery-derived additions. Verify names from author sources before adding other candidate characters; do not infer an exhaustive roster from a gallery index. |
 
 ## Cross-project acceptance
@@ -26,7 +27,8 @@ Every row remains open until catalog publication and the separate native gamepla
 - [ ] Preserve owner-attested Skashi and FENNAH character/music permission with credit as owner-attested, not independently verified. It does not clear unrelated IP. SCP article licensing and image/model rights are separate; the historical SCP-173 sculpture image is not blanket-cleared.
 - [ ] Continue Memories series/episode chronology, original versus reupload dates, characters, official channels, real images and supported video embeds. Unknown dates, missing media and incomplete inventories stay explicit; embed readiness is not proof of playing.
 - [ ] Keep browser-local favorites and export/import, autoplay off; test navigation, persistence, character search and public source boundaries.
-- [ ] Reconcile held Memories catalog additions only after the specific publication hold is resolved. Do not retry the separately rejected wiki update without appropriate fresh authorization.
+- [x] Publish the specifically approved 34 Memories catalog additions while preserving the existing 133 records: [c15c2a6](https://github.com/Herbertofury/memories/commit/c15c2a6345381df4f1bbb02eed40421c3a118555). The active publishing pass verified deployment. This closes that catalog publication gate, not art/lore completeness, the newly recovered TikTok intake, or gameplay.
+- [ ] Resolve the separately rejected Memories wiki update only with appropriate fresh authorization; catalog approval does not silently clear this separate hold.
 - [ ] Maintain project-local character intake rules and credits alongside actual implementation, not just this index.
 
 ## Verified scope and unresolved work
@@ -35,7 +37,7 @@ Every row remains open until catalog publication and the separate native gamepla
 - [JetSetCraft #57](https://github.com/Herbertofury/JetSetCraft/pull/57): draft Lucy crew-ledger recruitment; active implementer reports all 11 CI checks passed. Abstract recruitment/persistence is not a rendered follower or rare event.
 - [JetSetCraft #58](https://github.com/Herbertofury/JetSetCraft/pull/58): draft named roster for Lucy, Pomni and five SCP identities with variants. The existing hunt/elite fixture failed; latest scheduling repair at e249d93 is awaiting CI verification. Do not label this passed or playable.
 - Source-event to rival to Honkistas persistent journal is a local isolated candidate, not published/native-verified. No character models or music have been imported by these drafts.
-- Newer catalog/roster requests beyond those drafts remain planned or held, not live appearances. Next: finish the exact-commit regression check, then integrate actual actor/event behavior and verify save/reload, recruitment, rare eligibility and duplicate prevention in game.
-- Public Memories source guides are progress, not a complete illustrated or exhaustive creator/video inventory. The held app catalog update and wiki publication remain separate gates.
+- Newer JetSetCraft roster requests beyond those drafts remain planned, not live appearances. The approved Memories catalog batch is published separately; new intake and incomplete research remain open. Next: finish the exact-commit regression check, then integrate actual actor/event behavior and verify save/reload, recruitment, rare eligibility and duplicate prevention in game.
+- Public Memories source guides are progress, not a complete illustrated or exhaustive creator/video inventory. The approved 34-entry app catalog update is published; additional intake, incomplete lore/image inventories and the separately held wiki publication remain open.
 
 This index does not change source-retirement decisions, permissions or current project priorities. Athena native integration remains the highest-priority broader project; no source repository is declared safe to delete here.

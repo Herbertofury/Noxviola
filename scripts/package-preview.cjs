@@ -107,7 +107,9 @@ async function verifyPackagedApplication(directory, { root = path.resolve(__dirn
     if (!allowed.has(entry) && ![...allowed.keys()].some(file => file.startsWith(entry + '/'))) throw new Error(`Unexpected packaged application entry: ${entry}`);
   }
   for (const [name, expected] of allowed) {
-    const bytes = extractFile(archive, name);
+    // ASAR's filesystem traverses using the host path separator, even when
+    // verifying a cross-platform package with portable '/' manifest names.
+    const bytes = extractFile(archive, path.normalize(name));
     if (bytes.length !== expected.bytes || crypto.createHash('sha256').update(bytes).digest('hex') !== expected.sha256) throw new Error(`Packaged source mismatch: ${name}`);
   }
   for (const name of APP_FILES) {
@@ -203,7 +205,7 @@ async function main(argv = process.argv.slice(2)) {
         if (!allowed.has(entry) && !expected.some(file => file.path.startsWith(entry + '/'))) throw new Error(`Unexpected packaged application entry: ${entry}`);
       }
       for (const file of expected) {
-        const digest = crypto.createHash('sha256').update(extractFile(archive, file.path)).digest('hex');
+        const digest = crypto.createHash('sha256').update(extractFile(archive, path.normalize(file.path))).digest('hex');
         if (digest !== file.sha256) throw new Error(`Packaged source mismatch: ${file.path}`);
       }
       const files = manifest(directory);

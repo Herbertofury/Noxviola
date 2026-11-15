@@ -8,8 +8,8 @@ const {webcrypto,createHash} = require('node:crypto');
 const source = fs.readFileSync(require.resolve('../browser/extension-api.preload.cjs'),'utf8');
 const EXT = 'a'.repeat(32);
 function nativeEvent() { const listeners = new Set();return {addListener:fn=>listeners.add(fn),removeListener:fn=>listeners.delete(fn),hasListener:fn=>listeners.has(fn),emit(...args){return [...listeners].map(fn=>fn(...args));}}; }
-function fixture({address='chrome-extension://'+EXT+'/popup.html',invoke=async()=>({ok:true,value:undefined}),subscribe=()=>({ok:true})}={}) {
-  const calls=[], mappings=[], subscriptions=[], nativeCalls=[], errors=[];
+function fixture({address='chrome-extension://'+EXT+'/popup.html',contextIsolated=true,invoke=async()=>({ok:true,value:undefined}),subscribe=()=>({ok:true})}={}) {
+  const calls=[], mappings=[], subscriptions=[], nativeCalls=[], errors=[], contextBridgeCalls=[];
   const ipcRenderer=Object.assign(new EventEmitter(),{invoke:async(method,...args)=>{calls.push([method,...args]);return invoke(...args);},sendSync:(channel,direction,id)=>{
     if(channel==='noxviola-extension:subscription'){subscriptions.push([direction,id]);return subscribe(direction,id);}
     mappings.push([direction,id]);return id===11?{ok:false,error:{message:'No native context'}}:{ok:true,value:direction==='nativeId'?id+100:id-100};
@@ -18,14 +18,44 @@ function fixture({address='chrome-extension://'+EXT+'/popup.html',invoke=async()
   const nativePort={name:'real-port',sender:{tab:{id:110,url:'https://allowed.test/'}},postMessage:value=>nativeCalls.push(['port.postMessage',value]),disconnect:()=>nativeCalls.push(['port.disconnect']),onMessage:nativeEvent(),onDisconnect:nativeEvent()};
   const main=vm.createContext({crypto:webcrypto,chrome:{runtime:nativeRuntime,tabs:{sendMessage:(...args)=>{nativeCalls.push(['sendMessage',...args]);if(typeof args.at(-1)==='function'){args.at(-1)('native reply');return;}return Promise.resolve('native reply');},executeScript:(id,details,callback)=>{nativeCalls.push(['tabs.executeScript',id,details]);callback(['actual native result']);},connect:(...args)=>{nativeCalls.push(['connect',...args]);return nativePort;}},scripting:{executeScript:details=>{nativeCalls.push(['executeScript',details]);return Promise.resolve([{result:true}]);}}},console:{error:error=>errors.push(error.message),log(){},warn(){}}});
   let required=0;
-  const contextBridge={exposeInMainWorld:(key,value)=>{Object.defineProperty(main,key,{value,configurable:true});},executeInMainWorld:({func})=>vm.runInContext('('+func.toString()+')()',main)};
-  const isolated=vm.createContext({location:{href:address},require:name=>{assert.equal(name,'electron');required++;return {ipcRenderer,contextBridge};},console:main.console});
-  vm.runInContext(source,isolated);
-  return {main,chrome:main.chrome,browser:main.browser,calls,mappings,subscriptions,nativeCalls,nativeRuntime,nativePort,ipcRenderer,errors,get required(){return required;}};
+  const contextBridge={exposeInMainWorld:(key,value)=>{assert.equal(contextIsolated,true,'Native contextBridge rejects non-isolated contexts.');contextBridgeCalls.push('expose');Object.defineProperty(main,key,{value,configurable:true});},executeInMainWorld:({func})=>{assert.equal(contextIsolated,true);contextBridgeCalls.push('execute');return vm.runInContext('('+func.toString()+')()',main);}};
+  const executionContext=contextIsolated?vm.createContext({location:{href:address},console:main.console}):main;
+  if(!contextIsolated)main.location={href:address};
+  // Electron passes require/process into its sandboxed preload wrapper. With
+  // native background pages, that wrapper shares the extension's main world.
+  const execute=vm.runInContext('(function(require,process){'+source+'\n})',executionContext);
+  execute(name=>{assert.equal(name,'electron');required++;return {ipcRenderer,contextBridge};},{contextIsolated});
+  return {main,chrome:main.chrome,browser:main.browser,calls,mappings,subscriptions,nativeCalls,nativeRuntime,nativePort,ipcRenderer,errors,contextBridgeCalls,get required(){return required;}};
 }
 test('actual preload exposes no transport or added APIs in ordinary website documents',()=>{
-  const f=fixture({address:'https://example.test/'});
-  assert.equal(f.required,0);assert.equal(f.main.__noxviolaExtensionHost,undefined);assert.equal(f.chrome.cookies,undefined);
+  for(const contextIsolated of [true,false]){
+    const f=fixture({address:'https://example.test/',contextIsolated});
+    assert.equal(f.required,0);assert.equal(f.main.__noxviolaExtensionHost,undefined);assert.equal(f.chrome.cookies,undefined);
+  }
+});
+test('native non-isolated background context installs real host create/event and Promise denial without contextBridge',async()=>{
+  let f;
+  f=fixture({contextIsolated:false,invoke:async(method,args)=>{
+    if(method==='tabs.create'){
+      const tab={id:14,url:args[0].url,active:false};
+      f.ipcRenderer.emit('noxviola-extension:event',{},'tabs.onCreated',tab);
+      return {ok:true,value:tab};
+    }
+    return {ok:false,error:{message:'The authenticated host denied this operation'}};
+  }});
+  assert.deepEqual(f.contextBridgeCalls,[]);
+  assert.equal(f.main.__noxviolaExtensionHost,undefined);
+  assert.equal(f.main.require,undefined);assert.equal(f.main.process,undefined);
+  assert.equal(typeof f.chrome.tabs.create,'function');assert.equal(typeof f.browser.tabs.create,'function');
+  const created=[];f.browser.tabs.onCreated.addListener(tab=>created.push(tab.id));
+  const tab=await f.browser.tabs.create({url:'https://allowed.test/created',active:false});
+  assert.equal(tab.id,14);assert.deepEqual(created,[14]);
+  assert.deepEqual(f.subscriptions,[['add','tabs.onCreated']]);
+  assert.equal(f.calls[0][1],'tabs.create');
+  await assert.rejects(f.browser.windows.create({}),/authenticated host denied/);
+  let callbackError;
+  await new Promise(resolve=>f.chrome.windows.create({},()=>{callbackError=f.chrome.runtime.lastError.message;resolve();}));
+  assert.match(callbackError,/authenticated host denied/);assert.equal(f.chrome.runtime.lastError,undefined);
 });
 test('host methods preserve Promise rejection and callback runtime.lastError instead of success-shaped undefined',async()=>{
   const f=fixture({invoke:async(method,args)=>method==='tabs.query'?{ok:true,value:[{id:10,title:'Actual host tab'}]}:{ok:false,error:{code:'UNSUPPORTED_API',message:'This host has no windows.create'}}});

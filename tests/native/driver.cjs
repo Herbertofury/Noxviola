@@ -119,6 +119,7 @@ function observeBackground(contents) {
   if (contents.getType() !== 'backgroundPage') return;
   const partition = contents.session;
   let observedExtension = null;
+  const pendingPreloadErrors = [];
   function record(event, fields = {}, candidate = contents.getURL()) {
     try {
       for (const address of [candidate, contents.getURL()]) {
@@ -128,12 +129,24 @@ function observeBackground(contents) {
         const extension = partition.extensions.getExtension(url.hostname);
         if (isFixtureExtension(extension)) observedExtension = extension;
       }
-      if (!observedExtension) return;
+      if (!observedExtension) {
+        // A preload can fail before the native extension appears in the Session
+        // registry. Retain only this exact production preload, and publish it
+        // only after this context is identified as a generated fixture.
+        if (event === 'preload-error' && path.resolve(fields.preloadPath) === path.resolve(__dirname, '../../browser/extension-api.preload.cjs')) {
+          pendingPreloadErrors.push({ capturedAt: new Date().toISOString(), fields });
+        }
+        return;
+      }
+      for (const pending of pendingPreloadErrors.splice(0)) {
+        lifecycleEvent(partition, 'preload-error', { webContentsId: contents.id, type: contents.getType(), url: contents.getURL(), runtimeId: observedExtension.id, ...pending.fields, capturedAt: pending.capturedAt, identifiedAt: new Date().toISOString() });
+      }
       lifecycleEvent(partition, event, { webContentsId: contents.id, type: contents.getType(), url: contents.getURL(), runtimeId: observedExtension.id, ...fields });
     } catch { /* Ignore unrelated or initial empty documents; never probe them. */ }
   }
   contents.on('did-start-navigation', details => record('did-start-navigation', { isMainFrame: details.isMainFrame }, details.url));
   contents.on('console-message', details => record('console-message', { level: details.level, message: details.message, lineNumber: details.lineNumber, sourceId: details.sourceId }, details.sourceId || contents.getURL()));
+  contents.on('preload-error', (_event, preloadPath, error) => record('preload-error', { preloadPath, error: errorDetails(error) }));
   contents.on('did-finish-load', () => record('did-finish-load'));
   contents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => record('did-fail-load', { errorCode, errorDescription, validatedURL, isMainFrame }, validatedURL));
   contents.on('render-process-gone', (_event, details) => record('render-process-gone', { reason: details.reason, exitCode: details.exitCode }));
@@ -536,13 +549,44 @@ async function extensionDiagnostics() {
       const partition = partitionFor(grant.identity);
       const registered = partition.extensions.getExtension(grant.runtimeId);
       details.runtimeRegistered = !!registered;
+      try { details.preloadScripts = partition.getPreloadScripts(); }
+      catch (error) { details.preloadScriptsError = errorDetails(error); }
       details.backgroundPages = await Promise.all(backgroundPages(grant.runtimeId, grant.identity).map(async contents => {
         const page = { id: contents.id, type: contents.getType(), url: contents.getURL(), loading: contents.isLoading(), loadingMainFrame: contents.isLoadingMainFrame() };
+        try {
+          const preferences = contents.getLastWebPreferences();
+          page.webPreferences = Object.fromEntries(['contextIsolation', 'sandbox', 'nodeIntegration', 'nodeIntegrationInWorker', 'nodeIntegrationInSubFrames', 'preload', 'webSecurity'].map(key => [key, preferences?.[key] ?? null]));
+        } catch (error) { page.webPreferencesError = errorDetails(error); }
         // This is a one-time read only after a failed gate, never a wait for success
         // or execution in the initial empty background document.
         if (!page.loadingMainFrame && contents.mainFrame.url.startsWith(`chrome-extension://${grant.runtimeId}/`)) {
           try {
-            page.committedDocument = await contents.executeJavaScript('({ readyState: document.readyState, runtimeType: typeof chrome === "undefined" ? "undefined" : typeof chrome.runtime, onMessageType: typeof chrome === "undefined" ? "undefined" : typeof chrome.runtime?.onMessage, hasMessageListeners: typeof chrome !== "undefined" && typeof chrome.runtime?.onMessage?.hasListeners === "function" ? chrome.runtime.onMessage.hasListeners() : null })');
+            page.committedDocument = await contents.executeJavaScript(`(() => {
+              const chromeApi = globalThis.chrome, browserApi = globalThis.browser;
+              function descriptor(object, key) {
+                if (object === undefined || object === null) return null;
+                const value = Object.getOwnPropertyDescriptor(object, key);
+                if (!value) return null;
+                return { configurable: value.configurable, enumerable: value.enumerable,
+                  writable: 'writable' in value ? value.writable : null,
+                  getterType: typeof value.get, setterType: typeof value.set,
+                  valueType: 'value' in value ? typeof value.value : null };
+              }
+              function namespace(api) {
+                return { type: typeof api, tabsType: typeof api?.tabs,
+                  methods: Object.fromEntries(['create', 'get', 'query'].map(name => [name, typeof api?.tabs?.[name]])),
+                  tabsDescriptor: descriptor(api, 'tabs'),
+                  methodDescriptors: Object.fromEntries(['create', 'get', 'query'].map(name => [name, descriptor(api?.tabs, name)])),
+                  runtimeId: api?.runtime?.id ?? null };
+              }
+              return { readyState: document.readyState, origin: location.origin,
+                runtimeType: typeof chromeApi?.runtime, onMessageType: typeof chromeApi?.runtime?.onMessage,
+                hasMessageListeners: typeof chromeApi?.runtime?.onMessage?.hasListeners === 'function' ? chromeApi.runtime.onMessage.hasListeners() : null,
+                chrome: namespace(chromeApi), browser: namespace(browserApi), browserEqualsChrome: browserApi === chromeApi,
+                globalDescriptors: { chrome: descriptor(globalThis, 'chrome'), browser: descriptor(globalThis, 'browser'), extensionHost: descriptor(globalThis, '__noxviolaExtensionHost') },
+                context: { requireType: typeof require, processType: typeof process, extensionHostType: typeof globalThis.__noxviolaExtensionHost }
+              };
+            })()`);
           } catch (error) { page.inspectionError = errorDetails(error); }
         } else page.inspection = 'Skipped: background document has not committed or is loading';
         return page;
@@ -868,7 +912,7 @@ async function secondLaunch() {
 
 // Observers are attached before production startup, so extension-ready may be
 // recorded even when it precedes loadExtension's resolved promise. They only
-// retain events from the two generated fixture packages under this fresh profile.
+// retain events from the generated fixture packages under this fresh profile.
 app.on('session-created', observePartition);
 app.on('web-contents-created', (_event, contents) => observeBackground(contents));
 require('../../browser/main.cjs');

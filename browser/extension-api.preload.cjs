@@ -22,10 +22,9 @@
     add:(name,callback) => { if (!callbacks.has(name)) callbacks.set(name,new Set()); callbacks.get(name).add(callback); },
     remove:(name,callback) => { callbacks.get(name)?.delete(callback); if (!callbacks.get(name)?.size) callbacks.delete(name); },
   };
-  contextBridge.exposeInMainWorld('__noxviolaExtensionHost',transport);
-  contextBridge.executeInMainWorld({func:() => {
-    const transport = globalThis.__noxviolaExtensionHost;
-    Reflect.deleteProperty(globalThis,'__noxviolaExtensionHost');
+  function installExtensionAPIs(directTransport) {
+    const transport = directTransport || globalThis.__noxviolaExtensionHost;
+    if (!directTransport) Reflect.deleteProperty(globalThis,'__noxviolaExtensionHost');
     const chrome = globalThis.chrome;
     if (!chrome?.runtime?.id) throw new Error('The native extension runtime is unavailable.');
     const nativeRuntime = chrome.runtime, nativeTabs = chrome.tabs, nativeScripting = chrome.scripting;
@@ -1404,5 +1403,16 @@
       return globalThis.browser;
     }
     Object.defineProperty(globalThis,'browser',{value:promiseAPIs(),configurable:true,writable:true,enumerable:true});
-  }});
+  }
+  // Electron's native MV2 background pages are sandboxed but do not create an
+  // isolated world. The maintained adapter initializes that existing context
+  // directly; using contextBridge there throws before any host API is added.
+  // Keep its transport in this closure. This does not change WebPreferences or
+  // expose Node/Electron imports, and every call still authenticates in main.
+  if (process.contextIsolated) {
+    contextBridge.exposeInMainWorld('__noxviolaExtensionHost',transport);
+    contextBridge.executeInMainWorld({func:installExtensionAPIs});
+  } else {
+    installExtensionAPIs(transport);
+  }
 })();

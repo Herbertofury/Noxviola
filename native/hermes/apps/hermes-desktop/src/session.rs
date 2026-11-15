@@ -27,7 +27,7 @@ pub struct SessionStore {
     worker: JoinHandle<Result<(), String>>,
 }
 
-fn data_dir() -> io::Result<PathBuf> {
+pub fn data_dir() -> io::Result<PathBuf> {
     #[cfg(windows)]
     let base = std::env::var_os("LOCALAPPDATA");
     #[cfg(not(windows))]

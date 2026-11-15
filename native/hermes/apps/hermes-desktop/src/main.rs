@@ -37,6 +37,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     select_hardware_accelerated_backend()?;
 
     let (restored, session_store) = session::SessionStore::open()?;
+    let engine_data_dir = session::data_dir()?.join("engine");
+    std::fs::create_dir_all(&engine_data_dir)?;
     let window = MainWindow::new()?;
     let controller = Rc::new(RefCell::new(BrowserController::from_session(restored)?));
     let web_view_focused = Rc::new(Cell::new(false));
@@ -45,6 +47,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         &window,
         Rc::clone(&controller),
         Rc::clone(&web_view_focused),
+        engine_data_dir,
     )?;
     sync_ui(&window, &controller.borrow());
     connect_ui_callbacks(
@@ -194,6 +197,7 @@ fn connect_servo_runtime(
     window: &MainWindow,
     controller: Rc<RefCell<BrowserController>>,
     web_view_focused: Rc<Cell<bool>>,
+    engine_data_dir: std::path::PathBuf,
 ) -> Result<(), slint::SetRenderingNotifierError> {
     let weak_window_for_waker = window.as_weak();
     let event_loop_waker = EventLoopWaker::new(move || {
@@ -202,7 +206,7 @@ fn connect_servo_runtime(
         });
     });
 
-    let runtime = ServoRuntime::new(event_loop_waker);
+    let runtime = ServoRuntime::new(event_loop_waker, engine_data_dir);
     let weak_window_for_rendering = window.as_weak();
     let mut rendering_context: Option<Rc<BrowserRenderingContext>> = None;
     let mut wgpu_device: Option<slint::wgpu_29::wgpu::Device> = None;

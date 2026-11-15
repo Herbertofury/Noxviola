@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -65,11 +66,11 @@ pub struct ServoRuntime {
 }
 
 impl ServoRuntime {
-    pub fn new(event_loop_waker: EventLoopWaker) -> Self {
+    pub fn new(event_loop_waker: EventLoopWaker, config_dir: PathBuf) -> Self {
         ensure_crypto_provider();
 
         let redraw_waker = event_loop_waker.clone();
-        let options = hermes_options();
+        let options = hermes_options(config_dir);
         let multiprocess_enabled = options.multiprocess;
         let sandbox_enabled = options.sandbox;
         let inner = ServoBuilder::default()
@@ -136,13 +137,14 @@ impl ServoRuntime {
     }
 }
 
-fn hermes_options() -> Opts {
+fn hermes_options(config_dir: PathBuf) -> Opts {
     Opts {
         // Servo 0.7.0 content-process isolation renders correctly in Hermes.
         // Keep the operating-system sandbox disabled independently: the
         // current Linux gaol path is not yet reliable enough for a release.
         multiprocess: true,
         sandbox: false,
+        config_dir: Some(config_dir),
         ..Opts::default()
     }
 }
@@ -348,12 +350,20 @@ mod tests {
 
     #[test]
     fn enables_content_process_isolation() {
-        assert!(hermes_options().multiprocess);
+        assert!(hermes_options("test-profile".into()).multiprocess);
     }
 
     #[test]
     fn keeps_the_unreliable_os_sandbox_disabled() {
-        assert!(!hermes_options().sandbox);
+        assert!(!hermes_options("test-profile".into()).sandbox);
+    }
+
+    #[test]
+    fn uses_the_selected_engine_storage_directory() {
+        let path = std::path::PathBuf::from("test-profile");
+        let options = hermes_options(path.clone());
+        assert_eq!(options.config_dir, Some(path));
+        assert!(!options.temporary_storage);
     }
 
     use super::*;

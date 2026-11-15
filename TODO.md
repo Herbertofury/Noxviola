@@ -2,6 +2,10 @@
 
 Updated 2026-11-07 UTC. This is the maintained Noxviola continuation index. Project-local plans remain authoritative for implementation detail. The earlier checklist and verified checkpoints are preserved below; an old checkpoint does not close a whole project.
 
+## New character/catalog requests · 2026-11-15
+
+- [ ] Reconcile and deliver the [Memories / JetSetCraft character backlog](docs/MEMORIES-JETSETCRAFT-BACKLOG.md): Grinions, AMYGDALA/Lucy, SCP variants, Honkistas guests, Edgerunners and other favorites, with author lore/socials/credits, rights and native acceptance tracked separately. The linked November 15 index is scoped new work; it does not merge or replace held PR #4. Draft CI and abstract roster logic are not visible game appearances. Continue the existing implementation pass rather than duplicating it.
+
 ## Current priorities and next actions · 2026-11-07
 
 **Athena is the requested unified home for learning, Engineering Atlas and Feature Foundry. AoA remains unfinished, and the engineering research and implementation goal remains ongoing under Athena.** Migration, a single article, experiment or release does not complete that ongoing goal. Keep Athena and AoA in the working queue. Check the existing work and current owner before starting another pass, then record a concrete result or the exact remaining blocker.

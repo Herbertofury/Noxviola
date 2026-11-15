@@ -91,7 +91,7 @@ impl Session {
             // An empty address is the native shell's unopened new-tab page.
             if !t.url.is_empty() {
                 let url = url::Url::parse(&t.url).map_err(|_| "invalid tab URL")?;
-                if !matches!(url.scheme(), "http" | "https") {
+                if !matches!(url.scheme(), "http" | "https" | "about") {
                     return Err("unsupported tab URL scheme".into());
                 }
             }
@@ -157,6 +157,75 @@ fn previous_path(path: &Path) -> PathBuf {
     name.push(".previous");
     name.into()
 }
+
+// A generic traversal is necessary because unknown fields can contain nested
+// objects. serde_json::Value would already have discarded duplicated keys.
+struct UniqueJson;
+
+impl<'de> Deserialize<'de> for UniqueJson {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Visitor;
+        impl<'de> serde::de::Visitor<'de> for Visitor {
+            type Value = UniqueJson;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                formatter.write_str("JSON without duplicate object keys")
+            }
+            fn visit_bool<E: serde::de::Error>(self, _: bool) -> Result<Self::Value, E> {
+                Ok(UniqueJson)
+            }
+            fn visit_i64<E: serde::de::Error>(self, _: i64) -> Result<Self::Value, E> {
+                Ok(UniqueJson)
+            }
+            fn visit_u64<E: serde::de::Error>(self, _: u64) -> Result<Self::Value, E> {
+                Ok(UniqueJson)
+            }
+            fn visit_f64<E: serde::de::Error>(self, _: f64) -> Result<Self::Value, E> {
+                Ok(UniqueJson)
+            }
+            fn visit_str<E: serde::de::Error>(self, _: &str) -> Result<Self::Value, E> {
+                Ok(UniqueJson)
+            }
+            fn visit_string<E: serde::de::Error>(self, _: String) -> Result<Self::Value, E> {
+                Ok(UniqueJson)
+            }
+            fn visit_unit<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+                Ok(UniqueJson)
+            }
+            fn visit_none<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+                Ok(UniqueJson)
+            }
+            fn visit_some<D: serde::Deserializer<'de>>(
+                self,
+                d: D,
+            ) -> Result<Self::Value, D::Error> {
+                UniqueJson::deserialize(d)
+            }
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                self,
+                mut seq: A,
+            ) -> Result<Self::Value, A::Error> {
+                while seq.next_element::<UniqueJson>()?.is_some() {}
+                Ok(UniqueJson)
+            }
+            fn visit_map<A: serde::de::MapAccess<'de>>(
+                self,
+                mut map: A,
+            ) -> Result<Self::Value, A::Error> {
+                let mut keys = std::collections::HashSet::new();
+                while let Some(key) = map.next_key::<String>()? {
+                    if !keys.insert(key) {
+                        return Err(serde::de::Error::custom("duplicate object key"));
+                    }
+                    map.next_value::<UniqueJson>()?;
+                }
+                Ok(UniqueJson)
+            }
+        }
+        deserializer.deserialize_any(Visitor)
+    }
+}
+
 fn read_session(path: &Path) -> Result<Option<Session>, StateError> {
     let bytes = match fs::read(path) {
         Ok(bytes) => bytes,
@@ -168,6 +237,12 @@ fn read_session(path: &Path) -> Result<Option<Session>, StateError> {
             });
         }
     };
+    // Refuse ambiguous JSON before materializing it as maps; otherwise a
+    // later checkpoint could silently overwrite one of the duplicate values.
+    serde_json::from_slice::<UniqueJson>(&bytes).map_err(|e| StateError::Invalid {
+        path: path.into(),
+        reason: e.to_string(),
+    })?;
     let session: Session = serde_json::from_slice(&bytes).map_err(|e| StateError::Invalid {
         path: path.into(),
         reason: e.to_string(),
@@ -381,5 +456,52 @@ mod tests {
             "123456789012345678901234567890"
         );
         assert_eq!(fs::read(previous_path(&file)).unwrap(), original);
+    }
+
+    #[test]
+    fn duplicate_nested_unknown_keys_require_recovery_without_changing_either_copy() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("session.json");
+        let previous = previous_path(&file);
+        let valid = br#"{"version":1,"profiles":[{"id":"personal","name":"Personal"}],"tabs":[],"activeId":null,"unknown":123456789012345678901234567890}"#;
+        let ambiguous = br#"{"version":1,"profiles":[{"id":"personal","name":"Personal"}],"tabs":[],"activeId":null,"unknown":{"array":[{"key":1,"key":2}]}}"#;
+
+        fs::write(&file, ambiguous).unwrap();
+        fs::write(&previous, valid).unwrap();
+        let LoadedSession::Previous { session, .. } = load(&file).unwrap() else {
+            panic!("expected recovery")
+        };
+        assert_eq!(
+            session.extra["unknown"].to_string(),
+            "123456789012345678901234567890"
+        );
+        assert!(matches!(
+            save(&file, &session),
+            Err(StateError::RecoveryRequired { .. })
+        ));
+        assert_eq!(fs::read(&file).unwrap(), ambiguous);
+        assert_eq!(fs::read(&previous).unwrap(), valid);
+
+        fs::write(&file, valid).unwrap();
+        fs::write(&previous, ambiguous).unwrap();
+        let LoadedSession::Primary(session) = load(&file).unwrap() else {
+            panic!("expected primary")
+        };
+        assert!(matches!(
+            save(&file, &session),
+            Err(StateError::Invalid { .. })
+        ));
+        assert_eq!(fs::read(&file).unwrap(), valid);
+        assert_eq!(fs::read(&previous).unwrap(), ambiguous);
+    }
+
+    #[test]
+    fn about_urls_supported_by_navigation_can_be_saved_and_restored() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("session.json");
+        let mut state = sample();
+        state.tabs[0].url = "about:blank".into();
+        save(&file, &state).unwrap();
+        assert_eq!(load(&file).unwrap(), LoadedSession::Primary(state));
     }
 }

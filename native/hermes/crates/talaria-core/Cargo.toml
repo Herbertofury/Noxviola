@@ -1,0 +1,10 @@
+[package]
+name = "talaria-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+noxviola-core = { path = "../../../core" }
+url.workspace = true
+uuid = { version = "1", features = ["v4"] }

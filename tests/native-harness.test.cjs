@@ -91,3 +91,22 @@ test('packaged store assertions reject leaks, missing persistence and session-co
   assert.throws(() => assertStores(value, 'one', { sessionCookieExpected: false }), /Session-only/);
   assert.doesNotThrow(() => assertStores({ ...value, cookie: 'noxviola_fixture=one' }, 'one', { sessionCookieExpected: false }));
 });
+
+test('packaged navigation observes the selected target commit before accepting an already-duplicated URL', async () => {
+  const { waitForDocument } = require('./native/packaged-driver.cjs');
+  const target = { id: 'selected-public-page', sessionId: 'same-native-target' };
+  const address = 'http://127.0.0.1:12345/page?packaged=duplicate';
+  const documents = [
+    { url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript', title: 'JavaScript | MDN', complete: true, fixtureReady: false },
+    { url: address, title: 'Loading fixture', complete: false, fixtureReady: false },
+    { url: address, title: 'Noxviola synthetic fixture', complete: true, fixtureReady: true },
+  ];
+  let calls = 0;
+  const observed = await waitForDocument(async actualTarget => {
+    assert.equal(actualTarget, target, 'Readiness must never substitute an existing duplicate target');
+    return documents[calls++];
+  }, target, { address });
+  assert.equal(calls, 3);
+  assert.equal(observed, documents[2]);
+  await assert.rejects(waitForDocument(async () => { throw new Error('Actual renderer inspection failed'); }, target, { address }), /Actual renderer inspection failed/);
+});

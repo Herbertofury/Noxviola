@@ -62,6 +62,18 @@ async function bounded(promise, milliseconds, message) {
   finally { clearTimeout(timer); }
 }
 
+async function waitForDocument(evaluate, target, { fixture = true, address = null } = {}) {
+  return until(async () => {
+    try {
+      const document = await evaluate(target, "({url:location.href,title:document.title,complete:document.readyState==='complete',fixtureReady:typeof window.fixture?.readIdentity==='function'})");
+      return document.complete && (!fixture || document.fixtureReady) && (address === null || document.url === address) ? document : null;
+    } catch (error) {
+      if (/Execution context was destroyed|Cannot find context|Inspected target navigated/i.test(error.message)) return false;
+      throw error;
+    }
+  }, 'the selected target’s committed document readiness');
+}
+
 function summarizeNetLog(file) {
   const document = JSON.parse(fs.readFileSync(file, 'utf8'));
   assert.ok(Array.isArray(document.events) && document.events.length, 'The normal packaged exit must finish its actual Chromium NetLog');
@@ -164,20 +176,18 @@ async function runPackagedPhase(packaged, context, phase, { publicHttps = false 
     })()`);
     await until(() => evaluate(shell, `!document.getElementById(${JSON.stringify(id)}).dataset.saving`), `${id} submission to finish`);
   }
-  async function ready(target, fixture = true) {
-    return until(async () => {
-      try { return await evaluate(target, `document.readyState === 'complete' ${fixture ? "&& typeof window.fixture?.readIdentity === 'function'" : ''}`); }
-      catch (error) {
-        if (/Execution context was destroyed|Cannot find context|Inspected target navigated/i.test(error.message)) return false;
-        throw error;
-      }
-    }, 'committed document readiness');
+  async function ready(target, fixture = true, address = null) {
+    return waitForDocument(evaluate, target, { fixture, address });
   }
-  async function navigate(address) {
+  async function navigate(address, knownTarget = null) {
+    const activeId = (await state()).activeId;
     await command('navigate', address);
-    const target = await targetAt(address);
-    await ready(target);
-    await until(async () => { const current = await state(); return !current.tabs.find(tab => tab.id === current.activeId)?.loading; }, 'completed application navigation');
+    const target = knownTarget || await targetAt(address);
+    const document = await ready(target, true, address);
+    await until(async () => {
+      const current = await state(), tab = current.tabs.find(tab => tab.id === activeId);
+      return current.activeId === activeId && tab && !tab.loading && tab.url === document.url && tab.title === document.title;
+    }, 'completed application navigation matching the selected committed document');
     return target;
   }
   async function check(name, action) {
@@ -456,10 +466,12 @@ async function runPackagedPhase(packaged, context, phase, { publicHttps = false 
         const spare = (await state()).tabs.find(tab => tab.url === `${context.origin}/page?packaged=duplicate`);
         assert.ok(spare, 'Public browsing must not overwrite either identity storage fixture tab');
         await command('activate', spare.id);
+        let publicTarget;
         for (const test of HTTPS_CASES) {
           const start = performance.now();
           await command('navigate', test.url);
           const target = await targetAt(test.url);
+          publicTarget = target;
           await ready(target, false);
           const document = await evaluate(target, `({url:location.href,title:document.title,secureContext:isSecureContext,bodyCharacters:document.body?.innerText.length || 0,nodeRequire:typeof require,privilegedBridge:typeof window.browser,navigation:performance.getEntriesByType('navigation').map(entry=>entry.toJSON())})`);
           assert.equal(new URL(document.url).protocol, 'https:');
@@ -475,7 +487,9 @@ async function runPackagedPhase(packaged, context, phase, { publicHttps = false 
           await sample(`public-https-${new URL(test.url).hostname}`, target);
         }
         // Public documents are not reopened as part of the deterministic restart fixture.
-        await navigate(`${context.origin}/page?packaged=duplicate`);
+        // Several other targets already have this duplicate URL. Observe the
+        // exact public-page target returning, never another tab's ready document.
+        await navigate(`${context.origin}/page?packaged=duplicate`, publicTarget);
       });
       await command('activate', expected.personal);
       const final = await state();
@@ -587,4 +601,4 @@ async function runPackagedPhase(packaged, context, phase, { publicHttps = false 
   }
 }
 
-module.exports = { runPackagedPhase, packagedLaunchArguments, publicAddress, assertStores, summarizeNetLog, HTTPS_CASES };
+module.exports = { runPackagedPhase, packagedLaunchArguments, publicAddress, assertStores, summarizeNetLog, waitForDocument, HTTPS_CASES };

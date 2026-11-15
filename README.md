@@ -14,6 +14,8 @@ npm test
 
 Named identities with separate persistent browser partitions, side-by-side identity tabs, tabs, address/search, navigation, find, reopen closed tabs, split view, source links and download destination selection are implemented. Use the identity menu to switch; ♙ adds a name (press Enter). The vault is one local app-wide library, not an identity-specific secret store. Actual cookie/storage isolation still needs native acceptance. Sessions preserve duplicate URLs and more than twelve tabs; inactive restored tabs load when selected. The **♡ Vault** saves websites, images, videos, creators and characters locally with collections, names, notes, favorites, search and JSON export. This first vault stores references, not downloaded copyrighted media. It does not upload or sync personal data.
 
+The **☷ Account atlas** organizes site origins, labels/handles, identity associations and account/password-manager tracking markers. Open routes into the assigned identity; edit and reversible archive are supported. It stores metadata locally in plaintext, **never a password vault**. No credential autofill, manager connection or actual account login is claimed.
+
 The visual direction is purple, adaptable and Firefox-inspired, with an original purple fox mascot to be designed later. No Firefox logo or mascot assets are copied. Feature Foundry/Athena themes are inspiration, not a mandatory design authority.
 
 ## Current boundaries

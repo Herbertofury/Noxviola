@@ -10,13 +10,15 @@ let downloadHandler;
 function identitySession(id){const partition=`persist:noxviola-identity-${id}`;const s=session.fromPartition(partition);if(!configuredSessions.has(partition)){s.setPermissionCheckHandler(()=>false);s.setPermissionRequestHandler((_w,_p,cb)=>cb(false));if(downloadHandler)s.on('will-download',downloadHandler);configuredSessions.add(partition);}return s;}
 let win,tabs=[],activeId,closed=[],saveTimer,sessionFile,live,splitId=null;
 const HEIGHT=112;
+const accountStore=require('./accounts.cjs');let accounts=[],accountFile,accountsOpen=false;
+function publishAccounts(){win.webContents.send('accounts',{accounts,profiles,open:accountsOpen});}
 const vaultStore=require('./vault.cjs');let vaultFile,vault=[],vaultOpen=false;
 function publishVault(){win.webContents.send('vault',{items:vault,open:vaultOpen});}
 const snapshot=()=>({version:1,profiles,activeId,tabs:tabs.map(({id,url,title,identity})=>({id,url,title,identity}))});
 function persist(){if(sessionFile)saveState(sessionFile,snapshot());}
 function publish(){if(win&&!win.isDestroyed())win.webContents.send('state',{...snapshot(),currentIdentity,splitId,tabs:tabs.map(({id,url,title,identity,loading,view})=>({id,url,title,identity,loading:loading||false,live:!!view})),canBack:active()?.view?.webContents.navigationHistory.canGoBack()||false,canForward:active()?.view?.webContents.navigationHistory.canGoForward()||false});clearTimeout(saveTimer);saveTimer=setTimeout(persist,200);}
 function active(){return tabs.find(t=>t.id===activeId);}
-function layout(){if(!win)return;const [width,height]=win.getContentSize();const visible=[activeId,splitId].filter((id,i,a)=>id&&a.indexOf(id)===i);for(const t of tabs){if(!t.view)continue;const i=visible.indexOf(t.id);t.view.setVisible(i>=0&&!vaultOpen);if(i>=0)t.view.setBounds({x:visible.length===2?Math.floor(width/2)*i:0,y:HEIGHT,width:visible.length===2?Math.floor(width/2):width,height:Math.max(0,height-HEIGHT)});}}
+function layout(){if(!win)return;const [width,height]=win.getContentSize();const visible=[activeId,splitId].filter((id,i,a)=>id&&a.indexOf(id)===i);for(const t of tabs){if(!t.view)continue;const i=visible.indexOf(t.id);t.view.setVisible(i>=0&&!vaultOpen&&!accountsOpen);if(i>=0)t.view.setBounds({x:visible.length===2?Math.floor(width/2)*i:0,y:HEIGHT,width:visible.length===2?Math.floor(width/2):width,height:Math.max(0,height-HEIGHT)});}}
 function ensureView(t){
  if(t.view)return t.view;
  const view=new WebContentsView({webPreferences:{session:identitySession(t.identity),nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true,allowRunningInsecureContent:false,spellcheck:true}});t.view=view;win.contentView.addChildView(view);
@@ -43,7 +45,11 @@ async function command(event,{name,value}={}){
  switch(name){
  case 'identity-add':{const name=String(value||'').trim();if(name){const p={id:crypto.randomUUID(),name};profiles.push(p);currentIdentity=p.id;newTab();}break;}
  case 'identity-switch':{if(profiles.some(p=>p.id===value)){currentIdentity=value;const t=tabs.find(x=>x.identity===value);if(t)activate(t.id);else newTab();}break;}
- case 'vault':vaultOpen=!vaultOpen;layout();publishVault();break;
+ case 'accounts':accountsOpen=!accountsOpen;vaultOpen=false;publishVault();layout();publishAccounts();break;
+ case 'account-save':{const updated=accountStore.upsert(accounts,value,profiles);accountStore.save(accountFile,updated);accounts=updated;publishAccounts();break;}
+ case 'account-open':{const item=accounts.find(x=>x.id===value);if(!item)throw new Error('Account not found');const target=accountStore.route(item,profiles);accountsOpen=false;publishAccounts();newTab(target.url,target.identity);break;}
+ case 'account-archive':{const item=accounts.find(x=>x.id===value);if(!item)throw new Error('Account not found');const updated=accountStore.upsert(accounts,{...item,archived:!item.archived},profiles);accountStore.save(accountFile,updated);accounts=updated;publishAccounts();break;}
+ case 'vault':vaultOpen=!vaultOpen;accountsOpen=false;publishAccounts();layout();publishVault();break;
  case 'vault-add':{const item=vaultStore.normalize({...value,id:crypto.randomUUID()});const updated=[...vault,item];vaultStore.save(vaultFile,updated);vault=updated;publishVault();break;}
  case 'vault-star':{const updated=vault.map(x=>x.id===value?{...x,favorite:!x.favorite}:x);vaultStore.save(vaultFile,updated);vault=updated;publishVault();break;}
  case 'vault-open':{const item=vault.find(x=>x.id===value);if(item){vaultOpen=false;publishVault();newTab(item.url);}break;}
@@ -61,7 +67,7 @@ async function command(event,{name,value}={}){
  }
 }
 if(!app.requestSingleInstanceLock())app.quit();else app.whenReady().then(()=>{
- app.setAppUserModelId('org.noxviola.browser');vaultFile=path.join(app.getPath('userData'),'private-vault.json');try{vault=vaultStore.load(vaultFile);}catch(e){dialog.showErrorBox('Vault needs recovery','Existing data was not overwritten. Restore private-vault.json.previous before retrying.');app.quit();return;}sessionFile=path.join(app.getPath('userData'),'browser-session.json');live=session.fromPartition('persist:noxviola-browser');
+ app.setAppUserModelId('org.noxviola.browser');vaultFile=path.join(app.getPath('userData'),'private-vault.json');try{vault=vaultStore.load(vaultFile);}catch(e){dialog.showErrorBox('Vault needs recovery','Existing data was not overwritten. Restore private-vault.json.previous before retrying.');app.quit();return;}accountFile=path.join(app.getPath('userData'),'private-accounts.json');try{accounts=accountStore.load(accountFile);}catch(error){dialog.showErrorBox('Account inventory needs recovery','Existing inventory was not overwritten. Restore private-accounts.json.previous before retrying.');app.quit();return;}sessionFile=path.join(app.getPath('userData'),'browser-session.json');live=session.fromPartition('persist:noxviola-browser');
  live.setPermissionCheckHandler(()=>false);live.setPermissionRequestHandler((_wc,_permission,callback)=>callback(false));
  downloadHandler=async(event,item)=>{item.pause();const result=await dialog.showSaveDialog(win,{defaultPath:path.join(app.getPath('downloads'),path.basename(item.getFilename()))});if(result.canceled||!result.filePath){item.cancel();return;}item.setSavePath(result.filePath);item.resume();item.on('updated',()=>win?.webContents.send('notice',`Downloading ${item.getFilename()}: ${item.getReceivedBytes()} / ${item.getTotalBytes()} bytes`));item.once('done',(_,state)=>win?.webContents.send('notice',`${item.getFilename()}: ${state}`));};
  win=new BrowserWindow({title:'Noxviola',width:1320,height:860,minWidth:640,minHeight:420,backgroundColor:'#171122',webPreferences:{preload:path.join(__dirname,'preload.cjs'),nodeIntegration:false,contextIsolation:true,sandbox:true}});

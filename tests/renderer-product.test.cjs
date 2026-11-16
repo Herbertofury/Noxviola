@@ -364,3 +364,11 @@ test('following add preserves form after failure and carries the displayed brows
  h.submit(form);await tick();assert.equal(field(form,'name').value,'Project');assert.match(h.$('notice').textContent,/Storage unavailable/);assert.equal(h.calls.at(-1).value.identity,'work');
  fail=false;h.submit(form);await tick();assert.equal(field(form,'name').value,'');
 });
+
+test('following distinguishes snapshot gaps, source dates and provider pauses without promising real-time history',async t=>{
+ const h=await harness(t,{initial:state({panel:'following'})});
+ h.emit('onFollows',{identity:'personal',items:[{id:'repo',identity:'personal',name:'Tagged project',kind:'project',url:'https://github.com/example/project',provider:'github-releases',automatic:true,paused:false,busy:false,lastSuccess:1700000000000,error:'',freshness:'overdue',coverage:'Public releases and current tags, not a complete change history.',providerNotBefore:Date.now()+3600000,items:[{id:'tag:v1',title:'Tag v1',kind:'tag',commit:'a'.repeat(40),publishedAt:'',observedAt:1700000000000,read:false,presentInLastSnapshot:false}]}]});
+ await painted(h,'follow-items');const text=h.$('follow-items').textContent;
+ assert.match(text,/Check overdue/);assert.match(text,/not a complete change history/);assert.match(text,/Tag date is not provided/);assert.match(text,/Not returned in last successful snapshot/);assert.match(text,/Observed on this device/);
+ assert.equal([...h.$('follow-items').querySelectorAll('button')].find(b=>b.textContent==='Check now').disabled,true);
+});

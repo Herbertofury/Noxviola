@@ -4,7 +4,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const os=require('node:os');
 const path=require('node:path');
-const {FollowService,decode,sourceFor,githubCollect,INTERVAL}=require('../browser/follows.cjs');
+const {FollowService,decode,sourceFor,githubCollect,INTERVAL,serverTiming}=require('../browser/follows.cjs');
 function fixture(t, options={}){
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'nox-follow-test-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
  let now=1000;const setup={file:path.join(dir,'following.json'),getIdentities:()=>['personal','work'],now:()=>now,...options};
@@ -44,12 +44,12 @@ test('records missing from a later source response are retained, not silently di
  let items=[normalized()];const {service}=fixture(t,{collect:async()=>({cache:{},items})});const s=add(service);await service.refresh('personal',s.id);items=[];await service.refresh('personal',s.id);assert.equal(service.get('personal',s.id).items.length,1);
 });
 test('pause cancels in-flight collection and late success cannot overwrite pause or add updates',async t=>{
- let resolve,signal;const {service}=fixture(t,{collect:async(_s,opts)=>{signal=opts.signal;return new Promise(r=>resolve=r);}});const s=add(service);const pending=service.refresh('personal',s.id);
+ let resolve,signal;const {service}=fixture(t,{collect:async(_s,opts)=>{signal=opts.signal;return new Promise(r=>resolve=r);}});const s=add(service);const pending=service.refresh('personal',s.id);await new Promise(setImmediate);
  assert.equal(service.list('personal')[0].busy,true);service.change('personal',s.id,{paused:true});assert.equal(signal.aborted,true);resolve({cache:{},items:[normalized()]});await pending;
  assert.equal(service.get('personal',s.id).paused,true);assert.equal(service.get('personal',s.id).items.length,0);assert.equal(service.list('personal')[0].busy,false);await assert.rejects(service.refresh('personal',s.id),/Resume/);
 });
 test('duplicate in-flight refresh coalesces; dispose aborts without writing results',async t=>{
- let count=0,resolve,signal;const {service,file}=fixture(t,{collect:async(_s,opts)=>{count++;signal=opts.signal;return new Promise(r=>resolve=r);}});const s=add(service);const bytes=fs.readFileSync(file,'utf8');const pending=service.refresh('personal',s.id);await service.refresh('personal',s.id);assert.equal(count,1);
+ let count=0,resolve,signal;const {service,file}=fixture(t,{collect:async(_s,opts)=>{count++;signal=opts.signal;return new Promise(r=>resolve=r);}});const s=add(service);const bytes=fs.readFileSync(file,'utf8');const pending=service.refresh('personal',s.id);await new Promise(setImmediate);await service.refresh('personal',s.id);assert.equal(count,1);
  service.dispose();assert.equal(signal.aborted,true);resolve({cache:{},items:[normalized()]});await pending;assert.equal(fs.readFileSync(file,'utf8'),bytes);
 });
 test('tick checks only explicitly enabled due and unpaused sources',async t=>{
@@ -58,9 +58,9 @@ test('tick checks only explicitly enabled due and unpaused sources',async t=>{
 });
 test('GitHub collector follows all pages and revalidates ETags without cookies or redirects',async()=>{
  const source={...sourceFor('https://github.com/example/project'),cache:{}};const first=source.endpoint,second=first+'&page=2',requests=[];
- const result=await githubCollect(source,{fetcher:async(url,options)=>{requests.push({url,options});return url===first?response([row(1)],{etag:'page1',link:`<${second}>; rel="next"`}):response([row(2)],{etag:'page2'});}});
- assert.deepEqual(result.items.map(i=>i.id),['1','2']);assert.equal(requests.length,2);for(const {options}of requests){assert.equal(options.redirect,'error');assert.equal(options.credentials,'omit');assert.equal(options.headers.Authorization,undefined);}
- source.cache=result.cache;const cached=await githubCollect(source,{fetcher:async(url,options)=>{assert.equal(options.headers['If-None-Match'],url===first?'page1':'page2');return response(null,{},304);}});assert.deepEqual(cached,result);
+ const result=await githubCollect(source,{now:()=>1000,fetcher:async(url,options)=>{requests.push({url,options});if(url.includes('/tags?'))return response([],{etag:'tags'});return url===first?response([row(1)],{etag:'page1',link:`<${second}>; rel="next"`}):response([row(2)],{etag:'page2'});}});
+ assert.deepEqual(result.items.map(i=>i.id),['1','2']);assert.equal(requests.length,3);for(const {options}of requests){assert.equal(options.redirect,'error');assert.equal(options.credentials,'omit');assert.equal(options.headers.Authorization,undefined);}
+ source.cache=result.cache;const cached=await githubCollect(source,{now:()=>1000,fetcher:async(url,options)=>{assert.equal(options.headers['If-None-Match'],url===first?'page1':url.includes('/tags?')?'tags':'page2');return response(null,{},304);}});assert.deepEqual(cached,result);
 });
 test('pagination blocks cross-origin/local network and changed paths before issuing the unsafe request',async()=>{
  for(const next of ['http://127.0.0.1/private','https://evil.test/path','https://api.github.com/user','https://api.github.com:443@127.0.0.1/path']){
@@ -112,10 +112,60 @@ test('all follow mutation and collection entry points enforce source ownership',
 test('overlapping scheduler ticks never refresh an already refreshed later source from a stale snapshot',async t=>{
  let unblock;const calls=[];const {service}=fixture(t,{collect:async source=>{calls.push(source.url);if(source.url.endsWith('/first'))await new Promise(resolve=>unblock=resolve);return{cache:{},items:[]};}});
  add(service,'personal',{url:'https://github.com/example/first',automatic:true});add(service,'personal',{url:'https://github.com/example/second',automatic:true});
- const firstTick=service.tick();await service.tick();unblock();await firstTick;assert.equal(calls.filter(url=>url.endsWith('/second')).length,1);
+ const firstTick=service.tick();await new Promise(setImmediate);await service.tick();unblock();await firstTick;assert.equal(calls.filter(url=>url.endsWith('/second')).length,1);
 });
 test('timeout is a visible failed attempt, not a silent unchanged or successful check',async t=>{
  t.mock.timers.enable({apis:['setTimeout']});
- const {service}=fixture(t,{collect:async(_source,{signal})=>new Promise((_resolve,reject)=>signal.addEventListener('abort',()=>reject(new Error('aborted')),{once:true}))});const source=add(service);const pending=service.refresh('personal',source.id);t.mock.timers.tick(60000);await pending;
+ const {service}=fixture(t,{collect:async(_source,{signal})=>new Promise((_resolve,reject)=>signal.addEventListener('abort',()=>reject(new Error('aborted')),{once:true}))});const source=add(service);const pending=service.refresh('personal',source.id);await new Promise(setImmediate);t.mock.timers.tick(60000);await pending;
  const saved=service.get('personal',source.id);assert.match(saved.error,/timed out/);assert.equal(saved.lastAttempt,1000);assert.equal(saved.lastSuccess,0);assert.equal(saved.nextCheck,1000+INTERVAL);assert.equal(service.list('personal')[0].busy,false);
+});
+const tag=(name='v1',sha='a'.repeat(40))=>({name,commit:{sha}});
+test('project collects every releases and tags page, tag names stay stable and have no invented date',async()=>{
+ const source={...sourceFor('https://github.com/example/project'),cache:{}};const tags=source.endpoint.replace('/releases?','/tags?'),second=tags+'&page=2';const called=[];
+ const result=await githubCollect(source,{now:()=>1000,fetcher:async address=>{called.push(address);return address===source.endpoint?response([row()]):address===tags?response([tag('feature/a')],{link:`<${second}>; rel="next"`}):response([tag('v2')]);}});
+ assert.equal(called.length,3);assert.equal(result.items.length,3);assert.equal(result.items[1].id,'tag:feature/a');assert.equal(result.items[1].url,'https://github.com/example/project/tree/feature%2Fa');assert.equal(result.items[1].publishedAt,'');assert.equal(result.items[1].commit,'a'.repeat(40));
+});
+test('moved tag becomes unread without duplicate identity and failure on tags retains entire last-good check',async t=>{
+ let sha='a'.repeat(40),fail=false;const {service,setTime}=fixture(t,{collect:(source,options)=>githubCollect(source,{...options,fetcher:async address=>address.includes('/releases?')?response([row()]):fail?response(null,{},500):response([tag('v1',sha)])})});const s=add(service);await service.refresh('personal',s.id);service.change('personal',s.id,{read:true});
+ sha='b'.repeat(40);setTime(2000);await service.refresh('personal',s.id);let saved=service.get('personal',s.id);assert.equal(saved.items.length,2);assert.equal(saved.items.find(i=>i.id==='tag:v1').read,false);assert.equal(saved.items.find(i=>i.id==='tag:v1').commit,sha);assert.equal(saved.items[0].read,true);
+ fail=true;setTime(3000);await service.refresh('personal',s.id);saved=service.get('personal',s.id);assert.equal(saved.lastSuccess,2000);assert.equal(saved.items.length,2);assert.match(saved.error,/500/);
+});
+test('provider timing parses polling interval, Retry-After seconds/date and rate reset',()=>{
+ const now=1700000000000;
+ assert.deepEqual(serverTiming(response([],{ 'x-poll-interval':'9000','retry-after':'120','x-ratelimit-remaining':'0','x-ratelimit-reset':String(now/1000+500)}),now),{notBefore:now+9000000,githubNotBefore:now+501000});
+ assert.equal(serverTiming(response([],{ 'retry-after':new Date(now+600000).toUTCString()}),now).githubNotBefore,now+600000);
+ assert.equal(serverTiming(response([],{ 'retry-after':'bad','x-poll-interval':'Infinity','x-ratelimit-reset':'99999999999999999999','x-ratelimit-remaining':'0'}),now).githubNotBefore,0);
+});
+test('304 respects polling and shared cooldown headers and does not request later endpoints after pause',async()=>{
+ const source={...sourceFor('https://github.com/example'),cache:{}};source.cache[source.endpoint]={etag:'old',next:null,items:[normalized()]};
+ const result=await githubCollect(source,{now:()=>1000,fetcher:async()=>response(null,{'x-poll-interval':'7200','retry-after':'60'},304)});assert.equal(result.notBefore,7201000);assert.equal(result.githubNotBefore,61000);assert.equal(result.items.length,1);
+ const project={...sourceFor('https://github.com/example/project'),cache:{}};let calls=0;
+ await assert.rejects(githubCollect(project,{now:()=>1000,fetcher:async()=>{calls++;return response([row()],{'retry-after':'60'});}}),error=>error.retryAt===61000);assert.equal(calls,1);
+});
+test('shared cooldown survives restart and suppresses checks for a different source until expiry',async t=>{
+ let calls=0;const {service,reopen,setTime}=fixture(t,{collect:async()=>{calls++;const error=new Error('rate limited');error.retryAt=5000000;throw error;}});const a=add(service),b=add(service,'work',{url:'https://github.com/other/project'});
+ await service.refresh('personal',a.id);const restarted=reopen();await restarted.refresh('work',b.id);assert.equal(calls,1);assert.equal(restarted.list('work')[0].providerNotBefore,5000000);setTime(5000001);await restarted.refresh('work',b.id);assert.equal(calls,2);
+});
+test('queued distinct sources never overlap and apply first response cooldown before next request',async t=>{
+ let release;const calls=[];let active=0,maxActive=0;const {service}=fixture(t,{collect:async source=>{calls.push(source.url);active++;maxActive=Math.max(maxActive,active);await new Promise(resolve=>release=resolve);active--;return{cache:{},items:[],githubNotBefore:5000000};}});const a=add(service),b=add(service,'work',{url:'https://github.com/other/project'});
+ const first=service.refresh('personal',a.id);await new Promise(setImmediate);const second=service.refresh('work',b.id);await new Promise(setImmediate);assert.equal(calls.length,1);release();await first;await new Promise(setImmediate);
+ if(calls.length>1)release();await second;assert.equal(maxActive,1);assert.equal(calls.length,1,'queued check must honor preceding source provider cooldown');
+});
+test('freshness separates never checked, checked, overdue and failed',async t=>{
+ let fail=false;const {service,setTime}=fixture(t,{collect:async()=>{if(fail)throw new Error('bad');return{cache:{},items:[]};}});const source=add(service);assert.equal(service.list('personal')[0].freshness,'unchecked');await service.refresh('personal',source.id);assert.equal(service.list('personal')[0].freshness,'checked');setTime(1000+INTERVAL);assert.equal(service.list('personal')[0].freshness,'overdue');fail=true;await service.refresh('personal',source.id);assert.equal(service.list('personal')[0].freshness,'failed');
+});
+test('source polling pause does not become a provider-wide pause for unrelated sources',async t=>{
+ const calls=[];const {service}=fixture(t,{collect:async s=>{calls.push(s.id);return{cache:{},items:[],notBefore:5000000};}});const a=add(service),b=add(service,'work',{url:'https://github.com/other/project'});
+ await service.refresh('personal',a.id);await service.refresh('personal',a.id);assert.equal(calls.length,1);await service.refresh('work',b.id);assert.equal(calls.length,2);
+});
+test('collector preserves timing guidance when later response parsing fails',async()=>{
+ const source={...sourceFor('https://github.com/example/project'),cache:{}};
+ await assert.rejects(githubCollect(source,{now:()=>1000,fetcher:async()=>response({malformed:true},{'x-poll-interval':'7200','retry-after':'90'})}),error=>error.sourceNotBefore===7201000&&error.retryAt===91000);
+});
+test('first failed check has failed freshness, not never-attempted freshness',async t=>{
+ const {service}=fixture(t,{collect:async()=>{throw new Error('offline');}});const source=add(service);await service.refresh('personal',source.id);assert.equal(service.list('personal')[0].freshness,'failed');assert.equal(service.get('personal',source.id).lastSuccess,0);
+});
+test('queued check honors prior source error cooldown before any network request',async t=>{
+ let unblock;let calls=0;const {service}=fixture(t,{collect:async()=>{calls++;await new Promise(resolve=>unblock=resolve);const error=new Error('rate limited');error.retryAt=5000000;throw error;}});const a=add(service),b=add(service,'work',{url:'https://github.com/other/project'});
+ const first=service.refresh('personal',a.id);await new Promise(setImmediate);const second=service.refresh('work',b.id);unblock();await first;await new Promise(setImmediate);if(calls>1)unblock();await second;assert.equal(calls,1);
 });

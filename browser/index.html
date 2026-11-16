@@ -155,7 +155,7 @@
   <label><input name="automatic" type="checkbox">Check public GitHub updates hourly while Noxviola is open</label>
   <button>Follow source</button>
  </form>
- <p class="subtle">GitHub projects: published releases. GitHub creators: public repositories and their latest activity. Other HTTPS sources are saved for manual checking, not automatically scraped. Checks use GitHub’s public API without your website cookies; no assets are downloaded or executed. Rate/access failures stay visible.</p>
+ <p class="subtle">GitHub projects: public releases and current Git tags. GitHub creators: public owned repositories and their latest reported activity. These are periodic snapshots, not a complete history: intermediate changes, deleted tags and private activity may be missed. Other HTTPS sources are saved for manual checking, not automatically scraped. Checks use GitHub’s public API without your website cookies; no assets are downloaded or executed. Rate/access failures stay visible.</p>
  <div class="controls"><input id="follow-search" type="search" aria-label="Search following" placeholder="Find creators, projects or updates"><label>Show<select id="follow-filter"><option value="all">All follows</option><option value="unread">With unread updates</option><option value="creator">Creators</option><option value="project">Projects</option><option value="paused">Paused</option></select></label></div>
  <p id="follow-count" role="status" aria-live="polite"></p><div id="follow-items" class="follow-grid"></div>
 </section>

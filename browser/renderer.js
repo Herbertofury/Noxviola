@@ -5,7 +5,7 @@ const api = window.browser;
 let currentState = {profiles:[],tabs:[],preferences:{},currentIdentity:'personal',panel:null};
 let vaultItems = [], accountItems = [], extensionData = {items:[],profiles:[],busy:false};
 let permissionData = {items:[]}, downloadItems = [], capabilityData = null, extensionPreview = null;
-let followData={items:[]},followDraftIdentity=null;
+let followData={items:[]},followDraftIdentity=null,followDeadlineTimer;
 let historyData={items:[]},bookmarkData={tree:[]},workspaceData={items:[],groups:[]},resourceData=null,bookmarkFolder=null,extensionActions=[];
 let settingsDirty=false,historySettingsDirty=false;
 let bookmarkDraftIdentity=null,bookmarkMoveIdentity=null,historyDraftIdentity=null;
@@ -702,6 +702,9 @@ $('capability-search').oninput=renderCapabilities;$('capability-status').onchang
 api.command('state').then(renderState).catch(error=>announce(error.message));
 
 function renderFollows(){
+  clearTimeout(followDeadlineTimer);
+  const now=Date.now(),deadlines=(followData.items||[]).flatMap(source=>[source.providerNotBefore,source.lastSuccess?source.nextCheck:0]).filter(value=>Number.isFinite(value)&&value>now);
+  if(currentState.panel==='following'&&deadlines.length)followDeadlineTimer=setTimeout(()=>{if(currentState.panel==='following')renderFollows();},Math.min(2147483647,Math.min(...deadlines)-now+20));
   errorMessage('follow-error',followData.error);$('follow-recover').hidden=!followData.recoveryAvailable;
   $('follow-identity').textContent=`Following for ${identityName(followData.identity||currentState.currentIdentity)}.${followDraftIdentity?` Unsaved follow will be added to ${identityName(followDraftIdentity)}.`:''} Pausing keeps saved updates; automatic checks stop when the browser closes.`;
   const query=$('follow-search').value.toLocaleLowerCase(),filter=$('follow-filter').value;
@@ -709,19 +712,22 @@ function renderFollows(){
   $('follow-count').textContent=`${sources.length} sources · ${(followData.items||[]).reduce((n,s)=>n+s.items.filter(i=>!i.read).length,0)} unread updates`;
   paintList($('follow-items'),sources,source=>{
     const card=node('article',undefined,'follow-card'),key={id:source.id,identity:source.identity};
-    card.append(node('p',`${source.kind.toUpperCase()} · ${source.provider==='manual'?'MANUAL CHECK':source.provider==='github-releases'?'GITHUB RELEASES':'GITHUB PROJECT ACTIVITY'}`,'subtle'),node('h2',source.name),node('p',source.url,'follow-address'));
+    card.append(node('p',`${source.kind.toUpperCase()} · ${source.provider==='manual'?'MANUAL CHECK':source.provider==='github-releases'?'GITHUB RELEASES + TAGS':'GITHUB REPOSITORIES'}`,'subtle'),node('h2',source.name),node('p',source.url,'follow-address'));
     card.append(node('p',source.paused?'Paused · saved updates retained':source.busy?'Checking public source…':source.provider==='manual'?'Saved only · automatic tracking unavailable':source.automatic?'Hourly checks enabled while browser is open':'Manual refresh · automatic checks off','follow-status'));
     card.append(node('p',source.lastSuccess?`Last successful check: ${new Date(source.lastSuccess).toLocaleString()}`:'Not checked yet.','subtle'));
+    if(source.coverage)card.append(node('p',source.coverage,'subtle'));
+    if(source.freshness==='overdue'||(!source.error&&source.lastSuccess&&source.nextCheck<=Date.now()))card.append(node('p','Check overdue: saved data may be stale. The browser may have been closed.','error'));
+    if(source.providerNotBefore>Date.now())card.append(node('p',`Provider requested no checks before ${new Date(source.providerNotBefore).toLocaleString()}.`,'subtle'));
     if(source.error)card.append(node('p',source.error,'error'));
     const actions=node('div',undefined,'card-actions');actions.append(action('Open source','follow-open',key),action(source.paused?'Resume':'Pause','follow-change',{...key,paused:!source.paused}));
     if(source.provider!=='manual'){
-      const refresh=action('Check now','follow-refresh',key);refresh.disabled=source.busy||source.paused;actions.append(refresh,action(source.automatic?'Turn off automatic checks':'Enable hourly checks','follow-change',{...key,automatic:!source.automatic}));
+      const refresh=action('Check now','follow-refresh',key);refresh.disabled=source.busy||source.paused||source.providerNotBefore>Date.now();actions.append(refresh,action(source.automatic?'Turn off automatic checks':'Enable hourly checks','follow-change',{...key,automatic:!source.automatic}));
     }
     if(source.items.length)actions.append(action('Mark all read','follow-change',{...key,read:true}));card.append(actions);
     const updates=node('details');updates.open=source.items.some(item=>!item.read);updates.append(node('summary',`${source.items.filter(i=>!i.read).length} unread · ${source.items.length} saved updates`));
     const list=node('div',undefined,'follow-updates');
     for(const item of [...source.items].sort((a,b)=>b.observedAt-a.observedAt)){
-      const row=node('div',undefined,'follow-update');row.append(node('span',item.read?'Read':'New','follow-badge'),node('strong',item.title),node('small',item.publishedAt?`Source date: ${item.publishedAt}`:'Source date unavailable'),action('Open update','follow-open',{...key,itemId:item.id}));list.append(row);
+      const row=node('div',undefined,'follow-update');row.append(node('span',item.read?'Read':'New','follow-badge'),node('strong',item.title),node('small',item.publishedAt?`Source date: ${item.publishedAt}`:item.kind==='tag'?'Tag date is not provided by the source API.':'Source date unavailable'),node('small',`Observed on this device: ${new Date(item.observedAt).toLocaleString()}`),...(item.commit?[node('small',`Commit: ${item.commit}`)]:[]),...(item.presentInLastSnapshot===false?[node('small','Not returned in last successful snapshot; saved record retained.')]:[]),action('Open update','follow-open',{...key,itemId:item.id}));list.append(row);
     }
     if(!source.items.length)list.append(node('p',source.lastSuccess?'No items returned by the last successful check. This does not establish that no other activity exists.':'Check this source to load its supported updates.','subtle'));
     updates.append(list);card.append(updates);return card;

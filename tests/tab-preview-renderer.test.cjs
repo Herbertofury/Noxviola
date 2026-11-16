@@ -7,7 +7,7 @@ const path = require('node:path');
 const {JSDOM, VirtualConsole} = require('jsdom');
 const html=fs.readFileSync(path.join(__dirname,'../browser/index.html'),'utf8');
 const source=fs.readFileSync(path.join(__dirname,'../browser/renderer.js'),'utf8');
-const methods=['onState','onVault','onVaultDraft','onAccounts','onExtensions','onExtensionPreview','onDownloads','onPermissions','onCapabilities','onNotice','onAddress','onFind','onHistory','onBookmarks','onWorkspaces','onResources','onSettingsPreview','onFindResult','onExtensionActions'];
+const methods=['onState','onVault','onVaultDraft','onAccounts','onExtensions','onExtensionPreview','onDownloads','onPermissions','onCapabilities','onNotice','onAddress','onFind','onHistory','onBookmarks','onFollows','onWorkspaces','onResources','onSettingsPreview','onFindResult','onExtensionActions'];
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 async function setup(t, orientation='horizontal') {
   const state={version:1,profiles:[{id:'personal',name:'Personal'}],preferences:{searchEngine:'google',tabLayout:orientation},activeId:'a',currentIdentity:'personal',activeWorkspaceId:'default',panel:null,closing:false,saveError:'',tabs:[{id:'a',identity:'personal',url:'https://example.test/',title:'Example',workspaceId:'default',live:true}],engine:{}};

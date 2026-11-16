@@ -37,6 +37,27 @@ async function clickVisibleControl(contents, selector, observe) {
   })()`);
 }
 
+async function installImportObservation(contents) {
+  return contents.executeJavaScript(`(() => {
+    const trace=window.__realImportTrace={events:[],dropped:0};
+    const record=event=>{if(trace.events.length<32)trace.events.push({at:performance.now(),...event});else trace.dropped++;};
+    window.browser.onExtensions(value=>record({stage:'extension-state',busy:value.busy,error:value.error,open:value.open}));
+    window.browser.onExtensionPreview(value=>record({stage:'preview-event',received:Boolean(value)}));
+    document.getElementById('extension-import-package').addEventListener('click',event=>record({stage:'import-click',disabled:event.currentTarget.disabled,handler:typeof event.currentTarget.onclick}),{capture:true,passive:true});
+  })()`);
+}
+async function readImportObservation(contents) {
+  return contents.executeJavaScript(`(() => ({
+    notice:document.getElementById('notice')?.textContent||'',
+    error:document.getElementById('extension-error')?.textContent||'',
+    panelHidden:document.getElementById('extensions')?.hidden,
+    previewHidden:document.getElementById('extension-preview')?.hidden,
+    importDisabled:document.getElementById('extension-import-package')?.disabled,
+    importHandler:typeof document.getElementById('extension-import-package')?.onclick,
+    previewReceived:Boolean(window.__realPreview),trace:window.__realImportTrace
+  }))()`);
+}
+
 function ownedPackageId(profile, directory, filesystem = fs, paths = path) {
   try {
     // The ordinary Node realpath walk preserves non-link Windows 8.3 names.
@@ -271,6 +292,7 @@ async function main() {
   }
 
   dialog.showOpenDialog = async () => {
+    (result.pickerObservations ||= []).push({at:new Date().toISOString(),selectedArchiveMatches:selectedArchive===corpus.archive});
     assert.equal(selectedArchive, corpus.archive, 'The only native picker response must be the admitted original package copy');
     selectedArchive = null;
     return { canceled: false, filePaths: [corpus.archive] };
@@ -307,6 +329,7 @@ async function main() {
     result.identity = identity;
     await shell.webContents.executeJavaScript('window.__realPreview=null;void window.browser.onExtensionPreview(value=>{window.__realPreview=value;});window.__realActions=[];void window.browser.onExtensionActions(value=>{window.__realActions=value;});');
     let baseline;
+    await installImportObservation(shell.webContents);
     await check('sandboxed light baseline', async () => {
       fixtureContents = await navigate(`${context.origin}/light?baseline=1`);
       baseline = await sample(fixtureContents, 'baseline');
@@ -321,6 +344,7 @@ async function main() {
       selectedArchive = corpus.archive;
       await click(shell.webContents, '#extension-import-package');
       const preview = await until(() => shell.webContents.executeJavaScript('window.__realPreview'), 'actual ZIP inspection preview');
+      result.importObservation=await readImportObservation(shell.webContents);
       assert.equal(selectedArchive, null);
       assert.equal(preview.name, PIN.name); assert.equal(preview.version, PIN.version); assert.equal(preview.format, 'zip');
       assert.equal(preview.provenance.archiveDigest, PIN.asset.sha256); assert.equal(preview.provenance.codeRewritten, false);
@@ -451,7 +475,7 @@ async function main() {
     try {
       await Promise.race([(async () => {
         result.backgroundDiagnostics = await backgroundDiagnostics();
-        if (shell && !shell.isDestroyed()) { result.failureState = await state(); result.failureExtensions = await command('extension-list'); }
+        if (shell && !shell.isDestroyed()) { result.failureState = await state(); result.failureExtensions = await command('extension-list'); result.importObservation=await readImportObservation(shell.webContents);result.pickerStillPending=selectedArchive!==null;const shellImage=await shell.webContents.capturePage();fs.writeFileSync(path.join(context.output,'real-extension-shell-failure.png'),shellImage.toPNG()); }
         if (fixtureContents && !fixtureContents.isDestroyed()) await sample(fixtureContents, 'failure');
       })(), new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Failure diagnostics exceeded two seconds')), 2000); })]);
     } catch (diagnosticError) { result.diagnosticError = errorDetails(diagnosticError); }
@@ -474,4 +498,4 @@ if (isElectronEntry()) main().catch(error => {
   console.error(error.stack || error);
   require('electron').app.exit(1); // An early failure must not idle until the outer deadline.
 });
-module.exports = { errorDetails, stackDetails, isElectronEntry, clickVisibleControl, ownedPackageId, extensionContextDiagnostics, main };
+module.exports = { errorDetails, stackDetails, isElectronEntry, clickVisibleControl, ownedPackageId, extensionContextDiagnostics, installImportObservation, readImportObservation, main };

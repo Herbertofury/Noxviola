@@ -871,6 +871,27 @@ async function clearPersonalDownloadHistory(expected) {
 async function firstLaunch() {
   const expected = {};
   const initial = await state();
+  await check('native Following form persists a manual source without claiming automatic collection', async () => {
+    await command('following');
+    await until(()=>window.webContents.executeJavaScript("Boolean(document.getElementById('follow-form').getClientRects().length)"),'following form');
+    await window.webContents.executeJavaScript(`(() => { const form=document.getElementById('follow-form');form.elements.namedItem('name').value='Native follow fixture';form.elements.namedItem('url').value='https://example.invalid/project?item=one#details';form.requestSubmit(); })()`);
+    const file=path.join(context.profile,'browser-follows.json');
+    const saved=await until(()=>{if(!fs.existsSync(file))return null;const data=JSON.parse(fs.readFileSync(file,'utf8'));return data.sources.find(row=>row.name==='Native follow fixture')||null;},'durable follow created by actual renderer');
+    assert.equal(saved.identity,initial.currentIdentity);assert.equal(saved.provider,'manual');assert.equal(saved.automatic,false);assert.equal(saved.url,'https://example.invalid/project?item=one#details');
+    await until(()=>window.webContents.executeJavaScript("document.getElementById('follow-items').textContent.includes('automatic tracking unavailable')"),'honest manual-source status');
+    await command('follow-change',{identity:saved.identity,id:saved.id,paused:true});expected.followId=saved.id;
+    await captureShell('synthetic-following',1320,860);
+    await command('panel-close');
+  });
+  await check('native Modrinth follow form saves exact loader and game-version filters without fetching or installing', async () => {
+    await command('following');
+    await until(()=>window.webContents.executeJavaScript("Boolean(document.getElementById('follow-form').getClientRects().length)"),'Modrinth follow form');
+    await window.webContents.executeJavaScript(`(() => {const form=document.getElementById('follow-form');form.elements.namedItem('name').value='Synthetic Modrinth follow';form.elements.namedItem('url').value='https://modrinth.com/mod/sodium';form.elements.namedItem('loader').value='forge';form.elements.namedItem('gameVersion').value='1.20.1';form.requestSubmit();})()`);
+    const saved=await until(()=>JSON.parse(fs.readFileSync(path.join(context.profile,'browser-follows.json'),'utf8')).sources.find(row=>row.name==='Synthetic Modrinth follow'),'durable native Modrinth compatibility');
+    assert.equal(saved.provider,'modrinth-versions');assert.deepEqual(saved.compatibility,{loader:'forge',gameVersion:'1.20.1'});assert.equal(saved.automatic,false);assert.equal(saved.lastSuccess,0);expected.modrinthFollowId=saved.id;
+    await until(()=>window.webContents.executeJavaScript("document.getElementById('follow-items').textContent.includes('declare') || document.getElementById('follow-items').textContent.includes('declared metadata')"),'explicit metadata-only compatibility scope');
+    await command('panel-close');
+  });
   await assertSpellcheck('fresh-default-before-any-settings-change', true, []);
   await check('capture actual synthetic blank and settings shell at narrow and desktop widths', async () => {
     for (const [width, height] of [[700, 600], [1320, 860]]) await captureShell('synthetic-blank', width, height);
@@ -1188,6 +1209,11 @@ async function firstLaunch() {
 
 async function secondLaunch() {
   const expected = JSON.parse(fs.readFileSync(path.join(context.directory, 'restart-expectations.json'), 'utf8'));
+  await check('follow source and pause choice survive a real process restart', async () => {
+    const data=JSON.parse(fs.readFileSync(path.join(context.profile,'browser-follows.json'),'utf8'));
+    const saved=data.sources.find(row=>row.id===expected.followId);assert.ok(saved);assert.equal(saved.paused,true);assert.equal(saved.automatic,false);assert.equal(saved.provider,'manual');
+    const modrinth=data.sources.find(row=>row.id===expected.modrinthFollowId);assert.ok(modrinth);assert.equal(modrinth.provider,'modrinth-versions');assert.deepEqual(modrinth.compatibility,{loader:'forge',gameVersion:'1.20.1'});assert.equal(modrinth.automatic,false);
+  });
   await check('real process restart restores complete duplicate-preserving tab and identity metadata', async () => {
     const restored = await state();
     assert.deepEqual(restored.tabs.map(({ id, url, identity }) => ({ id, url, identity })), expected.tabs);

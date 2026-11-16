@@ -11,13 +11,13 @@ const APP_FILES = [
   'browser/tab-preview-host.cjs', 'browser/tab-preview-preload.cjs', 'browser/tab-preview.html', 'browser/tab-preview.js', 'browser/tab-preview.css',
   'browser/tab-search-host.cjs', 'browser/tab-search-preload.cjs', 'browser/tab-search.html', 'browser/tab-search.js', 'browser/tab-search.css',
   'browser/sidebar-layout.cjs', 'browser/sidebar-web-panel.cjs',
-  'browser/capabilities.json', 'browser/state.cjs', 'browser/favicons.cjs',
+  'browser/capabilities.json', 'browser/state.cjs', 'browser/favicons.cjs', 'browser/find-session.cjs',
   'browser/storage.cjs', 'browser/session-writer.cjs', 'browser/session-path.cjs',
   'browser/permissions.cjs', 'browser/downloads.cjs', 'browser/extensions.cjs', 'browser/extension-runtime.cjs',
   'browser/extension-api.preload.cjs', 'browser/extension-bridge.cjs', 'browser/extension-policy.cjs',
   'browser/extension-menus.cjs', 'browser/extension-icons.cjs', 'browser/extension-adapter-LICENSE.txt', 'browser/extension-browser-polyfill-LICENSE.txt',
   'browser/preferences.cjs', 'browser/resources.cjs', 'browser/spellcheck.cjs', 'browser/service-store.cjs',
-  'browser/history.cjs', 'browser/bookmarks.cjs', 'browser/workspaces.cjs',
+  'browser/curseforge-follow.cjs', 'browser/modrinth-follow.cjs', 'browser/follows.cjs', 'browser/history.cjs', 'browser/bookmarks.cjs', 'browser/workspaces.cjs',
   'browser/vault.cjs', 'browser/accounts.cjs', 'LICENSE', 'THIRD_PARTY_NOTICES.md',
 ];
 

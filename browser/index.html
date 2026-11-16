@@ -70,6 +70,7 @@
   <button data-command="downloads"><strong>Downloads</strong><span>Progress, pause, resume, cancel and show in folder</span></button>
   <button data-command="permissions"><strong>Site permissions</strong><span>Review and revoke origin-specific decisions</span></button>
   <button data-command="bookmarks"><strong>Bookmarks</strong><span>Folders and saved websites for each identity</span></button>
+  <button data-command="following"><strong>Following</strong><span>Your creators, projects and releases, together</span></button>
   <button data-command="history"><strong>History</strong><span>Search visits and control local recording</span></button>
   <button data-command="workspaces"><strong>Workspaces and groups</strong><span>Organize tabs while keeping their account identities</span></button>
   <button data-command="resources"><strong>Resource monitor</strong><span>Inspect browser processes when you choose</span></button>
@@ -163,6 +164,22 @@
  <details id="bookmark-editor"><summary>Add or edit a bookmark</summary><p id="bookmark-draft-identity" class="subtle"></p><form id="bookmark-form" class="editor"><input name="id" type="hidden"><label>Type<select name="type"><option value="bookmark">Website</option><option value="folder">Folder</option></select></label><label>Title<input name="title" required></label><label>Address<input name="url" type="url" placeholder="https://example.com"></label><label>Folder<select name="parentId" id="bookmark-parent"></select></label><div class="form-actions"><button class="primary">Save bookmark</button><button type="button" id="bookmark-reset">Cancel editing</button></div></form></details>
  <details id="bookmark-move-editor" hidden><summary>Move selected bookmark or folder</summary><form id="bookmark-move-form" class="controls"><input name="id" type="hidden"><select name="parentId" id="bookmark-move-parent" aria-label="Destination folder"></select><button class="primary">Move here</button></form></details>
  <div id="bookmark-items" class="record-list"></div>
+</section>
+<section id="following" class="panel" hidden>
+ <div class="panel-heading"><div><p class="subtle">YOUR WORLD, IN ONE BROWSER</p><h1>Following</h1><p>Keep creators and projects close. Independent, local-first, and built into Noxviola.</p></div><button data-command="panel-close">Back to page</button></div>
+ <p id="follow-error" class="error" hidden></p><button id="follow-recover" data-command="follow-recover" hidden>Restore previous following checkpoint</button>
+ <p id="follow-identity" class="subtle"></p>
+ <form id="follow-form" class="follow-compose">
+  <label>Name<input name="name" required placeholder="Creator or project name"></label>
+  <label>Source URL<input name="url" type="url" required placeholder="https://github.com/creator/project"></label>
+  <label>Type<select name="kind"><option value="project">Project</option><option value="creator">Creator</option></select></label>
+  <label><input name="automatic" type="checkbox">Check supported public updates hourly while Noxviola is open</label>
+  <label>Modrinth loader (optional)<input name="loader" placeholder="e.g. forge"></label><label>Minecraft version (optional)<input name="gameVersion" placeholder="e.g. 1.20.1"></label>
+  <button>Follow source</button>
+ </form>
+ <p class="subtle">GitHub projects: public releases and current Git tags. GitHub creators: public owned repositories and their latest reported activity. These are periodic snapshots, not a complete history: intermediate changes, deleted tags and private activity may be missed. Modrinth project links collect public per-version metadata, not project-level compatibility aggregates; changelogs and files are not downloaded. Other HTTPS sources are saved for manual checking, not automatically scraped. Checks use GitHub’s public API without your website cookies; no assets are downloaded or executed. Rate/access failures stay visible.</p>
+ <div class="controls"><input id="follow-search" type="search" aria-label="Search following" placeholder="Find creators, projects or updates"><label>Show<select id="follow-filter"><option value="all">All follows</option><option value="unread">With unread updates</option><option value="creator">Creators</option><option value="project">Projects</option><option value="paused">Paused</option></select></label></div>
+ <p id="follow-count" role="status" aria-live="polite"></p><div id="follow-items" class="follow-grid"></div>
 </section>
 <section id="history" class="panel" hidden>
  <div class="panel-heading"><div><h1>History</h1><p id="history-identity"></p></div><button data-command="panel-close">Back to page</button></div>

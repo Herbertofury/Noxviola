@@ -1,0 +1,26 @@
+{
+  "checkedAt": "2026-11-16T15:33:50.585Z",
+  "source": "https://github.com/finktheartist/sakuga-vfx",
+  "responses": [
+    {
+      "endpoint": "/repos/finktheartist/sakuga-vfx/releases",
+      "status": 200
+    },
+    {
+      "endpoint": "/repos/finktheartist/sakuga-vfx/tags",
+      "status": 200
+    },
+    {
+      "endpoint": "/repos/finktheartist/sakuga-vfx/releases",
+      "status": 304
+    },
+    {
+      "endpoint": "/repos/finktheartist/sakuga-vfx/tags",
+      "status": 304
+    }
+  ],
+  "releases": 0,
+  "tags": 0,
+  "sameItems": true,
+  "disclaimer": "Counts establish only the returned public snapshot, not complete project history."
+}

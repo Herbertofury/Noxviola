@@ -11,7 +11,7 @@ const {JSDOM, VirtualConsole} = require('jsdom');
 const html = fs.readFileSync(path.join(__dirname, '../browser/index.html'), 'utf8');
 const source = fs.readFileSync(path.join(__dirname, '../browser/renderer.js'), 'utf8');
 const inventory = JSON.parse(fs.readFileSync(path.join(__dirname, '../browser/capabilities.json'), 'utf8'));
-const ipcMethods = ['onState', 'onVault', 'onVaultDraft', 'onAccounts', 'onExtensions', 'onExtensionPreview', 'onDownloads', 'onPermissions', 'onCapabilities', 'onNotice', 'onAddress', 'onFind', 'onHistory','onBookmarks','onWorkspaces','onResources','onSettingsPreview','onFindResult','onExtensionActions'];
+const ipcMethods = ['onState', 'onVault', 'onVaultDraft', 'onAccounts', 'onExtensions', 'onExtensionPreview', 'onDownloads', 'onPermissions', 'onCapabilities', 'onNotice', 'onAddress', 'onFind', 'onHistory','onBookmarks','onFollows','onWorkspaces','onResources','onSettingsPreview','onFindResult','onExtensionActions'];
 const profiles = [{id: 'personal', name: 'Personal'}, {id: 'work', name: 'Work'}];
 const copy = value => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
 const tick = () => new Promise(resolve => setImmediate(resolve));

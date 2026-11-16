@@ -12,7 +12,7 @@ const html = fs.readFileSync(path.join(__dirname, '../browser/index.html'), 'utf
 const source = fs.readFileSync(path.join(__dirname, '../browser/renderer.js'), 'utf8');
 const subscriptions = ['onState','onVault','onVaultDraft','onAccounts','onExtensions','onExtensionPreview',
   'onDownloads','onPermissions','onCapabilities','onNotice','onAddress','onFind','onHistory','onBookmarks',
-  'onWorkspaces','onResources','onSettingsPreview','onFindResult','onExtensionActions'];
+  'onFollows','onWorkspaces','onResources','onSettingsPreview','onFindResult','onExtensionActions'];
 const profiles = [{id:'personal',name:'Personal'},{id:'work',name:'Work'}];
 const copy = value => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
 const tick = () => new Promise(resolve => setImmediate(resolve));
@@ -345,4 +345,38 @@ test('DOM product: preference controls preserve a dirty draft and apply committe
   assert.equal(h.$('bookmarks-bar').hidden,false);
   assert.equal(field(form,'homePage').value,expected.homePage);
   assert.equal(field(form,'shortcut.focus-address').value,'');
+});
+
+test('following shows honest adapter coverage, last-good errors, scoped commands and full update list',async t=>{
+ const h=await harness(t,{initial:state({panel:'following'})});
+ const source={id:'repo',identity:'personal',name:'<script>creator</script>',kind:'project',url:'https://github.com/example/project',provider:'github-releases',automatic:false,paused:false,busy:false,lastSuccess:1700000000000,error:'HTTP 429: last-good data kept',items:[{id:'one',title:'<img src=x onerror=alert(1)>',url:'https://github.com/example/project/releases/tag/v1',read:false,observedAt:1,publishedAt:'2026-11-16'}]};
+ h.emit('onFollows',{identity:'personal',items:[source,{...source,id:'manual',name:'Manual creator',kind:'creator',provider:'manual',items:[],lastSuccess:0,error:''}]});await painted(h,'follow-items');
+ assert.match(h.$('follow-items').textContent,/HTTP 429/);assert.match(h.$('follow-items').textContent,/automatic tracking unavailable/);assert.equal(h.$('follow-items').querySelector('img'),null);
+ const cards=h.$('follow-items').querySelectorAll('article');assert.equal(cards.length,2);
+ const refresh=[...cards[0].querySelectorAll('button')].find(b=>b.textContent==='Check now');refresh.click();await tick();assert.deepEqual(h.calls.at(-1),{name:'follow-refresh',value:{id:'repo',identity:'personal'}});
+ assert.equal([...cards[1].querySelectorAll('button')].some(b=>b.textContent==='Check now'),false);
+ h.select(h.$('follow-filter'),'unread');await painted(h,'follow-items');assert.equal(h.$('follow-items').querySelectorAll('article').length,1);
+ h.input(h.$('follow-search'),'no-match');await painted(h,'follow-items');assert.equal(h.$('follow-items').querySelectorAll('article').length,0);
+});
+
+test('following add preserves form after failure and carries the displayed browser identity',async t=>{
+ let fail=true;const h=await harness(t,{initial:state({panel:'following'}),command:async name=>{if(name==='follow-add'&&fail)throw new Error('Storage unavailable');}});
+ h.emit('onFollows',{identity:'work',items:[]});const form=h.$('follow-form');h.input(field(form,'name'),'Project');h.input(field(form,'url'),'https://github.com/test/project');h.check(field(form,'automatic'),true);
+ h.submit(form);await tick();assert.equal(field(form,'name').value,'Project');assert.match(h.$('notice').textContent,/Storage unavailable/);assert.equal(h.calls.at(-1).value.identity,'work');
+ fail=false;h.submit(form);await tick();assert.equal(field(form,'name').value,'');
+});
+
+test('following distinguishes snapshot gaps, source dates and provider pauses without promising real-time history',async t=>{
+ const h=await harness(t,{initial:state({panel:'following'})});
+ h.emit('onFollows',{identity:'personal',items:[{id:'repo',identity:'personal',name:'Tagged project',kind:'project',url:'https://github.com/example/project',provider:'github-releases',automatic:true,paused:false,busy:false,lastSuccess:1700000000000,error:'',freshness:'overdue',coverage:'Public releases and current tags, not a complete change history.',providerNotBefore:Date.now()+3600000,items:[{id:'tag:v1',title:'Tag v1',kind:'tag',commit:'a'.repeat(40),publishedAt:'',observedAt:1700000000000,read:false,presentInLastSnapshot:false}]}]});
+ await painted(h,'follow-items');const text=h.$('follow-items').textContent;
+ assert.match(text,/Check overdue/);assert.match(text,/not a complete change history/);assert.match(text,/Tag date is not provided/);assert.match(text,/Not returned in last successful snapshot/);assert.match(text,/Observed on this device/);
+ assert.equal([...h.$('follow-items').querySelectorAll('button')].find(b=>b.textContent==='Check now').disabled,true);
+});
+
+test('Modrinth following shows same-version declarations and saves identity-scoped compatibility without changing the source',async t=>{
+ const h=await harness(t,{initial:state({panel:'following'})});
+ h.emit('onFollows',{identity:'work',items:[{id:'mod',identity:'work',name:'Versioned mod',kind:'project',provider:'modrinth-versions',url:'https://modrinth.com/mod/example',lastSuccess:1000,compatibility:{loader:'forge',gameVersion:'1.20.1'},matchingVersionIds:[],items:[{id:'modrinth:version1',kind:'modrinth-version',title:'Forge version',versionNumber:'1.0',releaseType:'release',loaders:['forge'],gameVersions:['1.19.2'],observedAt:1000,publishedAt:'2026-11-16',read:false},{id:'modrinth:version2',kind:'modrinth-version',title:'Fabric version',versionNumber:'2.0',releaseType:'beta',loaders:['fabric'],gameVersions:['1.20.1'],observedAt:1000,publishedAt:'2026-11-16',read:false}]}]});
+ await painted(h,'follow-items');assert.match(h.$('follow-items').textContent,/0 versions in the last successful snapshot match both saved filters/);assert.match(h.$('follow-items').textContent,/Loaders: forge · Minecraft: 1.19.2/);assert.match(h.$('follow-items').textContent,/Loaders: fabric · Minecraft: 1.20.1/);
+ const form=h.$('follow-items').querySelector('form'),inputs=form.querySelectorAll('input');h.input(inputs[0],'fabric');h.submit(form);await tick();assert.deepEqual(h.calls.at(-1),{name:'follow-change',value:{id:'mod',identity:'work',compatibility:{loader:'fabric',gameVersion:'1.20.1'}}});
 });

@@ -241,6 +241,16 @@ function createPageTools({ window, context, command, state, navigate, activate, 
           const cleared = (await view.webContents.capturePage()).toBitmap();
           assert.deepEqual(cleared, before, 'Clearing find must remove its actual rendered page highlighting');
           evidence.find.clearedPixelsSha256 = sha256(cleared);
+          // Replay a captured native result to deterministically model delayed
+          // delivery after stopFindInPage, exercising production event fencing.
+          const stale = nativeEvents.find(item => item.finalUpdate && item.matches === 3);
+          assert.ok(stale);
+          const delivered = (await observations('find')).length;
+          view.webContents.emit('found-in-page', {}, stale);
+          await frame(window.webContents);
+          assert.equal((await observations('find')).length, delivered, 'Cleared requests must not republish stale native results');
+          assert.equal(await window.webContents.executeJavaScript("document.getElementById('find-count').textContent"), '');
+          evidence.find.staleResultReplayRejected = true;
         } finally { view.webContents.removeListener('found-in-page', listener); }
       });
       await check('real page PDF and visible PNG controls export complete files and preserve declined existing destinations', async () => {

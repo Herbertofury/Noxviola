@@ -35,7 +35,7 @@ const ENUMS = Object.freeze({
   sidebarSide:['left','right'],
 });
 const DEFAULTS = Object.freeze({searchEngine:'duckduckgo',tabLayout:'horizontal',theme:'dark',accent:'violet',density:'comfortable',tabSearchPosition:'left',tabSearchStyle:'detailed',
-  sidebarVisible:true,sidebarExpanded:false,sidebarSide:'left',sidebarWidth:320,sidebarActive:'bookmarks',sidebarApps:[],sidebarTools:[{id:'tabs',visible:true},{id:'bookmarks',visible:true},{id:'history',visible:true},{id:'downloads',visible:true}],
+  sidebarVisible:true,sidebarExpanded:false,sidebarRailExpanded:false,sidebarSide:'left',sidebarWidth:320,sidebarActive:'bookmarks',sidebarApps:[],sidebarTools:[{id:'tabs',visible:true},{id:'bookmarks',visible:true},{id:'history',visible:true},{id:'downloads',visible:true}],
   homePage:'about:blank',customSearchURL:'https://duckduckgo.com/?q={searchTerms}',showBookmarksBar:false,spellcheckEnabled:true,
   toolbar:{library:true,extensions:true,split:true,home:true},shortcuts:{}});
 const PREFERENCE_KEYS = Object.freeze(Object.keys(DEFAULTS));
@@ -94,7 +94,7 @@ function preferences(raw={}, {strict=true,platform=process.platform}={}) {
   if(typeof result.showBookmarksBar!=='boolean')fail('The bookmarks bar setting must be true or false.');
   if(result.spellcheckEnabled===undefined)result.spellcheckEnabled=true;
   if(typeof result.spellcheckEnabled!=='boolean')fail('Spellcheck must be explicitly enabled or disabled.');
-  for(const name of ['sidebarVisible','sidebarExpanded']){if(result[name]===undefined)result[name]=DEFAULTS[name];if(typeof result[name]!=='boolean')fail(`Saved ${name} must be true or false.`);}
+  for(const name of ['sidebarVisible','sidebarExpanded','sidebarRailExpanded']){if(result[name]===undefined)result[name]=DEFAULTS[name];if(typeof result[name]!=='boolean')fail(`Saved ${name} must be true or false.`);}
   if(result.sidebarWidth===undefined)result.sidebarWidth=DEFAULTS.sidebarWidth;
   if(!Number.isInteger(result.sidebarWidth)||result.sidebarWidth<180||result.sidebarWidth>1600)fail('Sidebar width must be an integer from 180 to 1600 pixels.');
   if(result.sidebarApps===undefined)result.sidebarApps=[];

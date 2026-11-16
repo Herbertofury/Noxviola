@@ -2,9 +2,10 @@
 // All measurements are device-independent pixels. The side panel and vertical
 // tabs each reserve their own space so they cannot overlap one another or a
 // split page. The panel shrinks only to fit the actual window.
-function sidebarLayout({width,height,chromeHeight,verticalTabs,visible,expanded,side,panelWidth,progress=1}) {
+function sidebarLayout({width,height,chromeHeight,verticalTabs,visible,expanded,side,panelWidth,progress=1,railProgress=0}) {
   width=Math.max(0,Math.floor(width));height=Math.max(0,Math.floor(height));chromeHeight=Math.max(0,Math.min(height,Math.floor(chromeHeight)));
-  const rail=visible?48:0, tabs=verticalTabs?210:0;
+  const tabs=verticalTabs?210:0, wideRail=Math.min(200,Math.max(48,width-tabs-240));
+  const rail=visible?Math.round(48+(wideRail-48)*Math.max(0,Math.min(1,railProgress))):0;
   const available=Math.max(0,width-rail-tabs-240);
   const desired=visible&&expanded?Math.min(Math.max(0,panelWidth),available):0;
   const panel=Math.round(desired*Math.max(0,Math.min(1,progress))),leftSide=side!=='right';

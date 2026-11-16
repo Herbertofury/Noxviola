@@ -6,3 +6,7 @@ test('rail, panel, vertical tabs and page reserve distinct space on either side'
 test('narrow windows fit the panel and animation can reverse without negative page bounds',()=>{
  const base={width:700,height:500,chromeHeight:40,verticalTabs:true,visible:true,expanded:true,side:'left',panelWidth:600};const full=sidebarLayout(base),half=sidebarLayout({...base,progress:.5}),closed=sidebarLayout({...base,progress:0});assert.equal(full.panel,202);assert.equal(full.pageWidth,240);assert.equal(half.panel,101);assert.equal(closed.panel,0);assert.equal(sidebarLayout({...base,visible:false}).rail,0);
 });
+test('expanded launcher reserves space on both sides, interpolates and fits narrow windows',()=>{
+ for(const side of ['left','right']){const base={width:1200,height:800,chromeHeight:76,verticalTabs:true,visible:true,expanded:true,side,panelWidth:320};const wide=sidebarLayout({...base,railProgress:1}),half=sidebarLayout({...base,railProgress:.5});assert.equal(wide.rail,200);assert.equal(wide.pageWidth,470);assert.equal(half.rail,124);assert.equal(half.pageWidth,546);if(side==='left'){assert.equal(wide.panelX,200);assert.equal(wide.tabX,520);}else{assert.equal(wide.railX,1000);assert.equal(wide.panelX,680);assert.equal(wide.pageRight,520);}}
+ const narrow=sidebarLayout({width:550,height:500,chromeHeight:40,verticalTabs:true,visible:true,expanded:true,panelWidth:320,railProgress:1});assert.equal(narrow.rail,100);assert.equal(narrow.pageWidth,240);assert.equal(narrow.panel,0);
+});

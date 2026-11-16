@@ -37,7 +37,7 @@ let accountFile, accounts = [], accountError = '', accountRecovery = null;
 let permissionOpening = null, extensionBusy = false;
 let resolveIdentitySession, history, bookmarks, workspaces, follows, followTimer, resourceMonitor, extensionBridge, spellcheck;
 let activeWorkspaceId = 'default', nextRuntimeTabId = 1, preferencePreview = null;
-let sidebarProgress=0,sidebarTimer=null;
+let sidebarProgress=0,sidebarRailProgress=0,sidebarTimer=null;
 const runtimeTabs = new Map(), nativeTabs = new Map(), sessionTargets = new Map(), browserEvents = new EventEmitter();
 const configuredSessions = new Set(), identityInitializations = new Map(), extensionWindows = new Map(), pendingOperations = new Set();
 const SIDEBAR = 210;
@@ -124,7 +124,7 @@ function recordHistory(tab,url) {
 }
 function currentSidebarGeometry(){
   const [width,height]=win&&!win.isDestroyed()?win.getContentSize():[1320,860];
-  return sidebarLayout({width,height,chromeHeight:chromeHeight(),verticalTabs:preferences.tabLayout==='vertical',visible:preferences.sidebarVisible||sidebarProgress>0,expanded:sidebarProgress>0,side:preferences.sidebarSide,panelWidth:preferences.sidebarWidth,progress:sidebarProgress});
+  return sidebarLayout({width,height,chromeHeight:chromeHeight(),verticalTabs:preferences.tabLayout==='vertical',visible:preferences.sidebarVisible||sidebarProgress>0,expanded:sidebarProgress>0,side:preferences.sidebarSide,panelWidth:preferences.sidebarWidth,progress:sidebarProgress,railProgress:sidebarRailProgress});
 }
 function syncSidebarWeb(){
   const appEntry=preferences.sidebarActive.startsWith('app:')?preferences.sidebarApps.find(item=>item.id===preferences.sidebarActive.slice(4)):null;
@@ -139,10 +139,10 @@ function changeSidebar(patch){
   preferences=preferenceStore.applyPreferences(preferences,patch);syncSidebarWeb();animateSidebar();publish(false);publishHistory();publishBookmarks();queueSave();
 }
 function animateSidebar(){
-  clearTimeout(sidebarTimer);const target=preferences.sidebarVisible&&preferences.sidebarExpanded?1:0,from=sidebarProgress;
+  clearTimeout(sidebarTimer);const target=preferences.sidebarVisible&&preferences.sidebarExpanded?1:0,from=sidebarProgress,railTarget=preferences.sidebarRailExpanded?1:0,railFrom=sidebarRailProgress;
   let reduced=false;try{reduced=systemPreferences.getAnimationSettings().prefersReducedMotion;}catch{}
-  const duration=reduced?0:180*Math.abs(target-from),start=performance.now();
-  const tick=()=>{const t=duration?Math.min(1,(performance.now()-start)/duration):1;sidebarProgress=from+(target-from)*(1-Math.pow(1-t,3));layout();if(t<1)sidebarTimer=setTimeout(tick,8);else{sidebarTimer=null;sidebarProgress=target;layout();}};
+  const duration=reduced?0:180*Math.max(Math.abs(target-from),Math.abs(railTarget-railFrom)),start=performance.now();
+  const tick=()=>{const t=duration?Math.min(1,(performance.now()-start)/duration):1,eased=1-Math.pow(1-t,3);sidebarProgress=from+(target-from)*eased;sidebarRailProgress=railFrom+(railTarget-railFrom)*eased;layout();if(t<1)sidebarTimer=setTimeout(tick,8);else{sidebarTimer=null;sidebarProgress=target;sidebarRailProgress=railTarget;layout();}};
   tick();
 }
 function layout() {
@@ -525,6 +525,7 @@ async function perform(name, value) {
     case 'tab-preview': if (value?.open) {void tabPreview.show(String(value.id||''),value.position).catch(()=>notice('Tab preview is unavailable.'));} else tabPreview.hide(); break;
     case 'search-tabs': {const width=win.getContentSize()[0],right=preferences.tabSearchPosition==='right',anchor=value?.anchor||{x:right?width-180:38,y:0,width:28,height:34,align:right?'right':'left'};tabPreview.hide();tabSearch.show(anchor);break;}
     case 'sidebar-toggle':changeSidebar({sidebarVisible:!preferences.sidebarVisible});break;
+    case 'sidebar-rail-expand':changeSidebar({sidebarRailExpanded:!preferences.sidebarRailExpanded});break;
     case 'sidebar-select':{
       if(typeof value!=='string')throw new Error('Choose a sidebar panel.');
       const closingCurrent=preferences.sidebarVisible&&preferences.sidebarExpanded&&preferences.sidebarActive===value;
@@ -790,7 +791,7 @@ async function start() {
     if (choice.response !== 1) {app.quit();return;}
     restored = {value:recoverState(sessionFile,restored.preview).value};
   }
-  originalSession = restored.value; profiles = originalSession.profiles; preferences = originalSession.preferences;sidebarProgress=preferences.sidebarVisible&&preferences.sidebarExpanded?1:0;
+  originalSession = restored.value; profiles = originalSession.profiles; preferences = originalSession.preferences;sidebarProgress=preferences.sidebarVisible&&preferences.sidebarExpanded?1:0;sidebarRailProgress=preferences.sidebarRailExpanded?1:0;
   spellcheck=new SpellcheckService({enabled:preferences.spellcheckEnabled,canAct:()=>!closing,onError:notice});
   spellcheck.attach(session.defaultSession);
   resolveIdentitySession = createIdentitySessionResolver({session,root:app.getPath('sessionData')});

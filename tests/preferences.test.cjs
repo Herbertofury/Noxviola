@@ -40,7 +40,7 @@ test('tab search settings persist and the new default does not invalidate an exi
 });
 test('sidebar settings preserve custom apps and never export their URLs in appearance presets',()=>{
   const value=preference.preferences({sidebarSide:'right',sidebarWidth:380,sidebarApps:[{id:'chat',name:'Chat',url:'https://example.test/',future:{keep:true}}],sidebarActive:'app:chat'});
-  const saved=preference.applyPreferences(value,{sidebarExpanded:true});assert.deepEqual(saved.sidebarApps,value.sidebarApps);assert.equal(saved.sidebarActive,'app:chat');
+  assert.equal(value.sidebarRailExpanded,false);const saved=preference.applyPreferences(value,{sidebarExpanded:true,sidebarRailExpanded:true});assert.deepEqual(saved.sidebarApps,value.sidebarApps);assert.equal(saved.sidebarActive,'app:chat');assert.equal(preference.preferences(saved).sidebarRailExpanded,true);assert.throws(()=>preference.preferences({...saved,sidebarRailExpanded:'yes'}),/sidebarRailExpanded/);
   const preset=preference.exportPreset(saved);assert.equal(Object.hasOwn(preset.preferences,'sidebarApps'),false);assert.equal(Object.hasOwn(preset.preferences,'sidebarActive'),false);
   assert.throws(()=>preference.preferences({...value,sidebarApps:[...value.sidebarApps,...value.sidebarApps]}),/invalid/);
   assert.throws(()=>preference.preferences({...value,sidebarApps:[{id:'chat',name:'Chat',url:'file:///secret'}]}),/invalid/);

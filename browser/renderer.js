@@ -183,6 +183,8 @@ function updateSidebarGeometry(g){
 function renderSidebarChrome(){
   const pref=currentState.preferences,active=pref.sidebarActive||'bookmarks',apps=pref.sidebarApps||[],tools=pref.sidebarTools||SIDEBAR_TOOLS.map(([id])=>({id,visible:true})),web=active.startsWith('app:');
   document.body.dataset.sidebarSide=pref.sidebarSide||'left';
+  document.body.dataset.sidebarRailExpanded=String(Boolean(pref.sidebarRailExpanded));
+  const expand=$('sidebar-rail-expand'),expandLabel=pref.sidebarRailExpanded?'Collapse sidebar':'Expand sidebar';expand.title=expandLabel;expand.setAttribute('aria-label',expandLabel);expand.setAttribute('aria-pressed',String(Boolean(pref.sidebarRailExpanded)));
   $('sidebar-toggle').setAttribute('aria-pressed',String(pref.sidebarVisible!==false));
   for(const button of $('sidebar-rail').querySelectorAll('[data-sidebar]')){const index=tools.findIndex(item=>item.id===button.dataset.sidebar);button.hidden=index<0||!tools[index].visible;button.style.order=String(index<0?tools.length:index);button.setAttribute('aria-pressed',String(Boolean(pref.sidebarVisible!==false&&pref.sidebarExpanded&&button.dataset.sidebar===active)));}
   $('sidebar-apps').style.order=String(tools.length+1);
@@ -244,7 +246,7 @@ function renderSidebarToolEditor(){
   }));
 }
 api.onSidebarLayout?.(updateSidebarGeometry);api.onSidebarWebState?.(value=>{sidebarWebState=value||{};renderSidebarChrome();});
-$('sidebar-toggle').onclick=()=>run('sidebar-toggle');$('sidebar-close').onclick=()=>run('sidebar-close');$('sidebar-manage').onclick=()=>run('settings');
+$('sidebar-toggle').onclick=()=>run('sidebar-toggle');$('sidebar-rail-expand').onclick=()=>run('sidebar-rail-expand');$('sidebar-close').onclick=()=>run('sidebar-close');$('sidebar-manage').onclick=()=>run('settings');
 for(const control of $('sidebar-rail').querySelectorAll('[data-sidebar]'))control.onclick=()=>run('sidebar-select',control.dataset.sidebar);
 $('sidebar-search').oninput=renderSidebarItems;
 $('sidebar-back').onclick=()=>run('sidebar-web-back');$('sidebar-forward').onclick=()=>run('sidebar-web-forward');$('sidebar-reload').onclick=()=>run('sidebar-web-reload');$('sidebar-mute').onclick=()=>run('sidebar-web-mute',!sidebarWebState.muted);$('sidebar-unload').onclick=()=>run('sidebar-web-unload');
@@ -266,6 +268,7 @@ function renderPreferenceForm(state) {
   const form=$('settings-form'),values={theme:'dark',accent:'violet',density:'comfortable',tabSearchPosition:'left',tabSearchStyle:'detailed',sidebarSide:'left',sidebarWidth:320,sidebarApps:[],sidebarTools:SIDEBAR_TOOLS.map(([id])=>({id,visible:true})),homePage:'about:blank',customSearchURL:'https://duckduckgo.com/?q={searchTerms}',...state.preferences};
   editForm(form,values,['searchEngine','tabLayout','tabSearchPosition','tabSearchStyle','theme','accent','density','sidebarSide','sidebarWidth','homePage','customSearchURL']);
   form.elements.namedItem('sidebarVisible').checked=values.sidebarVisible!==false;
+  form.elements.namedItem('sidebarRailExpanded').checked=Boolean(values.sidebarRailExpanded);
   sidebarDraftApps=values.sidebarApps.map(item=>({...item}));renderSidebarAppEditor();sidebarDraftTools=values.sidebarTools.map(item=>({...item}));for(const [id] of SIDEBAR_TOOLS)if(!sidebarDraftTools.some(item=>item.id===id))sidebarDraftTools.push({id,visible:false});renderSidebarToolEditor();
   form.elements.namedItem('showBookmarksBar').checked=Boolean(values.showBookmarksBar);
   form.elements.namedItem('spellcheckEnabled').checked=values.spellcheckEnabled!==false;
@@ -567,7 +570,7 @@ $('settings-form').onsubmit=event=>{
   for(const name of ['searchEngine','tabLayout','tabSearchPosition','tabSearchStyle','theme','accent','density','homePage','customSearchURL'])value[name]=data.get(name);
   value.showBookmarksBar=form.elements.namedItem('showBookmarksBar').checked;
   value.spellcheckEnabled=form.elements.namedItem('spellcheckEnabled').checked;
-  value.sidebarVisible=form.elements.namedItem('sidebarVisible').checked;value.sidebarSide=data.get('sidebarSide');value.sidebarWidth=Number(data.get('sidebarWidth'));value.sidebarApps=sidebarDraftApps.map(item=>({...item}));value.sidebarTools=sidebarDraftTools.map(item=>({...item}));
+  value.sidebarVisible=form.elements.namedItem('sidebarVisible').checked;value.sidebarRailExpanded=form.elements.namedItem('sidebarRailExpanded').checked;value.sidebarSide=data.get('sidebarSide');value.sidebarWidth=Number(data.get('sidebarWidth'));value.sidebarApps=sidebarDraftApps.map(item=>({...item}));value.sidebarTools=sidebarDraftTools.map(item=>({...item}));
   if(currentState.preferences.sidebarActive?.startsWith('app:')&&!value.sidebarApps.some(item=>`app:${item.id}`===currentState.preferences.sidebarActive)){value.sidebarActive='bookmarks';value.sidebarExpanded=false;}
   for(const name of ['home','library','extensions','split'])value.toolbar[name]=form.elements.namedItem(`toolbar.${name}`).checked;
   for(const [key,entry] of data)if(key.startsWith('shortcut.'))value.shortcuts[key.slice(9)]=entry;

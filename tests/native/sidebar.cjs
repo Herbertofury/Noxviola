@@ -6,8 +6,18 @@ async function until(fn,label){const end=performance.now()+15000;let last;while(
 async function exerciseSidebar({window,context,command,state,activate,partitionFor,check,expected}){
  await check('sidebar opens canonical history and bookmarks and isolates real website panels by identity',async()=>{
   await activate(expected.personalTab);const before=await state(),saved=before.preferences,bookmark=await command('bookmark-current');
+  if(!saved.sidebarVisible)await command('sidebar-toggle');
+  if(saved.sidebarRailExpanded)await command('sidebar-rail-expand');
+  await window.webContents.executeJavaScript("document.getElementById('sidebar-rail-expand').click()");
+  await until(async()=>{const s=await state();return s.preferences.sidebarRailExpanded&&s.sidebarGeometry.rail===200;},'expanded sidebar launcher');
+  assert.equal(await window.webContents.executeJavaScript("document.getElementById('sidebar-rail-expand').getAttribute('aria-pressed')"),'true');
   await command('sidebar-select','history');
   await until(()=>window.webContents.executeJavaScript("document.querySelector('#sidebar-title').textContent==='History'&&document.querySelector('#sidebar-panel').getBoundingClientRect().width>0"),'history sidebar');
+  await command('settings-save',{tabLayout:'vertical',sidebarSide:'right'});if(!(await state()).splitId)await command('split');
+  const split=await until(async()=>{const s=await state();return s.splitId&&s.sidebarGeometry.panel===s.preferences.sidebarWidth?s:null;},'expanded launcher beside vertical tabs and split pages');
+  const pages=window.contentView.children.filter(view=>view.webContents&&!view.webContents.isDestroyed()&&view.getVisible()&&view.getBounds().y===split.chromeHeight&&/^https?:/.test(view.webContents.getURL())).map(view=>view.getBounds()).sort((a,b)=>a.x-b.x);
+  assert.equal(pages.length,2);assert.equal(pages[0].x,split.sidebarGeometry.pageX);assert.equal(pages[0].width+pages[1].width,split.sidebarGeometry.pageWidth);assert.equal(pages[1].x+pages[1].width,split.sidebarGeometry.panelX);
+  await command('split');await command('settings-save',{tabLayout:saved.tabLayout,sidebarSide:saved.sidebarSide});
   const history=await command('sidebar-data');assert.equal(history.identity,expected.personalIdentity);assert.ok(history.items.some(item=>item.url===before.tabs.find(tab=>tab.id===expected.personalTab).url));
   await command('sidebar-select','bookmarks');await until(()=>window.webContents.executeJavaScript(`document.querySelector('#sidebar-items').textContent.includes(${JSON.stringify(bookmark.title)})`),'real bookmark in the sidebar');
   const url=`${context.origin}/page?sidebar=isolated`,app={id:'native-sidebar-fixture',name:'Synthetic sidebar fixture',url};
@@ -28,7 +38,7 @@ async function exerciseSidebar({window,context,command,state,activate,partitionF
   for(let i=0;i<4;i++)await command('sidebar-select',`app:${app.id}`);
   await until(async()=>{const s=await state();return s.preferences.sidebarExpanded&&s.sidebarGeometry.panel===300;},'the sidebar after rapid reversible toggles');
   await command('sidebar-width',380);await until(async()=>(await state()).sidebarGeometry.panel===380,'resized sidebar');
-  await command('sidebar-close');await command('settings-save',{sidebarApps:saved.sidebarApps,sidebarActive:saved.sidebarActive,sidebarSide:saved.sidebarSide,sidebarWidth:saved.sidebarWidth,sidebarVisible:saved.sidebarVisible,sidebarExpanded:saved.sidebarExpanded});
+  await command('sidebar-close');await command('settings-save',{sidebarApps:saved.sidebarApps,sidebarActive:saved.sidebarActive,sidebarSide:saved.sidebarSide,sidebarWidth:saved.sidebarWidth,sidebarVisible:saved.sidebarVisible,sidebarExpanded:saved.sidebarExpanded,sidebarRailExpanded:saved.sidebarRailExpanded,tabLayout:saved.tabLayout});
   await command('bookmark-remove',{identity:expected.personalIdentity,id:bookmark.id});await activate(before.activeId);
  });
 }

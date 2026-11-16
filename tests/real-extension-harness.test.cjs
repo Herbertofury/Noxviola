@@ -54,6 +54,51 @@ test('actual CJS driver dispatches through Electron-style dynamic import and exi
   assert.equal(isElectronEntry({ versions: { electron: '44.11.3' }, type: 'browser', argv: ['electron', path.join(__dirname, 'unrelated.cjs')] }, driver), false);
 });
 
+test('actual driver click waits for an asynchronous production panel update and invokes its real handler once', async t => {
+  const { JSDOM } = require('jsdom');
+  const { clickVisibleControl } = require('./native/real-extension-driver.cjs');
+  const html = fs.readFileSync(path.join(__dirname, '../browser/index.html'), 'utf8');
+  const renderer = fs.readFileSync(path.join(__dirname, '../browser/renderer.js'), 'utf8');
+  const dom = new JSDOM(html, { url: 'https://noxviola.invalid/', runScripts: 'outside-only', pretendToBeVisual: true });
+  t.after(() => dom.window.close());
+  const { window } = dom, callbacks = new Map(), calls = [];
+  let releasePanel;
+  const panelReply = new Promise(resolve => { releasePanel = resolve; });
+  const state = { version: 1, profiles: [{ id: 'personal', name: 'Personal' }], preferences: {}, tabs: [],
+    activeId: null, currentIdentity: 'personal', panel: null, engine: { electron: '44.11.3', chromium: 'fixture' } };
+  window.browser = new Proxy({ command: async (name, value) => {
+    calls.push({ name, value });
+    if (name === 'state') return state;
+    if (name === 'extensions') { await panelReply; callbacks.get('onState')({ ...state, panel: 'extensions' }); }
+  } }, { get(target, key) {
+    if (key in target) return target[key];
+    assert.match(key, /^on[A-Z]/);
+    return callback => { callbacks.set(key, callback); return () => callbacks.delete(key); };
+  } });
+  // jsdom does not perform layout. Only geometry is supplied here; the actual
+  // HTML, renderer state transition, control and command handler execute.
+  window.HTMLElement.prototype.getClientRects = function () { return this.closest('[hidden]') ? [] : [{}]; };
+  window.HTMLElement.prototype.scrollIntoView = function () {};
+  window.eval(renderer);
+  await new Promise(resolve => setImmediate(resolve));
+  window.document.querySelector('nav button[data-command="extensions"]').click();
+  const contents = { executeJavaScript: async code => window.eval(code) };
+  let observations = 0;
+  await clickVisibleControl(contents, '#extension-import-package', async predicate => {
+    observations++;
+    assert.equal(await predicate(), false, 'The asynchronous panel has not rendered yet');
+    assert.equal(calls.filter(call => call.name === 'extension-preview-dialog').length, 0);
+    releasePanel();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(await predicate(), true, 'Production state rendering exposes the real control');
+  });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(observations, 1);
+  assert.deepEqual(calls.filter(call => call.name === 'extensions'), [{ name: 'extensions', value: undefined }]);
+  assert.deepEqual(calls.filter(call => call.name === 'extension-preview-dialog'), [{ name: 'extension-preview-dialog', value: 'package' }]);
+  assert.equal(window.document.getElementById('extensions').hidden, false);
+});
+
 test('real-package CLI requires an explicit archive and refuses unsafe or silently ignored options', () => {
   const parsed = options(['--archive', 'corpus/darkreader.zip', '--output', 'records']);
   assert.equal(parsed.archive, path.resolve('corpus/darkreader.zip'));

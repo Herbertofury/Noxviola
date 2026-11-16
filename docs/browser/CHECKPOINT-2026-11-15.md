@@ -280,3 +280,16 @@ Both [real-extension jobs in run 43779608644](https://github.com/Herbertofury/No
 | Linux real-extension `14188365205` | 7,978 | `203bed09c0178c1a7c07f6b2e535ec2c01ef8a9642c2dab8045f77828764994f` |
 
 These original failure archives were downloaded, hash-verified and retained. The repaired source must run the actual native and real-package gates again; `3253be62` remains the last fully passed packaged checkpoint until those new native results exist. The master goal and all twelve gates remain open.
+
+### Core passes at `0c25987e`; real-package panel ordering remains a failed first attempt
+
+Commit `0c25987e7e14cdc78790d8a9423962346b8fa3a9`, tree `532d4e6f3b0b5439a0aeec60bc2a6645ca623883`, passed 269 portable contracts and 71 syntax checks in its isolated source snapshot. [Core native run 43780308365](https://github.com/Herbertofury/Noxviola/actions/runs/43780308365) completed successfully on both Windows job `133015750217` and Linux job `133015750474`: actual source launch/restart, the spelling settings checks, ordinary packaged executable/restart, public HTTPS and complete archive verification all passed. The source spelling-control result now exists; the independent dictionary-download consent limitation is unchanged. Final independent artifact readback is recorded separately.
+
+The dedicated [real-extension run 43780308399](https://github.com/Herbertofury/Noxviola/actions/runs/43780308399) remains a failure on both platforms. The real light-page/sandbox baseline passed, but clicking Extensions returned before its asynchronous IPC state update rendered the panel. The driver then tried to click the hidden import control. No package was installed or executed. Both receipts preserve an empty installed-extension list and the later visible Extensions state. The next test-only repair observes the actual visible/enabled control before invoking its existing click handler exactly once; ambiguity and revalidation still fail, the original bounded observer/deadline remains, and no production code or extension bytes are changed. A delayed-panel regression uses the actual production HTML and renderer with only IPC/layout substituted.
+
+| Original failed real-package artifact | Bytes | SHA-256 |
+| --- | ---: | --- |
+| Linux `14188047253` | 70,487 | `73ff0145049c36c7db44b9ca93bca4f979b42318d759977e098dbd973fdb62d9` |
+| Windows `14188057235` | 59,850 | `408434603dec46321f75113b0286ea955aa8c6b62f3a037d010ff55887bcd9893` |
+
+Both failure archives and raw native receipts were hash-verified and retained. Their unchanged source-input manifest is `ec70c941e041d93892c893ed1c6ca806803abbb176aa56869fef26efb0ba94cd`. This failure provides no evidence about an extension API dependency. The next run must perform the original unchanged-package workflow; universal compatibility and all master gates remain open.

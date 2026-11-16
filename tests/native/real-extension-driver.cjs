@@ -19,6 +19,23 @@ function stackDetails(stack) {
   })), ...(stack.parent ? { parent: stackDetails(stack.parent) } : {}) };
 }
 
+async function clickVisibleControl(contents, selector, observe) {
+  // A toolbar click can return before its asynchronous IPC state update has
+  // rendered the next panel. Observe the actual control through the existing
+  // bounded observer; invoke its real click handler exactly once after ready.
+  const selection = `[...document.querySelectorAll(${JSON.stringify(selector)})].filter(control => control.getClientRects().length && !control.disabled)`;
+  await observe(async () => {
+    const count = await contents.executeJavaScript(`(${selection}).length`);
+    if (count > 1) throw new Error(`Expected one visible enabled real control: ${selector}, got ${count}`);
+    return count === 1;
+  }, `one visible enabled real control: ${selector}`);
+  return contents.executeJavaScript(`(() => {
+    const controls = ${selection};
+    if (controls.length !== 1) throw new Error('Expected one visible enabled real control: '+${JSON.stringify(selector)}+', got '+controls.length);
+    controls[0].scrollIntoView({block:'nearest'}); controls[0].click();
+  })()`);
+}
+
 async function main() {
   const { app, BrowserWindow, dialog, session, webContents } = require('electron');
   const { createIdentitySessionResolver } = require('../../browser/session-path.cjs');
@@ -161,13 +178,7 @@ async function main() {
     return shell.webContents.executeJavaScript(`window.browser.command(${JSON.stringify(name)}, ${JSON.stringify(value) || 'undefined'})`);
   }
   const state = () => command('state');
-  async function click(contents, selector) {
-    return contents.executeJavaScript(`(() => {
-      const controls = [...document.querySelectorAll(${JSON.stringify(selector)})].filter(control => control.getClientRects().length && !control.disabled);
-      if (controls.length !== 1) throw new Error('Expected one visible enabled real control: '+${JSON.stringify(selector)}+', got '+controls.length);
-      controls[0].scrollIntoView({block:'nearest'}); controls[0].click();
-    })()`);
-  }
+  const click = (contents, selector) => clickVisibleControl(contents, selector, until);
   async function navigate(address) {
     await shell.webContents.executeJavaScript(`(() => {
       const input=document.getElementById('address'); input.value=${JSON.stringify(address)}; input.dispatchEvent(new Event('input',{bubbles:true}));
@@ -429,4 +440,4 @@ if (isElectronEntry()) main().catch(error => {
   console.error(error.stack || error);
   require('electron').app.exit(1); // An early failure must not idle until the outer deadline.
 });
-module.exports = { errorDetails, stackDetails, isElectronEntry, main };
+module.exports = { errorDetails, stackDetails, isElectronEntry, clickVisibleControl, main };

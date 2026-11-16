@@ -11,6 +11,7 @@ const {ResourceMonitor} = require('./resources.cjs');
 const {SpellcheckService} = require('./spellcheck.cjs');
 const {HistoryService} = require('./history.cjs');
 const {FollowService} = require('./follows.cjs');
+const {bindDownloads:bindDownloadFollowing} = require('./creator-following.cjs');
 const {BookmarkService,rootIds:bookmarkRootIds} = require('./bookmarks.cjs');
 const {WorkspaceService} = require('./workspaces.cjs');
 const storage = require('./storage.cjs');
@@ -37,7 +38,7 @@ let writer, saveError = '', sessionFile, dataDirectory, downloads, permissions, 
 let vaultFile, vaultDocument = {version:1, items:[]}, vaultError = '', vaultRecovery = null, vaultImport = null;
 let accountFile, accounts = [], accountError = '', accountRecovery = null;
 let permissionOpening = null, extensionBusy = false;
-let resolveIdentitySession, history, bookmarks, workspaces, follows, followTimer, resourceMonitor, extensionBridge, spellcheck;
+let resolveIdentitySession, history, bookmarks, workspaces, follows, followTimer, resourceMonitor, extensionBridge, spellcheck, detachDownloadFollowing;
 let activeWorkspaceId = 'default', nextRuntimeTabId = 1, preferencePreview = null;
 let sidebarProgress=0,sidebarRailProgress=0,sidebarTimer=null;
 const runtimeTabs = new Map(), nativeTabs = new Map(), sessionTargets = new Map(), workspaceLastTabs = new Map(), browserEvents = new EventEmitter();
@@ -115,7 +116,7 @@ function serviceView(service, read) {
   try{return {status:service?.status||'blocked',error:service?.error||'',recoveryAvailable:service?.status==='recovery',...read()};}
   catch(error){return {status:service?.status||'blocked',error:error.message,recoveryAvailable:service?.status==='recovery'};}
 }
-function publishFollows() { if(panel==='following')send('follows',serviceView(follows,()=>({identity:currentIdentity,items:follows.list(currentIdentity)}))); }
+function publishFollows(event) { if(event?.type==='creator-status-observed'&&event.newBan&&event.identity===currentIdentity)notice(`${event.authorName}: Nexus now shows a banned profile. Open Following for evidence and relocation options.`);if(panel==='following')send('follows',serviceView(follows,()=>{const items=follows.list(currentIdentity);return {identity:currentIdentity,items,creatorRegistry:follows.registryInfo(currentIdentity),hub:follows.creatorHub(currentIdentity,items)};})); }
 function publishHistory() { if(panel==='history'||preferences.sidebarVisible&&preferences.sidebarExpanded&&preferences.sidebarActive==='history')send('history',serviceView(history,()=>({identity:currentIdentity,...history.query(currentIdentity,{}),settings:history.settings(currentIdentity)}))); }
 function publishBookmarks() { if(panel==='bookmarks'||preferences.showBookmarksBar||preferences.sidebarVisible&&preferences.sidebarExpanded&&preferences.sidebarActive==='bookmarks')send('bookmarks',serviceView(bookmarks,()=>({identity:currentIdentity,tree:bookmarks.getTree(currentIdentity)}))); }
 function publishWorkspaces() { send('workspaces',serviceView(workspaces,()=>({items:workspaces.list(),groups:workspaces.list().flatMap(item=>workspaces.listGroups(item.id)),activeWorkspaceId}))); }
@@ -642,9 +643,27 @@ async function perform(name, value) {
     case 'follow-add':{const {identity=currentIdentity,...input}=value||{};const result=follows.add(identity,input);publishFollows();return result;}
     case 'follow-list':publishFollows();break;
     case 'follow-change':{const {identity=currentIdentity,id,...patch}=value||{};follows.change(identity,id,patch);publishFollows();break;}
-    case 'follow-refresh':await follows.refresh(value?.identity||currentIdentity,value?.id);publishFollows();break;
+    case 'follow-refresh':await follows.refresh(value?.identity||currentIdentity,value?.id,{freshCatalog:true});publishFollows();break;
+    case 'follow-item-read':follows.markFollowItem(value?.identity||currentIdentity,value?.id,value?.itemId,value?.read);publishFollows();break;
+    case 'follow-catalog-project':{const result=follows.followCatalogProject(value?.identity||currentIdentity,value?.id,value?.itemId);publishFollows();return result;}
+    case 'follow-settings':follows.setCreatorSettings(value?.identity||currentIdentity,value?.automatic);publishFollows();break;
+    case 'follow-backfill':{const owner=value?.identity||currentIdentity;const result=await follows.backfillCreators(owner,downloads.list({identity:owner}));publishFollows();return result;}
+    case 'follow-discover-project':{const result=await follows.discoverProject(value?.identity||currentIdentity,value?.id);publishFollows();return result;}
+    case 'follow-review-retry':{const result=await follows.retryDiscovery(value?.identity||currentIdentity,value?.discoveryId,{...(value?.projectUrl?{projectUrl:value.projectUrl}:{})});publishFollows();return result;}
+    case 'follow-review-choose':follows.chooseDiscovery(value?.identity||currentIdentity,value?.discoveryId,value?.creatorKey);publishFollows();break;
+    case 'follow-review-dismiss':follows.dismissDiscovery(value?.identity||currentIdentity,value?.discoveryId,value?.dismiss!==false);publishFollows();break;
+    case 'follow-unfollow':follows.unfollow(value?.identity||currentIdentity,value?.id);publishFollows();break;
+    case 'follow-restore':follows.restoreFollow(value?.identity||currentIdentity,value?.id);publishFollows();break;
+    case 'follow-creator-evidence':{const source=follows.get(value?.identity||currentIdentity,value?.id);if(!source.creatorIdentity?.evidenceUrl)throw new Error('No saved creator metadata evidence.');newTab(source.creatorIdentity.evidenceUrl,source.identity);break;}
+    case 'follow-discovery-evidence':{const owner=value?.identity||currentIdentity,row=follows._discoveryRow(owner,value?.discoveryId),creator=row.result?.creators.find(c=>c.key===value?.creatorKey);const address=value?.kind==='creator'?creator?.profileUrl:value?.kind==='evidence'?creator?.evidenceUrl:row.result?.project.url||row.projectUrl||row.provenance.pageUrl;if(!address)throw new Error('No saved public project or creator evidence.');newTab(address,owner);break;}
+
     case 'follow-evidence-open':{const source=follows.get(value?.identity||currentIdentity,value?.id);const record=source.transitions?.[value?.transitionIndex];const section=['status_evidence','identity_evidence','project_mappings'].includes(value?.section)?value.section:null;const address=section?record?.[section]?.[value?.evidenceIndex]?.[section==='project_mappings'?'evidence_url':'url']:null;if(!address)throw new Error('Saved transition evidence not found.');newTab(address,source.identity);break;}
     case 'follow-open':{const source=follows.get(value?.identity||currentIdentity,value?.id);const address=value?.itemId?source.items.find(item=>item.id===value.itemId)?.url:source.url;if(!address)throw new Error('Saved update not found.');newTab(address,source.identity);break;}
+    case 'follow-creator-status':await follows.refreshCreatorStatus(value?.identity||currentIdentity,value?.id,value?.authorId);publishFollows();break;
+    case 'follow-import-creators':follows.importRegistry(value?.identity||currentIdentity,value?.text);publishFollows();break;
+    case 'follow-migrate':{const destination=follows.acceptMigration(value?.identity||currentIdentity,value?.id,value);publishFollows();await follows.refresh(destination.identity,destination.id);publishFollows();return destination;}
+    case 'follow-undo-migration':follows.undoMigration(value?.identity||currentIdentity,value?.id);publishFollows();break;
+    case 'follow-evidence':{const address=follows.evidenceAddress(value?.identity||currentIdentity,value?.id,value?.url);newTab(address.url,address.identity);break;}
     case 'follow-recover':await recoverService(follows,'following');publishFollows();break;
     case 'bookmark-current':{
       const tab=active();if(!tab||!httpUrl(tab.url))throw new Error('Open a website before bookmarking it.');
@@ -797,7 +816,7 @@ async function requestClose() {
   }
   closeExtensionWindows();sidebarWeb.destroy();
   try { if (!extensionError) await extensions.dispose(); } catch (error) { notice(error.message); }
-  try{await extensionBridge?.dispose();}catch(error){notice(`Extension host cleanup: ${error.message}`);}clearInterval(followTimer);follows?.dispose();history?.dispose();bookmarks?.dispose();workspaces?.dispose();
+  try{await extensionBridge?.dispose();}catch(error){notice(`Extension host cleanup: ${error.message}`);}clearInterval(followTimer);detachDownloadFollowing?.();follows?.dispose();history?.dispose();bookmarks?.dispose();workspaces?.dispose();
   permissions.dispose(); downloads.dispose(); await writer.close().catch(() => {});
   allowClose = true; win.close();
 }
@@ -838,6 +857,7 @@ async function start() {
   downloads = new DownloadManager({directory:app.getPath('downloads'),reveal:file => shell.showItemInFolder(file),file:path.join(dataDirectory,'browser-downloads.json'),getIdentities:()=>profiles.map(profile=>profile.id)});
   downloads.on('change', () => { if (panel === 'downloads'||preferences.sidebarVisible&&preferences.sidebarExpanded&&preferences.sidebarActive==='downloads') send('downloads',downloads.list()); });
   downloads.on('status', () => publish(false));
+  detachDownloadFollowing=bindDownloadFollowing(downloads,follows,event=>{if(event.identity===currentIdentity)notice(`Creator discovery: ${event.message}`);});
   try { downloads.open(); } catch { /* Downloads exposes its history error and recovery controls without hiding live transfers. */ }
   extensions = new ExtensionManager({directory:path.join(dataDirectory,'extensions'),getSession:identitySession,getIdentities:() => profiles.map(profile => profile.id),loadExtension:createExtensionLoader({app,webContents})});
   extensions.subscribeRuntime(event => {

@@ -1,9 +1,10 @@
 'use strict';
 const crypto=require('node:crypto');
+const projectAdapter=require('./modhold-project.cjs');
 const ORIGIN='https://modholdmods.com',MAX_BYTES=16*1024*1024;
 function sourceFor(value){
  const u=new URL(value);if(u.username||u.password||u.protocol!=='https:'||!['modholdmods.com','www.modholdmods.com'].includes(u.host))return null;
- const author=u.pathname.match(/^\/u\/([a-zA-Z0-9_-]+)\/?$/),project=u.pathname.match(/^\/g\/([a-zA-Z0-9_-]+)\/mods\/([1-9][0-9]*)(?:\/[a-zA-Z0-9_-]+)?\/?$/);
+ const author=u.pathname.match(/^\/u\/([a-zA-Z0-9_.-]+)\/?$/),project=u.pathname.match(/^\/g\/([a-zA-Z0-9_-]+)\/mods\/([1-9][0-9]*)(?:\/[a-zA-Z0-9_-]+)?\/?$/);
  if(author)return {url:`${ORIGIN}/u/${author[1].toLowerCase()}`,kind:'creator',provider:'modhold-author',endpoint:`${ORIGIN}/api/v1/mods?page=1`};
  if(project&&Number.isSafeInteger(Number(project[2])))return {url:`${ORIGIN}/g/${project[1]}/mods/${project[2]}`,kind:'project',provider:'modhold-project',endpoint:`${ORIGIN}/api/v1/mods/${project[2]}`};return null;
 }
@@ -25,27 +26,30 @@ async function bodyJSON(response){
  try{while(true){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>MAX_BYTES)throw new Error('ModHold response exceeds 16 MiB budget; no partial snapshot saved.');chunks.push(value);}}catch(e){await reader.cancel().catch(()=>{});throw e;}finally{reader.releaseLock();}
  try{return JSON.parse(Buffer.concat(chunks,size).toString('utf8'));}catch{throw new Error('ModHold returned invalid JSON.');}
 }
-async function collect(source,{fetcher=fetch,signal,now=Date.now}={}){
- const parsed=sourceFor(source.url);if(!parsed)throw new Error('Unsupported ModHold source.');const cache={},items=[],seen=new Set();let pause=0,total,pageNumber=1,observed=0;
+// Fetch once, project many author views only after the full catalog validates.
+async function collectCatalog({fetcher=fetch,signal,now=Date.now}={}){
+ const cache={},items=[],seen=new Set();let pause=0,total,perPage,pageNumber=1,observed=0;
  try{do{
   if(signal?.aborted)throw new Error('ModHold check cancelled.');if(pause>now())throw new Error('ModHold requested a pause before the snapshot completed.');
-  const endpoint=parsed.provider==='modhold-project'?parsed.endpoint:`${ORIGIN}/api/v1/mods?page=${pageNumber}`,headers={Accept:'application/json','User-Agent':'Noxviola-Following/0.1 (https://github.com/Herbertofury/Noxviola)'};
-  // Provider does not document ETags; no conditional-request saving is assumed.
+  const endpoint=`${ORIGIN}/api/v1/mods?page=${pageNumber}`,headers={Accept:'application/json','User-Agent':'Noxviola-Following/0.1 (https://github.com/Herbertofury/Noxviola)'};
   const response=await fetcher(endpoint,{headers,credentials:'omit',redirect:'error',signal});const retry=response.headers.get('retry-after'),retryAt=retry===null?0:/^\d+$/.test(retry)?now()+Number(retry)*1000:Date.parse(retry);if(Number.isFinite(retryAt)&&retryAt>=0&&retryAt<=8640000000000000)pause=Math.max(pause,retryAt);
   if(!response.ok){if(response.status===429)pause=Math.max(pause,now()+60000);throw new Error(`ModHold returned HTTP ${response.status}; access is unresolved, not evidence of a ban or removal.`);}
-  const data=await bodyJSON(response);let pageItems;
-  if(parsed.provider==='modhold-project'){
-   const item=project(data);if(!parsed.endpoint.endsWith(`/${data.id}`))throw new Error('ModHold returned a different project.');pageItems=[item,...files(data.files,item.url)];
-  }else{
-   if(!Array.isArray(data?.mods)||!Number.isSafeInteger(data.total)||data.total<0||data.page!==pageNumber||!Number.isSafeInteger(data.per_page)||data.per_page<1||data.per_page>50||data.mods.length>data.per_page||(total!==undefined&&total!==data.total))throw new Error('ModHold catalog pagination changed or is invalid; no partial snapshot saved.');total=data.total;
-   const rows=data.mods.map(project);for(const item of rows){if(seen.has(item.id))throw new Error('ModHold repeated a project during pagination; no partial snapshot saved.');seen.add(item.id);}observed+=rows.length;
-   if(observed>total||(!rows.length&&observed<total)||(observed<total&&rows.length!==data.per_page))throw new Error('ModHold catalog is incomplete; no partial snapshot saved.');
-   const handle=new URL(parsed.url).pathname.split('/').pop();pageItems=rows.filter(item=>item.authorHandle.toLowerCase()===handle);
-  }
+  const data=await bodyJSON(response);
+  if(!Array.isArray(data?.mods)||!Number.isSafeInteger(data.total)||data.total<0||data.page!==pageNumber||!Number.isSafeInteger(data.per_page)||data.per_page<1||data.per_page>50||data.mods.length>data.per_page||(total!==undefined&&total!==data.total)||(perPage!==undefined&&perPage!==data.per_page))throw new Error('ModHold catalog pagination changed or is invalid; no partial snapshot saved.');total=data.total;perPage=data.per_page;
+  const pageItems=data.mods.map(project);for(const item of pageItems){if(seen.has(item.id))throw new Error('ModHold repeated a project during pagination; no partial snapshot saved.');seen.add(item.id);}observed+=pageItems.length;
+  if(observed>total||(!pageItems.length&&observed<total)||(observed<total&&pageItems.length!==perPage))throw new Error('ModHold catalog is incomplete; no partial snapshot saved.');
   if(signal?.aborted)throw new Error('ModHold check cancelled.');cache[endpoint]={etag:null,next:null,items:pageItems};items.push(...pageItems);pageNumber++;
- }while(parsed.provider==='modhold-author'&&observed<total);
- if(new Set(items.map(item=>item.id)).size!==items.length)throw new Error('ModHold returned duplicate files; no partial snapshot saved.');
- return {items,cache,providerNotBefore:pause,notBefore:0};
+ }while(observed<total);
+ return {items,cache,providerNotBefore:pause,notBefore:0,catalogObservedAt:now()};
  }catch(error){error.retryAt=Math.max(error.retryAt||0,pause);throw error;}
 }
-module.exports={sourceFor,collect,project,files,MAX_BYTES};
+function forAuthor(snapshot,source){
+ const parsed=sourceFor(source.url);if(parsed?.provider!=='modhold-author')throw new Error('Expected a ModHold author profile.');
+ const handle=new URL(parsed.url).pathname.split('/').pop(),matches=item=>item.authorHandle.toLowerCase()===handle;
+ return {...snapshot,items:snapshot.items.filter(matches),cache:Object.fromEntries(Object.entries(snapshot.cache).map(([address,page])=>[address,{...page,items:page.items.filter(matches)}]))};
+}
+async function collect(source,options={}){
+ const parsed=sourceFor(source.url);if(!parsed)throw new Error('Unsupported ModHold source.');
+ return parsed.provider==='modhold-project'?projectAdapter.collect(source,options):forAuthor(await collectCatalog(options),source);
+}
+module.exports={sourceFor,collect,collectCatalog,forAuthor,project,files,MAX_BYTES};

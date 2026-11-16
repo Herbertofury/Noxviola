@@ -1,0 +1,144 @@
+{
+  "schemaVersion": 1,
+  "startedAt": "2026-11-16T20:23:09.922Z",
+  "scope": "Public metadata only, no file downloads, native download execution, authentication, cookies, site follows or user profile data.",
+  "checks": [
+    {
+      "name": "ModHold exact project → creator",
+      "status": "passed",
+      "project": {
+        "provider": "modhold",
+        "key": "modhold:skyrim-se:11",
+        "url": "https://modholdmods.com/g/skyrim-se/mods/11",
+        "projectId": "11",
+        "game": "skyrim-se",
+        "chain": [],
+        "origin": "project",
+        "name": "Estates of Skyrim - Immersive Settlement and Survival Overhaul (Player Homes-Hire Workers-Economy)"
+      },
+      "creators": [
+        {
+          "key": "modhold:sethsaidthat",
+          "provider": "modhold",
+          "accountId": "sethsaidthat",
+          "handle": "SethSaidThat",
+          "name": "SethSaidThat",
+          "profileUrl": "https://modholdmods.com/u/sethsaidthat",
+          "evidenceUrl": "https://modholdmods.com/api/v1/mods/11",
+          "relation": "Published project author",
+          "observedAt": 1794860589923
+        }
+      ],
+      "requiresChoice": false
+    },
+    {
+      "name": "Modrinth exact project → public credited team",
+      "status": "passed",
+      "project": {
+        "provider": "modrinth",
+        "key": "modrinth-project:AANobbMI",
+        "projectId": "AANobbMI",
+        "url": "https://modrinth.com/mod/AANobbMI",
+        "name": "Sodium",
+        "modrinthProjectId": "AANobbMI"
+      },
+      "creators": [
+        {
+          "key": "modrinth:DzLrfrbK",
+          "provider": "modrinth",
+          "accountId": "DzLrfrbK",
+          "handle": "IMS",
+          "name": "IMS",
+          "profileUrl": "https://modrinth.com/user/DzLrfrbK",
+          "evidenceUrl": "https://api.modrinth.com/v2/project/AANobbMI/members",
+          "relation": "Public project team member",
+          "observedAt": 1794860593890
+        },
+        {
+          "key": "modrinth:TEZXhE2U",
+          "provider": "modrinth",
+          "accountId": "TEZXhE2U",
+          "handle": "jellysquid3",
+          "name": "jellysquid3",
+          "profileUrl": "https://modrinth.com/user/TEZXhE2U",
+          "evidenceUrl": "https://api.modrinth.com/v2/project/AANobbMI/members",
+          "relation": "Public project team member",
+          "observedAt": 1794860593890
+        },
+        {
+          "key": "modrinth:PSleyMoH",
+          "provider": "modrinth",
+          "accountId": "PSleyMoH",
+          "handle": "douira",
+          "name": "douira",
+          "profileUrl": "https://modrinth.com/user/PSleyMoH",
+          "evidenceUrl": "https://api.modrinth.com/v2/project/AANobbMI/members",
+          "relation": "Public project team member",
+          "observedAt": 1794860593890
+        }
+      ],
+      "requiresChoice": true
+    },
+    {
+      "name": "Modrinth known public file URL → exact version publisher",
+      "status": "passed",
+      "qualification": "The URL was supplied by live version metadata as synthetic provenance; no file was downloaded and no native completion is claimed.",
+      "projectId": "AANobbMI",
+      "versionId": "CT6qQx01",
+      "creators": [
+        {
+          "key": "modrinth:TEZXhE2U",
+          "provider": "modrinth",
+          "accountId": "TEZXhE2U",
+          "handle": "jellysquid3",
+          "name": "jellysquid3",
+          "profileUrl": "https://modrinth.com/user/TEZXhE2U",
+          "evidenceUrl": "https://api.modrinth.com/v2/version/CT6qQx01",
+          "relation": "Publisher of the downloaded version",
+          "observedAt": 1794860597404
+        }
+      ],
+      "requiresChoice": false
+    },
+    {
+      "name": "GitHub exact repository → stable owner",
+      "status": "passed",
+      "project": {
+        "provider": "github",
+        "key": "github-project:herbertofury/noxviola",
+        "url": "https://github.com/herbertofury/noxviola",
+        "projectId": "Herbertofury/Noxviola",
+        "chain": [],
+        "origin": "project",
+        "name": "Herbertofury/Noxviola",
+        "githubRepositoryId": "1436024828",
+        "githubOwnerId": "18050735"
+      },
+      "creators": [
+        {
+          "key": "github:18050735",
+          "provider": "github",
+          "accountId": "18050735",
+          "handle": "Herbertofury",
+          "name": "Herbertofury",
+          "profileUrl": "https://github.com/herbertofury",
+          "evidenceUrl": "https://api.github.com/repos/Herbertofury/Noxviola",
+          "relation": "Repository owner",
+          "observedAt": 1794860597658
+        }
+      ],
+      "pinnedRepositoryCheck": "passed",
+      "observedReleaseAndTagCount": 0
+    },
+    {
+      "name": "ModHold complete catalog and exact author projection",
+      "status": "passed",
+      "requests": 3,
+      "completeProjectCount": 149,
+      "exactAuthorProjectCount": 36,
+      "catalogObservedAt": "2026-11-16T20:23:33.570Z",
+      "source": "https://modholdmods.com/api/v1/mods?page=1"
+    }
+  ],
+  "finishedAt": "2026-11-16T20:23:33.571Z"
+}

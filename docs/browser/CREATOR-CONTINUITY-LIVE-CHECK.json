@@ -1,0 +1,35 @@
+{
+  "startedAt": "2026-11-16T19:48:09.596Z",
+  "node": "v24.22.1",
+  "scope": "Actual production collectors against public unauthenticated primary sources, after preserving the existing ModHold provider/catalog and stable identities. No native Electron/UI acceptance.",
+  "results": [
+    {
+      "provider": "modhold",
+      "projectId": "11",
+      "ok": true,
+      "items": 5,
+      "files": 4,
+      "version": "0.1.21",
+      "author": "SethSaidThat"
+    },
+    {
+      "provider": "modhold",
+      "projectId": "4",
+      "ok": true,
+      "items": 4,
+      "files": 3,
+      "version": "1.3.4",
+      "author": "SethSaidThat"
+    },
+    {
+      "provider": "nexus",
+      "ok": true,
+      "state": "banned",
+      "providerAuthorId": "199502561",
+      "summary": "Nexus displayed its Banned badge in this author’s profile header. No moderation reason was inferred.",
+      "evidenceUrl": "https://www.nexusmods.com/profile/SethSaidThat",
+      "observedAt": 1794858497874,
+      "notBefore": 0
+    }
+  ]
+}

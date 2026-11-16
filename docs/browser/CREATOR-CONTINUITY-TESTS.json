@@ -1,0 +1,23 @@
+{
+  "checkedAt": "2026-11-16T19:48:37.517593+00:00",
+  "baseCommit": "28cb18aacf515474331d5259610a974f47c491e1",
+  "node": "v24.22.1",
+  "commands": [
+    {
+      "command": "npm test",
+      "passed": 515,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "command": "npm run check",
+      "syntaxFiles": 116
+    },
+    {
+      "command": "git diff --check",
+      "passed": true
+    }
+  ],
+  "registrySha256": "229ea75c1ee06d4df8ace30c4572abcf612aa510fd7cbe9aee075e521c7039ad",
+  "scope": "Portable service/production-renderer DOM/package-source contracts. Live primary collectors have a separate receipt; actual Chromium visual launch was blocked before page load. No packaged Electron acceptance."
+}

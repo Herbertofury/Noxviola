@@ -4,6 +4,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const {isDeepStrictEqual} = require('node:util');
 const storage = require('./storage.cjs');
+const discovery = require('./creator-discovery.cjs');
 const {ServiceStore, clone, record: object, keys, id, identity, identities, text, integer} = require('./service-store.cjs');
 
 const STATES = new Set(['choosing-location', 'progressing', 'interrupted', 'completed', 'cancelled']);
@@ -28,6 +29,10 @@ function decode(value) {
     if (seen.has(row.id)) throw storage.fail('Download IDs must be unique.');
     seen.add(row.id);
     for (const field of ['filename', 'url', 'path', 'error']) text(row[field], `Download ${field}`);
+    if (row.provenance !== undefined) {
+      object(row.provenance, 'Download provenance');
+      if (typeof row.provenance.pageUrl !== 'string' || (row.provenance.pageUrl && discovery.publicAddress(row.provenance.pageUrl) !== row.provenance.pageUrl) || !Array.isArray(row.provenance.urlChain) || row.provenance.urlChain.some(address => !address || discovery.publicAddress(address) !== address)) throw storage.fail('Invalid download provenance; original data preserved.');
+    }
     if (!row.filename || row.path.includes('\0')) throw storage.fail('Download filename/path is invalid.');
     date(row.startedAt, 'Download start');
     if (row.finishedAt !== undefined) date(row.finishedAt, 'Download finish');
@@ -210,11 +215,11 @@ class DownloadManager extends EventEmitter {
     if (row.item) this._refresh(row);
     this.changed();
   }
-  _start(item, owner) {
+  _start(item, owner, contents, frame) {
     if (this.disposed) return;
     const data = {id: crypto.randomUUID(), identity: owner, filename: 'download', url: '',
       startedAt: this._time(), received: 0, total: 0, state: 'choosing-location', terminal: false,
-      paused: false, canResume: false, path: '', error: ''};
+      paused: false, canResume: false, path: '', error: '', provenance: discovery.provenance(item, contents, frame)};
     if (this.records.has(data.id)) throw storage.fail('A new download ID collided with existing history; nothing was replaced.');
     const row = {data, item, restored: false, persisted: null, listeners: null, waiters: new Set(), cancelRequested: false};
     this.records.set(data.id, row);
@@ -238,6 +243,11 @@ class DownloadManager extends EventEmitter {
       if (!TERMINAL_STATES.has(state)) { resultError = new Error('The native download ended with an unknown result.'); data.error = resultError.message; state = 'interrupted'; }
       data.state = state; data.finishedAt = this._time(); data.terminal = true; data.paused = false; data.canResume = false;
       this._detach(row); this._checkpoint(row); this._settled(row, resultError); this.changed();
+      // Native done(completed), never a progress getter, establishes success.
+      // The initiating page and identity were captured before tab navigation.
+      if (state === 'completed') queueMicrotask(() => {
+        if (!this.disposed) this.emit('completed', clone({id:data.id, identity:data.identity, filename:data.filename, url:data.url, provenance:data.provenance, state:data.state, terminal:true, finishedAt:data.finishedAt}));
+      });
     };
     row.listeners = {update, done}; item.on('updated', update); item.once('done', done);
     this._checkpoint(row); this.changed();
@@ -249,7 +259,7 @@ class DownloadManager extends EventEmitter {
       if (existing.identity !== owner) throw storage.fail('A native download Session cannot belong to two identities.');
       return;
     }
-    const listener = (_event, item) => this._start(item, owner);
+    const listener = (_event, item, contents, frame) => this._start(item, owner, contents, frame);
     session.on('will-download', listener); this.sessions.set(session, {identity: owner, listener});
   }
   list(options = {}) {

@@ -2,7 +2,13 @@
 
 Requested 2026-11-16. Flagship/premium-quality capability, not a new paid entitlement or billing flow. Noxviola must follow creators and projects independently of Athena; shared research, connector contracts and proven techniques must not introduce an Athena runtime requirement.
 
-## Implemented checkpoint
+## Current creator hub
+
+The current [Creator hub and automatic local follows](CREATOR-HUB.md) adds a creator-centered overview, exact successful-download provenance, default-on identity-local automatic creator following, explicit saved-source backfill, a review inbox, per-item read controls and durable unfollow/undo. ModHold authors share one complete catalog snapshot per identity/hour; exact new catalog projects can be followed separately. Discovered GitHub accounts/repositories and Modrinth accounts are pinned to provider IDs. Unsupported Nexus uploader discovery remains explicit review with the original project link.
+
+The source-by-source manual workflows and earlier evidence below remain historical foundation checkpoints. Their original opt-in defaults describe manually added follows; the owner-requested automatic creator preference is documented in the current hub workflow. Full native acceptance remains open.
+
+## Initial manual-following checkpoint
 
 Open **Tools → Following**, or the native browser menu. Add a named creator/project with an HTTPS source. The watchlist is scoped to the browser identity and saved locally using the browser's existing atomic checkpoint and explicit recovery service.
 
@@ -70,6 +76,10 @@ Historical fields render only when expanded, avoiding eagerly constructing every
 
 This is not complete history: only changes observed by this browser are captured. Source dates are distinct from observation/replacement times. Full release bodies are not retained, so a fingerprint-only change explicitly says the changed source content was not saved. Changes before this feature, between polls or created/deleted while offline cannot be reconstructed. CurseForge remains manual and its staged collector is not connected to this history store.
 
+## Creator Continuity
+
+The Following center now includes [Creator Continuity](CREATOR-CONTINUITY.md): dated source-status evidence, explicit/opt-in hourly Nexus author checks, exact per-mod migration review, and ModHold version/file observations. Original sources, browser identities and update history remain intact. The feature guide distinguishes portable/live-provider evidence from still-open native acceptance.
+
 ## ModHold public metadata · 2026-11-16
 
 The independent ModHold adapter accepts project pages and `/u/handle` author profiles. The [official developer API](https://modholdmods.com/developers) provides public metadata without keys; authenticated downloads are a separate workflow and are not used here. Project checks read the project and all returned file metadata. Author checks traverse every public catalog page and match the case-folded handle exactly, without undocumented author filters or broad-name matches. That can require multiple catalog requests; this is not every author post or every file. Empty author matches do not prove the author has no work elsewhere.
@@ -89,3 +99,5 @@ The native Following panel now accepts explicit schema-v1 JSON reports aligned w
 **Structural validation is not fact verification.** Notices explicitly say “Imported report” and “Not independently verified”; authority and mapping verification flags are attributed to the record. No real author's enforcement status is seeded. Retrieval errors cannot structurally support an enforcement report, but even a structurally valid provider-notice URL must still have its content and authorship reviewed. A past correction, limited restriction or obsolete project is not a verdict on today's account status. Conflicting active reports and different per-project destinations remain review-required.
 
 Opening saved evidence is an explicit action in the same browser identity. Importing never fetches evidence, adds/replaces a follow, starts tracking, downloads, accepts terms or sends a warning externally. Current source records and last-good updates stay intact. A review deadline repaint and preserved input drafts avoid stale labels and lost edits. User-approved verified mapping actions, premium entitlement, independently verified evidence acquisition and live shared-record sync remain OPEN. Existing ModHold tracking can be used independently of unverified cross-site claims.
+
+The historical adapter/report checkpoints above are preserved. [Creator Continuity](CREATOR-CONTINUITY.md) now adds independent primary Nexus evidence acquisition, a dated seed registry and explicitly reviewed mapping actions while retaining this shared-report consumer. Billing/entitlements and live shared-record synchronization remain unimplemented.

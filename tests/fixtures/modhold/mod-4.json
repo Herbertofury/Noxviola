@@ -1,0 +1,48 @@
+{
+  "id": 4,
+  "name": "Word Travels - Friends Talk About Your Deeds - 19560 Voiced Lines (Voiced-Immersive-Dialogue-Reputation-EoS)",
+  "version": "1.3.4",
+  "game": "skyrim-se",
+  "author": {
+    "handle": "SethSaidThat",
+    "name": "SethSaidThat"
+  },
+  "updated": "2026-11-14 18:15:29",
+  "published": "2026-10-10 01:09:42",
+  "page": "https://modholdmods.com/g/skyrim-se/mods/4/word-travels-friends-talk-about-your-deeds-19560-voiced-line",
+  "files": [
+    {
+      "id": 539,
+      "kind": "main",
+      "label": "Main file",
+      "name": "Word Travels - Friends Talk About Your Deeds 1.3.4.zip",
+      "version": "1.3.4",
+      "size": 627790528,
+      "sha256": "c958d82663e6f58b7e8250b0d867890bd0424d888838b16fb510c36dfaf7f295",
+      "scanned": "2026-11-16 18:49:15",
+      "downloads": 122
+    },
+    {
+      "id": 603,
+      "kind": "optional",
+      "label": "SkyrimNet Add-on",
+      "name": "Word Travels - SkyrimNet Add-on 1.0.1.zip",
+      "version": "1.0.1",
+      "size": 947,
+      "sha256": "9959bda5dd3add79c08c8f051a7cc8888b31a18388cfd1963af6e3d0691e64af",
+      "scanned": "2026-11-16 18:24:35",
+      "downloads": 8
+    },
+    {
+      "id": 213,
+      "kind": "optional",
+      "label": "Translation Kit",
+      "name": "Word Travels - Translation Kit 1.3.2.zip",
+      "version": "1.3.2",
+      "size": 9560,
+      "sha256": "d87820d9ec5878d858eced1a8e943fdc37e7556dd78602ff6ea8105693e1295f",
+      "scanned": "2026-11-15 20:39:19",
+      "downloads": 3
+    }
+  ]
+}

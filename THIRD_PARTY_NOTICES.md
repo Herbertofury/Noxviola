@@ -20,13 +20,15 @@ No new artwork was generated, redrawn or downloaded for this reuse. This notice 
 
 ## Packaged dependencies
 
-The lockfile is the authoritative version graph. The current preview packages Electron **44.11.3** and the production JavaScript dependency closure headed by **yauzl 3.4.0**, with **pend 1.2.0**. Their original license files accompany the packaged dependencies/runtime. Development-only test and packaging tools are not application runtime dependencies.
+The lockfile is the authoritative version graph. The current source pins Electron **45.3.2** and the production JavaScript dependency closure headed by **yauzl 3.4.0** and **parse5 8.1.1**, with **pend 1.2.0** and **entities 9.0.0**. parse5 parses inert public profile markup for author-status evidence; it never executes page scripts. Their original license files accompany the packaged dependencies/runtime. Development-only test and packaging tools are not application runtime dependencies.
 
 | Dependency | Declared license | Upstream |
 | --- | --- | --- |
 | Electron | MIT; bundled Chromium and other components have their own notices | [electron/electron](https://github.com/electron/electron) |
 | yauzl | MIT | [thejoshwolfe/yauzl](https://github.com/thejoshwolfe/yauzl) |
 | pend | MIT | [andrewrk/node-pend](https://github.com/andrewrk/node-pend) |
+| parse5 | MIT | [inikulin/parse5](https://github.com/inikulin/parse5) |
+| entities | BSD-2-Clause | [fb55/entities](https://github.com/fb55/entities) |
 
 This inventory supplements the complete notices shipped with those components; it does not replace them or relicense their code. Build manifests record the actual packaged files and hashes.
 

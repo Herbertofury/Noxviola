@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-11-16T20:27:22.377040+00:00",
+  "node": "v24.22.1",
+  "commands": [
+    {
+      "command": "npm test",
+      "passed": 557,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "command": "npm run check",
+      "syntaxFiles": 121
+    },
+    {
+      "command": "git diff --check",
+      "passed": true
+    }
+  ],
+  "catalogComparison": {
+    "transport": "synthetic complete public-provider fixture",
+    "projects": 150,
+    "authors": 12,
+    "pagesPerCatalog": 3,
+    "previousRequests": 36,
+    "sharedRequests": 3,
+    "responseByteRatio": 12,
+    "savedObservationsIdentical": true
+  },
+  "registrySha256": "229ea75c1ee06d4df8ace30c4572abcf612aa510fd7cbe9aee075e521c7039ad",
+  "scope": "Portable production download-event/service bridge, durable following, production renderer DOM and package-source contracts. Native DownloadItem is synthetic in event tests. Live public metadata has a separate receipt. Actual Chromium/native Electron acceptance remains blocked and unclaimed.",
+  "previousPublishedFeatureCommit": "dfa7ca26da768eab24fb0a2d80cbc1640f434713",
+  "integratedBrowserCommit": "ebe412a91cee535fed1710a28f13ea426de3be6f"
+}

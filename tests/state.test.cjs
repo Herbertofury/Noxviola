@@ -1,5 +1,16 @@
 'use strict';
-const {test}=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs');const os=require('node:os');const path=require('node:path');const {address,httpUrl,cleanState,readState,saveState,inspectState,recoverState}=require('../browser/state.cjs');
+const {test}=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs');const os=require('node:os');const path=require('node:path');const {address,httpUrl,extensionUrl,cleanState,readState,saveState,inspectState,recoverState}=require('../browser/state.cjs');
+
+test('extension tab URLs survive strict session round trips without granting navigation', t => {
+  const file=identityFixture(t), id='a'.repeat(32), url=`chrome-extension://${id}/ui/options/index.html?section=general#top`;
+  const state=cleanState({version:1,profiles:[{id:'personal',name:'Personal'}],tabs:[{id:'options',identity:'personal',url,title:'Options'}],activeId:'options'});
+  saveState(file,state);assert.equal(readState(file).tabs[0].url,url);assert.equal(readState(file).activeId,'options');
+  assert.equal(address(url),null,'A typed address cannot authorize an extension page');
+  for(const value of [`chrome-extension://user@${id}/page`,`chrome-extension://${id}:123/page`,'chrome-extension://bad/page',`chrome-extension://${id}/bad\npath`,'file:///private'])assert.equal(extensionUrl(value),null,value);
+  const before=fs.readFileSync(file);
+  assert.throws(()=>saveState(file,{...state,tabs:[{...state.tabs[0],url:'file:///private'}]}));
+  assert.deepEqual(fs.readFileSync(file),before);
+});
 
 function identityFixture(t) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'nox-identity-alias-'));

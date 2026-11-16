@@ -5,7 +5,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const {EventEmitter} = require('node:events');
-const {address, httpUrl, cleanState, inspectState, recoverState, SEARCH} = require('./state.cjs');
+const {address, httpUrl, extensionUrl, cleanState, inspectState, recoverState, SEARCH} = require('./state.cjs');
 const preferenceStore = require('./preferences.cjs');
 const {ResourceMonitor} = require('./resources.cjs');
 const {SpellcheckService} = require('./spellcheck.cjs');
@@ -39,6 +39,10 @@ const chromeHeight = () => HEIGHT + (preferences.showBookmarksBar ? 32 : 0);
 const active = () => tabs.find(tab => tab.id === activeId);
 const tabWorkspace = tab => tab.saved.workspaceId || 'default';
 const visibleTabs = () => tabs.filter(tab => tabWorkspace(tab) === activeWorkspaceId);
+const tabPreview = require('./tab-preview-host.cjs').createTabPreview({
+  WebContentsView, ipcMain, root:__dirname, getWindow:()=>win, blocked:()=>Boolean(panel)||closing,
+  getTabInfo:id=>{const tab=tabs.find(row=>row.id===id && tabWorkspace(row)===activeWorkspaceId);return tab?{title:tab.title,url:tab.url,identity:tab.identity,contents:tab.view?.webContents}:null;},
+});
 const hostEvent = (identity,event,...args) => browserEvents.emit('event',{identity,event,args});
 const send = (channel, value) => { if (win && !win.isDestroyed()) win.webContents.send(channel, value); };
 const notice = message => send('notice', String(message));
@@ -109,8 +113,10 @@ function layout() {
     const index = visible.indexOf(tab.id); tab.view.setVisible(index >= 0 && !panel);
     if (index >= 0) tab.view.setBounds({x:left + firstWidth*index,y:chromeHeight(),width:index === 1 ? available-firstWidth : firstWidth,height:Math.max(0,height-chromeHeight())});
   }
+  tabPreview.layout();
 }
 function setPanel(value) {
+  tabPreview.hide();
   panel = panel === value ? null : value;
   layout(); publish(false); publishVault(); publishAccounts(); publishExtensions(); publishPermissions();
   publishHistory();publishBookmarks();publishWorkspaces();
@@ -138,6 +144,18 @@ function identityReady(identity) {
   }
   return identityInitializations.get(identity);
 }
+function authorizedExtensionURL(identity, value) {
+  const url = extensionUrl(value);
+  if (!url || !extensions || extensionError) return null;
+  const partition = identitySession(identity), runtimeId = new URL(url).hostname;
+  const context = extensions.runtimeContext(partition,runtimeId);
+  return context?.identity === identity && context.runtimeId === runtimeId ? url : null;
+}
+function tabNavigationAllowed(tab, value) {
+  if (httpUrl(value)) return true;
+  const target = authorizedExtensionURL(tab.identity,value), current = extensionUrl(tab.url);
+  return !!target && !!current && new URL(target).hostname === new URL(current).hostname;
+}
 function ensureView(tab) {
   if (tab.view || tab.url === 'about:blank') return tab.view;
   const view = new WebContentsView({webPreferences:{session:identitySession(tab.identity),nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true,allowRunningInsecureContent:false,spellcheck:true}});
@@ -145,23 +163,23 @@ function ensureView(tab) {
   const wc = view.webContents;
   nativeTabs.set(wc.id,tab);wc.setAudioMuted(!!tab.saved.muted);
   wc.setWindowOpenHandler(({url}) => { if (httpUrl(url) && !closing) eventAction(() => newTab(url,tab.identity)); return {action:'deny'}; });
-  wc.on('will-navigate', (event,url) => { if (!httpUrl(url)) event.preventDefault(); });
-  wc.on('will-redirect', (event,url) => { if (!httpUrl(url)) event.preventDefault(); });
+  wc.on('will-navigate', (event,url) => { if (!tabNavigationAllowed(tab,url)) event.preventDefault(); });
+  wc.on('will-redirect', (event,url) => { if (!tabNavigationAllowed(tab,url)) event.preventDefault(); });
   wc.on('page-title-updated', (_event,title) => { if (!closing && tab.title !== title) {
     tab.title = title;publish();hostEvent(tab.identity,'tabs.onUpdated',tab.runtimeId,{title},tabDescriptor(tab));
     if(tab.committedURL===httpUrl(wc.getURL()))try{history?.updateTitle(tab.identity,tab.committedURL,title);}catch(error){notice(`History title was not saved: ${error.message}`);}
   } });
-  wc.on('did-start-loading', () => {tab.loading=true;publish(false);hostEvent(tab.identity,'tabs.onUpdated',tab.runtimeId,{status:'loading'},tabDescriptor(tab));});
+  wc.on('did-start-loading', () => {tabPreview.invalidate(tab.id);tab.loading=true;publish(false);hostEvent(tab.identity,'tabs.onUpdated',tab.runtimeId,{status:'loading'},tabDescriptor(tab));});
   wc.on('did-stop-loading', () => {tab.loading=false;publish(false);hostEvent(tab.identity,'tabs.onUpdated',tab.runtimeId,{status:'complete'},tabDescriptor(tab));});
   wc.on('audio-state-changed',()=>{publish(false);hostEvent(tab.identity,'tabs.onUpdated',tab.runtimeId,{audible:wc.isCurrentlyAudible()},tabDescriptor(tab));});
   wc.on('found-in-page',(_event,result)=>{if(tab.id===activeId)send('find-result',result);});
   function navigated(_event,url,isMainFrame=true,sameDocument=false) {
-    if(isMainFrame===false)return;const target=httpUrl(url);
-    if(!closing&&target){tab.url=target;recordHistory(tab,target);const zoom=originalSession.siteZooms?.[tab.identity]?.[new URL(target).origin];if(zoom!==undefined)wc.setZoomFactor(zoom);publish();hostEvent(tab.identity,'tab-navigation-committed',tab.runtimeId,{sameDocument});hostEvent(tab.identity,'tabs.onUpdated',tab.runtimeId,{url:target},tabDescriptor(tab));}else publish(false);
+    if(isMainFrame===false)return;tabPreview.invalidate(tab.id);const target=httpUrl(url)||(tabNavigationAllowed(tab,url)?extensionUrl(url):null);
+    if(!closing&&target){tab.url=target;if(httpUrl(target)){recordHistory(tab,target);const zoom=originalSession.siteZooms?.[tab.identity]?.[new URL(target).origin];if(zoom!==undefined)wc.setZoomFactor(zoom);}publish();hostEvent(tab.identity,'tab-navigation-committed',tab.runtimeId,{sameDocument});hostEvent(tab.identity,'tabs.onUpdated',tab.runtimeId,{url:target},tabDescriptor(tab));}else publish(false);
   }
   wc.on('did-navigate', (event,url)=>navigated(event,url,true,false));
   wc.on('did-navigate-in-page', (event,url,isMainFrame)=>navigated(event,url,isMainFrame,true));
-  wc.on('render-process-gone', (_event,details) => { tab.loading = false; notice(`Tab stopped (${details.reason}). Reload to recover.`); publish(false); });
+  wc.on('render-process-gone', (_event,details) => { tabPreview.invalidate(tab.id);tab.loading = false; notice(`Tab stopped (${details.reason}). Reload to recover.`); publish(false); });
   wc.on('did-fail-load', (_event,code,description,_url,mainFrame) => { if (mainFrame && code !== -3) notice(`Page could not load: ${description}`); });
   wc.on('context-menu', (_event,params) => Menu.buildFromTemplate([
     ...spellcheck.contextMenu(wc,params),
@@ -174,11 +192,17 @@ function ensureView(tab) {
   layout();
   identityReady(tab.identity).then(() => {
     tab.initializing = false;
-    if (!closing && tab.view === view && !wc.isDestroyed()) wc.loadURL(tab.url).catch(error => notice(`Navigation failed: ${error.message}`));
+    if (!closing && tab.view === view && !wc.isDestroyed()) {
+      if (extensionUrl(tab.url) && !authorizedExtensionURL(tab.identity,tab.url)) {
+        removeView(tab); notice('This extension tab is preserved but unavailable until its extension is enabled in this identity.'); publish(false); return;
+      }
+      wc.loadURL(tab.url).catch(error => notice(`Navigation failed: ${error.message}`));
+    }
   });
   return view;
 }
 function activate(id) {
+  tabPreview.hide();
   const tab = tabs.find(row => row.id === id); if (!tab || closing) return;
   const changed = activeId !== id; activeId = id; currentIdentity = tab.identity;activeWorkspaceId=tabWorkspace(tab);
   if (splitId === id) splitId = null;
@@ -188,7 +212,8 @@ function activate(id) {
 function newTab(url = 'about:blank', identity = currentIdentity, saved = null, position = tabs.length, options = {}) {
   if (closing) return;
   if (!profiles.some(profile => profile.id === identity)) throw new Error('Unknown browser identity.');
-  const target = address(url,preferences.searchEngine,preferences.customSearchURL); if (!target) throw new Error('Use an HTTP(S) address without embedded credentials, or a search.');
+  const target = ((saved || options.extension) && extensionUrl(url)) || address(url,preferences.searchEngine,preferences.customSearchURL); if (!target) throw new Error('Use an HTTP(S) address without embedded credentials, or a search.');
+  if (!saved && extensionUrl(target) && !authorizedExtensionURL(identity,target)) throw new Error('The extension page is not currently authorized in this identity.');
   const record = saved || {id:crypto.randomUUID(),url:target,title:target === 'about:blank' ? 'New tab' : 'Loading…',identity,workspaceId:activeWorkspaceId};
   const tab = tabFromSaved({...record,url:target,identity});
   const foreground=options.active!==false||!active();
@@ -197,11 +222,13 @@ function newTab(url = 'about:blank', identity = currentIdentity, saved = null, p
   if(foreground&&target==='about:blank')send('focus-address');return tab.id;
 }
 function removeView(tab) {
+  tabPreview.invalidate(tab.id);
   if (!tab.view) return;
   const view = tab.view; tab.view = null;
   nativeTabs.delete(view.webContents.id);win.contentView.removeChildView(view);view.webContents.close();
 }
 function closeTab(id) {
+  tabPreview.invalidate(id);
   if (closing) return;
   const index = tabs.findIndex(tab => tab.id === id); if (index < 0) return;
   const [tab] = tabs.splice(index,1); closed.push({saved:savedTab(tab),position:index}); removeView(tab);runtimeTabs.delete(tab.runtimeId);
@@ -217,7 +244,7 @@ function restoreTab() {
 }
 function navigate(value) {
   const url = address(value,preferences.searchEngine,preferences.customSearchURL); if (!url) throw new Error('Use an HTTP(S) address without embedded credentials, or a search.');
-  let tab = active(); if (!tab) return newTab(url);
+  let tab = active(); if (!tab) return newTab(url); tabPreview.invalidate(tab.id);
   showPage(); tab.url = url;tab.pendingTransition='typed';
   if (url === 'about:blank') { removeView(tab); tab.title = 'New tab';hostEvent(tab.identity,'tab-navigation-committed',tab.runtimeId,{sameDocument:false}); }
   else if (!tab.view) ensureView(tab);
@@ -284,19 +311,19 @@ function extensionHost() {
         options(properties,['windowId','url','index','active','pinned'],['active','pinned']);
         if(properties.windowId!==undefined&&properties.windowId!==win.id)throw new Error('The requested browser window does not exist.');
         const url=properties.url===undefined?'about:blank':properties.url;
-        if(url!=='about:blank'&&!httpUrl(url))throw new Error('This tab URL is not supported.');
+        if(url!=='about:blank'&&!httpUrl(url)&&!authorizedExtensionURL(identity,url))throw new Error('This tab URL is not supported or is not authorized in this identity.');
         const position=properties.index===undefined?tabs.length:tabs.indexOf(tabs.filter(tab=>tab.identity===identity)[properties.index]);
         if(properties.index!==undefined&&(!Number.isInteger(properties.index)||properties.index<0||properties.index>tabs.filter(tab=>tab.identity===identity).length))throw new Error('Invalid new-tab index.');
-        const id=newTab(url,identity,null,position<0?tabs.length:position,{active:properties.active!==false}),tab=findTab(id);
+        const id=newTab(url,identity,null,position<0?tabs.length:position,{active:properties.active!==false,extension:!!extensionUrl(url)}),tab=findTab(id);
         if(properties.pinned!==undefined)pinTab(tab,properties.pinned);
         return tabDescriptor(tab);
       },
       update:(identity,id,properties={})=>{
         options(properties,['url','pinned','muted','active'],['pinned','muted','active']);
-        if(properties.url!==undefined&&properties.url!=='about:blank'&&!httpUrl(properties.url))throw new Error('This tab URL is not supported.');
+        if(properties.url!==undefined&&properties.url!=='about:blank'&&!httpUrl(properties.url)&&!authorizedExtensionURL(identity,properties.url))throw new Error('This tab URL is not supported or is not authorized in this identity.');
         const tab=id===undefined?tabs.find(row=>row.identity===identity&&row.id===activeId):runtimeTab(identity,id);
         if(!tab)throw new Error('No active tab in this browser identity.');
-        if(properties.url!==undefined){if(properties.url!=='about:blank'&&!httpUrl(properties.url))throw new Error('This tab URL is not supported.');tab.url=properties.url;tab.pendingTransition='link';
+        if(properties.url!==undefined){tab.url=properties.url;tab.pendingTransition='link';
           if(tab.url==='about:blank'){removeView(tab);tab.title='New tab';hostEvent(tab.identity,'tab-navigation-committed',tab.runtimeId,{sameDocument:false});}else if(!tab.view)ensureView(tab);else if(!tab.initializing)tab.view.webContents.loadURL(tab.url).catch(error=>notice(error.message));}
         if(properties.pinned!==undefined)pinTab(tab,properties.pinned);if(properties.muted!==undefined)muteTab(tab,properties.muted);
         if(properties.active===true)activate(tab.id);else if(properties.active!==undefined&&properties.active!==false)throw new Error('active must be a boolean.');
@@ -430,6 +457,7 @@ async function perform(name, value) {
   const wc = active()?.view?.webContents;
   switch (name) {
     case 'state': return stateView();
+    case 'tab-preview': if (value?.open) {void tabPreview.show(String(value.id||''),value.position).catch(()=>notice('Tab preview is unavailable.'));} else tabPreview.hide(); break;
     case 'new': return newTab(typeof value === 'string' ? value : 'about:blank');
     case 'activate': activate(value); break;
     case 'close':closeTab(value);break;
@@ -600,7 +628,7 @@ async function perform(name, value) {
     case 'extension-preview-cancel': return extensionOperation(() => extensions.cancelPreview(value));
     case 'extension-install': return extensionOperation(() => extensions.install(value?.token,{identities:value?.identities,permissionsAccepted:value?.permissionsAccepted === true,unsignedImportAccepted:value?.unsignedImportAccepted === true,allowFileAccess:false,apiProfile:value?.apiProfile}));
     case 'extension-authorize': return extensionOperation(() => extensions.authorizeIdentity(value?.id,value?.identity,{permissionsAccepted:value?.permissionsAccepted === true,allowFileAccess:false}));
-    case 'extension-enable': return extensionOperation(async () => { if (value?.enabled === false) closeExtensionWindows(value.id,value.identity); return extensions.setEnabled(value?.id,value?.identity,value?.enabled); });
+    case 'extension-enable': return extensionOperation(async () => { if (value?.enabled === false) closeExtensionWindows(value.id,value.identity); const result=await extensions.setEnabled(value?.id,value?.identity,value?.enabled);if(value?.enabled===true&&active()?.identity===value?.identity)ensureView(active());return result; });
     case 'extension-uninstall': return extensionOperation(async () => {
       const choice = await dialog.showMessageBox(win,{type:'question',message:'Uninstall this extension?',detail:'Its owned code and enrollment will be removed. Chromium extension storage remains in its original identities; data erasure is not yet implemented.',buttons:['Cancel','Uninstall'],defaultId:0,cancelId:0,noLink:true});
       if (choice.response !== 1) return null; closeExtensionWindows(value); return extensions.uninstall(value);
@@ -630,6 +658,7 @@ function resumeAfterCloseError(message) {
 }
 async function requestClose() {
   if (closing || allowClose || !win || win.isDestroyed()) return;
+  tabPreview.hide();
   closing = true; clearTimeout(saveTimer); publish(false);
   const pending = await Promise.allSettled([...pendingOperations]);
   const failed = pending.find(result => result.status === 'rejected');
@@ -692,6 +721,11 @@ async function start() {
   downloads.on('status', () => publish(false));
   try { downloads.open(); } catch { /* Downloads exposes its history error and recovery controls without hiding live transfers. */ }
   extensions = new ExtensionManager({directory:path.join(dataDirectory,'extensions'),getSession:identitySession,getIdentities:() => profiles.map(profile => profile.id),loadExtension:createExtensionLoader({app,webContents})});
+  extensions.subscribeRuntime(event => {
+    if (event.kind !== 'revoked' || !event.runtimeId) return;
+    for (const tab of tabs) if (tab.identity === event.identity && extensionUrl(tab.url) && new URL(tab.url).hostname === event.runtimeId) removeView(tab);
+    layout(); publish(false);
+  });
   const {createExtensionBridge}=require('./extension-bridge.cjs');
   extensionBridge=createExtensionBridge({ipcMain,manager:extensions,host:extensionHost(),nativeImage});
   try {await extensions.open();} catch (error) {extensionError = error.message;}
@@ -704,7 +738,7 @@ async function start() {
   win.webContents.on('context-menu',(_event,params)=>Menu.buildFromTemplate([
     ...spellcheck.contextMenu(win.webContents,params),{role:'copy',enabled:!!params.selectionText},{role:'paste',enabled:params.isEditable},
   ]).popup({window:win}));
-  ipcMain.handle('command',command); win.on('resize',layout);
+  ipcMain.handle('command',command); win.on('resize',layout);win.on('blur',tabPreview.hide);win.on('minimize',tabPreview.hide);
   win.on('close',event => {if (!allowClose) {event.preventDefault();requestClose().catch(error => resumeAfterCloseError(error.message));}});
   win.webContents.on('did-finish-load',() => {
     eventAction(() => {if (tabs.length) {ensureView(active() || tabs[0]);layout();publish(false);} else newTab();});
@@ -717,4 +751,4 @@ if (!app.requestSingleInstanceLock()) app.quit();
 else app.whenReady().then(start).catch(error => {dialog.showErrorBox('Noxviola could not open safely',`${error.message}\nExisting data was preserved.`);app.quit();});
 app.on('second-instance',() => {win?.show();win?.focus();});
 app.on('before-quit',event => {if (win && !win.isDestroyed() && !allowClose) {event.preventDefault();requestClose().catch(error => resumeAfterCloseError(error.message));}});
-app.on('window-all-closed',() => app.quit());
+app.on('window-all-closed',() => {tabPreview.destroy();app.quit();});

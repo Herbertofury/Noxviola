@@ -25,6 +25,15 @@ function httpUrl(value) {
   try { const url = new URL(value); return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password ? url.href : null; }
   catch { return null; }
 }
+// Parsing a persisted extension URL is not authorization to load it. The live
+// host must independently verify current enrollment in the tab's identity.
+function extensionUrl(value) {
+  if (typeof value !== 'string' || /[\u0000-\u0020\u007f]/.test(value)) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'chrome-extension:' && /^[a-p]{32}$/.test(url.hostname) && !url.port && !url.username && !url.password ? url.href : null;
+  } catch { return null; }
+}
 function address(value, provider = 'google', customSearchURL) {
   const input = typeof value === 'string' ? value.trim() : '';
   if (!input) return 'about:blank';
@@ -43,7 +52,7 @@ function cleanState(raw = {}, {strict = false} = {}) {
   if (strict && (!Array.isArray(raw.tabs) || !Array.isArray(raw.profiles))) throw storage.fail('Session tabs and identities must be arrays.');
   const seen = new Set();
   const tabs = (Array.isArray(raw.tabs) ? raw.tabs : []).flatMap(row => {
-    const url = row?.url === 'about:blank' ? 'about:blank' : httpUrl(row?.url);
+    const url = row?.url === 'about:blank' ? 'about:blank' : httpUrl(row?.url) || extensionUrl(row?.url);
     if (!url) { if (strict) throw storage.fail('A saved tab has an unsupported or credential-bearing address.'); return []; }
     if (strict && row.title !== undefined && typeof row.title !== 'string') throw storage.fail('A saved tab title has an unsupported value.', 'UNSUPPORTED_DATA');
     for(const name of ['pinned','muted'])if(row[name]!==undefined&&typeof row[name]!=='boolean')throw storage.fail(`A saved tab has an unsupported ${name} value.`,'UNSUPPORTED_DATA');
@@ -85,4 +94,4 @@ function inspectState(file) { return storage.inspect(file, decode, () => cleanSt
 function readState(file) { return inspectState(file).value; }
 function saveState(file, value) { return storage.write(file, value?.version === 1 ? decode(value) : cleanState(value), decode); }
 function recoverState(file, preview) { return storage.recover(file, preview, decode); }
-module.exports = {address, httpUrl, cleanState, readState, saveState, inspectState, recoverState, SEARCH};
+module.exports = {address, httpUrl, extensionUrl, cleanState, readState, saveState, inspectState, recoverState, SEARCH};

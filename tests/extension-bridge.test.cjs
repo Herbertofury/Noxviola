@@ -34,6 +34,17 @@ function fixture(t,{permissions=['tabs','cookies','bookmarks','contextMenus','ac
 }
 function iconCodec(){return {createFromBuffer:png=>({isEmpty:()=>false,getSize:()=>pngDimensions(png),toPNG:()=>png})};}
 const imageData=color=>({width:1,height:1,data:new Uint8ClampedArray(color)});
+test('extension tab queries find only the caller’s own page in its identity',async t=>{
+  const f=fixture(t),url=`chrome-extension://${EXT}/options.html`,other=`chrome-extension://${OTHER}/options.html`;
+  f.tabs.set(31,{id:31,identity:'personal',windowId:1,url,title:'Options'});
+  f.tabs.set(32,{id:32,identity:'work',windowId:1,url,title:'Work options'});
+  f.tabs.set(33,{id:33,identity:'personal',windowId:1,url:other,title:'Other extension'});
+  assert.deepEqual((await f.call('tabs.query',[{url}])).map(tab=>tab.id),[31]);
+  assert.deepEqual((await f.call('tabs.query',[{url:`chrome-extension://${EXT}/*`}])).map(tab=>tab.id),[31]);
+  assert.deepEqual(await f.call('tabs.query',[{url:other}]),[]);
+  assert.deepEqual((await f.call('tabs.query',[{url}],f.event(1))).map(tab=>tab.id),[32]);
+  await assert.rejects(f.call('tabs.create',[{url:other}]),/not supported/);
+});
 test('history traversal operates on the live tab in the extension identity and rejects unsafe contexts',async t=>{
   const f=fixture(t,{permissions:[]}),calls=[];
   let canBack=true,canForward=true,target='https://allowed.test/previous',owner=null;

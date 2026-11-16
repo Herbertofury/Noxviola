@@ -1129,6 +1129,26 @@ async function firstLaunch() {
   });
   expected.pageTools = await pageTools().firstLaunch(expected);
   expected.extensionVisits = (await extensionData(await site())).visits;
+  await check('extension-owned tab creation, URL query, identity isolation and revocation use real native tabs', async () => {
+    const previous=(await state()).activeId, runtimeId=expected.bridgeRuntimeIds[expected.personalIdentity];
+    const background=backgroundPages(runtimeId,expected.personalIdentity)[0];assert.ok(background);
+    const created=await background.executeJavaScript(`browser.tabs.create({url:browser.runtime.getURL('options.html'),active:false})`);
+    const url=`chrome-extension://${runtimeId}/options.html`;
+    assert.equal(created.url,url);
+    const matching=await background.executeJavaScript(`browser.tabs.query({url:${JSON.stringify(url)}})`);
+    assert.equal(matching.length,1);assert.equal(matching[0].id,created.id);
+    const foreign=backgroundPages(expected.bridgeRuntimeIds[expected.secondIdentity],expected.secondIdentity)[0];assert.ok(foreign);
+    assert.equal((await foreign.executeJavaScript(`browser.tabs.query({url:${JSON.stringify(url)}})`)).length,0);
+    const tab=await until(async()=>{const row=(await state()).tabs.find(value=>value.url===url&&value.identity===expected.personalIdentity);return row||null;},'the extension options tab');
+    expected.extensionOptionsTab=tab.id;expected.extensionOptionsURL=url;
+    const view=await activate(tab.id), contents=view.webContents;assert.equal(contents.getURL(),url);
+    await command('extension-enable',{id:expected.bridgeId,identity:expected.personalIdentity,enabled:false});
+    assert.equal(contents.isDestroyed(),true,'Revocation destroys the extension document');
+    assert.equal((await state()).tabs.find(value=>value.id===tab.id).url,url,'Revocation preserves the tab record');
+    await command('extension-enable',{id:expected.bridgeId,identity:expected.personalIdentity,enabled:true});
+    assert.equal((await site(url)).webContents.getURL(),url,'Re-enabling reopens the preserved active tab');
+    await activate(previous);
+  });
   const final = await state();
   expected.tabs = final.tabs.map(({ id, url, identity }) => ({ id, url, identity }));
   expected.profiles = final.profiles;
@@ -1214,6 +1234,15 @@ async function secondLaunch() {
   });
   await check('both native extension storage namespaces preserve complete isolated values after a normal process restart', async () => {
     await createExtensionStorage({ context, result, backgroundPages, partitionFor }).afterRestart(expected, expected.extensionStorage);
+  });
+  await check('extension-owned tab survives process restart and is reauthorized in its own identity', async () => {
+    const previous=(await state()).activeId;
+    const restored=(await state()).tabs.find(tab=>tab.id===expected.extensionOptionsTab);
+    assert.equal(restored?.identity,expected.personalIdentity);assert.equal(restored?.url,expected.extensionOptionsURL);
+    const view=await activate(expected.extensionOptionsTab);assert.equal(view.webContents.getURL(),expected.extensionOptionsURL);
+    const background=backgroundPages(expected.bridgeRuntimeIds[expected.personalIdentity],expected.personalIdentity)[0];
+    assert.equal((await background.executeJavaScript(`browser.tabs.query({url:${JSON.stringify(expected.extensionOptionsURL)}})`)).length,1);
+    await activate(previous);
   });
   await check('library edits and merged metadata survive a real process restart', async () => {
     await window.webContents.executeJavaScript('window.__noxviolaNativeVault = null; void window.browser.onVault(value => { window.__noxviolaNativeVault = value; });');

@@ -12,6 +12,7 @@ const bookmarkSnapshots=new Map();
 function retainBookmarkDrafts(){const retained=new Set([bookmarkData.identity,bookmarkDraftIdentity,bookmarkMoveIdentity]);for(const identity of bookmarkSnapshots.keys())if(!retained.has(identity))bookmarkSnapshots.delete(identity);}
 let lastProfiles = '', lastSettings = '', lastSaveError = '', addressDirty = false;
 const tabNodes = new Map(), groupNodes=new Map(), painting = new WeakMap();
+let hideTabPreview = () => {};
 
 function announce(message) { $('notice').textContent = String(message || ''); $('notice').title = String(message || ''); }
 async function run(name, value) {
@@ -111,6 +112,32 @@ function renderTabs(state) {
   for(const [id,control] of groupNodes)if(!seenGroups.has(id)){control.remove();groupNodes.delete(id);}
   ordered.forEach((control,index)=>{if($('tabs').children[index]!==control)$('tabs').insertBefore(control,$('tabs').children[index]||null);});
 }
+function bindTabPreviews() {
+  const strip = $('tabs'); let timer = null, current = '';
+  const hide = () => {
+    clearTimeout(timer); timer = null;
+    if (current) {current = ''; void run('tab-preview',{open:false});}
+  };
+  hideTabPreview = hide;
+  const schedule = tab => {
+    hide(); if (!tab || tab.hidden || currentState.panel || currentState.closing) return;
+    timer = setTimeout(() => {
+      if (!tab.isConnected || tab.hidden || currentState.panel || currentState.closing) return;
+      const rect = tab.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+      current = tab.dataset.tabId;
+      void run('tab-preview',{open:true,id:current,position:{x:rect.x,y:rect.y,width:rect.width,height:rect.height,orientation:currentState.preferences.tabLayout==='vertical'?'vertical':'horizontal'}});
+    },650);
+  };
+  strip.addEventListener('pointerover',event=>{const tab=event.target.closest('.tab');if(tab&&!tab.contains(event.relatedTarget))schedule(tab);});
+  strip.addEventListener('pointerout',event=>{const tab=event.target.closest('.tab');if(tab&&!tab.contains(event.relatedTarget))hide();});
+  strip.addEventListener('focusin',event=>schedule(event.target.closest('.tab')));
+  strip.addEventListener('focusout',event=>{const tab=event.target.closest('.tab');if(!tab||!tab.contains(event.relatedTarget))hide();});
+  for(const name of ['pointerdown','dragstart','scroll'])strip.addEventListener(name,hide,{passive:true});
+  window.addEventListener('blur',hide);
+  document.addEventListener('keydown',event=>{if(event.key==='Escape')hide();});
+}
+bindTabPreviews();
 const themeMedia=window.matchMedia?.('(prefers-color-scheme: light)');
 function applyAppearance(preferences) {
   document.body.dataset.theme=preferences.theme==='system'?(themeMedia?.matches?'light':'dark'):preferences.theme||'dark';
@@ -133,6 +160,7 @@ function renderPreferenceForm(state) {
 }
 function renderState(state) {
   const old = currentState; currentState = state;
+  if (old.activeWorkspaceId !== state.activeWorkspaceId || old.panel !== state.panel || old.preferences.tabLayout !== state.preferences.tabLayout || state.closing) hideTabPreview();
   const profilesKey = JSON.stringify(state.profiles);
   if (profilesKey !== lastProfiles) {
     setOptions($('identity'),state.profiles,state.currentIdentity);
@@ -566,7 +594,7 @@ function renderWorkspaces() {
     card.append(details,controls);return card;
   },'There are no tabs in this workspace.');
 }
-api.onWorkspaces(data=>{workspaceData=data;renderWorkspaceSelector();renderTabs(currentState);if(currentState.panel==='workspaces')renderWorkspaces();});
+api.onWorkspaces(data=>{hideTabPreview();workspaceData=data;renderWorkspaceSelector();renderTabs(currentState);if(currentState.panel==='workspaces')renderWorkspaces();});
 $('workspace-reset').onclick=resetWorkspaceForm;$('group-reset').onclick=resetGroupForm;
 $('workspace-form').onsubmit=event=>{event.preventDefault();const form=event.currentTarget,value=Object.fromEntries(new FormData(form)),editing=Boolean(value.id);if(!editing)delete value.id;saveForm(form,editing?'workspace-update':'workspace-create',value,resetWorkspaceForm);};
 $('group-form').onsubmit=event=>{event.preventDefault();const form=event.currentTarget,value=Object.fromEntries(new FormData(form)),editing=Boolean(value.id);if(!editing){delete value.id;value.workspaceId=currentState.activeWorkspaceId||'default';}saveForm(form,editing?'group-update':'group-create',value,resetGroupForm);};

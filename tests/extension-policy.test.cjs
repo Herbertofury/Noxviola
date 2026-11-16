@@ -4,6 +4,18 @@ const assert = require('node:assert/strict');
 const {spawnSync} = require('node:child_process');
 const policy = require('../browser/extension-policy.cjs');
 
+test('extension-page URL query matching is limited to the caller’s own origin', () => {
+  const own='a'.repeat(32), other='b'.repeat(32), page=`chrome-extension://${own}/ui/options/index.html`;
+  assert.equal(policy.matches(page,page,{ownExtensionId:own}),true);
+  assert.equal(policy.matches(`chrome-extension://${own}/ui/*`,page,{ownExtensionId:own}),true);
+  assert.equal(policy.matches(page,page),false);
+  assert.equal(policy.matches(page,page,{ownExtensionId:other}),false);
+  assert.equal(policy.matches(`chrome-extension://${other}/*`,page,{ownExtensionId:own}),false);
+  assert.equal(policy.matches(`chrome-extension://${own}/*`,`chrome-extension://${other}/ui/options/index.html`,{ownExtensionId:own}),false);
+  assert.equal(policy.pattern(`chrome-extension://${own}/*`),null,'Query matching never creates host permissions');
+  assert.equal(policy.hasHost({permissions:{hosts:[`chrome-extension://${own}/*`]}},page),false);
+});
+
 test('permission pattern containment covers complete schemes and wildcard hosts, not representative URLs', () => {
   const covers = policy.patternContains;
   assert.equal(covers('*://*.example.test/*', 'https://deep.sub.example.test/anything'), true);

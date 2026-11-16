@@ -273,7 +273,7 @@ class ExtensionBridge {
       return tabs.map(tab => this.tab(context,tab)).filter(tab => Object.entries(query).every(([key,value]) => {
         if (['currentWindow','lastFocusedWindow','windowType'].includes(key)) return true;
         if (key === 'muted') return tab.mutedInfo?.muted === value;
-        if (key === 'url') return typeof tab.url === 'string' && (Array.isArray(value) ? value : [value]).some(pattern => policy.matches(pattern,tab.url,{allowFileAccess:context.allowFileAccess}));
+        if (key === 'url') return typeof tab.url === 'string' && (Array.isArray(value) ? value : [value]).some(pattern => policy.matches(pattern,tab.url,{allowFileAccess:context.allowFileAccess,ownExtensionId:context.runtimeId}));
         if (key === 'title') return typeof value === 'string' && typeof tab.title === 'string' && policy.glob(value,tab.title);
         return tab[key] === value;
       }));

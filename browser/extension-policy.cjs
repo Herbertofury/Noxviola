@@ -48,7 +48,16 @@ function glob(value, candidate) {
   }
   return states.includes(machine.end);
 }
-function matches(value, address, {ignorePath = false, allowFileAccess = false} = {}) {
+function matches(value, address, {ignorePath = false, allowFileAccess = false, ownExtensionId} = {}) {
+  // tabs.query may target the caller's own extension page. Keep this out of
+  // pattern()/host grants: it is not permission to inspect other extensions.
+  const own = typeof value === 'string' && /^chrome-extension:\/\/([a-p]{32})(\/[^#]*)$/.exec(value);
+  if (own) {
+    if (own[1] !== ownExtensionId) return false;
+    let url;
+    try { url = new URL(address); } catch { return false; }
+    return url.protocol === 'chrome-extension:' && url.hostname === ownExtensionId && !url.username && !url.password && !url.port && (ignorePath || glob(own[2],url.pathname + url.search));
+  }
   const spec = pattern(value);
   if (!spec) return false;
   let url;

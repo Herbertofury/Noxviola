@@ -8,6 +8,7 @@ const { execFileSync } = require('node:child_process');
 const APP_FILES = [
   'browser/main.cjs', 'browser/preload.cjs', 'browser/renderer.js',
   'browser/index.html', 'browser/style.css', 'browser/assets/noxviola.png',
+  'browser/tab-preview-host.cjs', 'browser/tab-preview-preload.cjs', 'browser/tab-preview.html', 'browser/tab-preview.js', 'browser/tab-preview.css',
   'browser/capabilities.json', 'browser/state.cjs',
   'browser/storage.cjs', 'browser/session-writer.cjs', 'browser/session-path.cjs',
   'browser/permissions.cjs', 'browser/downloads.cjs', 'browser/extensions.cjs', 'browser/extension-runtime.cjs',

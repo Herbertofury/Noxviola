@@ -311,7 +311,7 @@ test('DOM product: preference controls preserve a dirty draft and apply committe
   ];
   const h = await harness(t,{initial:state({panel:'settings',preferences:initialPreferences,shortcuts})});
   const form = h.$('settings-form');
-  for (const [name,value] of Object.entries({searchEngine:'custom',tabLayout:'vertical',theme:'light',accent:'teal',density:'compact'})) h.select(field(form,name),value);
+  for (const [name,value] of Object.entries({searchEngine:'custom',tabLayout:'vertical',tabSearchPosition:'right',tabSearchStyle:'compact',theme:'light',accent:'teal',density:'compact'})) h.select(field(form,name),value);
   h.input(field(form,'homePage'),'https://home.example/');
   h.input(field(form,'customSearchURL'),'https://search.example/?q={searchTerms}');
   h.check(field(form,'showBookmarksBar'),true);
@@ -326,7 +326,7 @@ test('DOM product: preference controls preserve a dirty draft and apply committe
   assert.equal(field(form,'spellcheckEnabled').checked,false,'the unsaved explicit spelling choice survives background state');
   assert.equal(h.document.body.dataset.theme,'dark','typing a draft does not claim a saved theme');
   h.submit(form); await tick();
-  const expected = {searchEngine:'custom',tabLayout:'vertical',theme:'light',accent:'teal',density:'compact',
+  const expected = {searchEngine:'custom',tabLayout:'vertical',tabSearchPosition:'right',tabSearchStyle:'compact',theme:'light',accent:'teal',density:'compact',
     homePage:'https://home.example/',customSearchURL:'https://search.example/?q={searchTerms}',showBookmarksBar:true,spellcheckEnabled:false,
     toolbar:{home:false,library:true,extensions:false,split:true},shortcuts:{new:'Ctrl+Shift+N','focus-address':''}};
   assert.deepEqual(h.calls.find(call => call.name === 'settings-save').value,expected);
@@ -335,6 +335,7 @@ test('DOM product: preference controls preserve a dirty draft and apply committe
   assert.equal(h.document.body.dataset.accent,'teal');
   assert.equal(h.document.body.dataset.density,'compact');
   assert.equal(h.document.body.dataset.tabLayout,'vertical');
+  assert.equal(h.document.body.dataset.tabSearchPosition,'right');
   assert.equal(h.$('tabs').getAttribute('aria-orientation'),'vertical');
   assert.equal(h.document.querySelector('[data-toolbar="home"]').hidden,true);
   assert.equal(h.document.querySelector('[data-toolbar="extensions"]').hidden,true);

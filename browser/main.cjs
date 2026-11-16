@@ -1,6 +1,6 @@
 'use strict';
 // Browser lifecycle adapted from Herbertofury/Enderloom main.js (GPL-3.0-only).
-const {app, BrowserWindow, WebContentsView, ipcMain, session, dialog, Menu, shell, webContents, nativeImage} = require('electron');
+const {app, BrowserWindow, WebContentsView, ipcMain, session, dialog, Menu, shell, webContents, nativeImage, screen} = require('electron');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
@@ -45,6 +45,10 @@ const tabPreview = require('./tab-preview-host.cjs').createTabPreview({
   WebContentsView, ipcMain, root:__dirname, getWindow:()=>win, blocked:()=>Boolean(panel)||closing,
   getTabInfo:id=>{const tab=tabs.find(row=>row.id===id && tabWorkspace(row)===activeWorkspaceId);return tab?{title:tab.title,url:tab.url,identity:tab.identity,contents:tab.view?.webContents}:null;},
 });
+const tabSearch = require('./tab-search-host.cjs').createTabSearch({BrowserWindow,screen,ipcMain,root:__dirname,getWindow:()=>win,
+  getData:tabSearchData,selectTab:id=>{if(closing)throw new Error('Browser is closing.');findTab(id);activate(id);},
+  closeTab:id=>{if(closing)throw new Error('Browser is closing.');findTab(id);closeTab(id);},
+  restoreTab:id=>{if(closing)throw new Error('Browser is closing.');restoreClosed(id);}});
 const hostEvent = (identity,event,...args) => browserEvents.emit('event',{identity,event,args});
 const send = (channel, value) => { if (win && !win.isDestroyed()) win.webContents.send(channel, value); };
 const notice = message => send('notice', String(message));
@@ -77,6 +81,12 @@ function stateView() {
     canForward:active()?.view?.webContents.navigationHistory.canGoForward() || false,
     engine:{electron:process.versions.electron,chromium:process.versions.chrome,isPackaged:app.isPackaged,appVersion:app.getVersion()}};
 }
+function tabSearchData(){
+  let workspaceList=[],groups=[];
+  try{workspaceList=workspaces?.list()||[];groups=workspaceList.flatMap(item=>workspaces.listGroups(item.id));}catch{}
+  const state=stateView();return {tabs:state.tabs,profiles:state.profiles,activeId:state.activeId,workspaces:workspaceList,groups,style:preferences.tabSearchStyle,
+    closed:closed.map(item=>({closedId:item.closedId,title:item.saved.title,url:item.saved.url,identity:item.saved.identity,workspaceId:item.saved.workspaceId,groupId:item.saved.groupId})).reverse()};
+}
 function queueSave() {
   clearTimeout(saveTimer);
   if (!writer || closing || saveError) return;
@@ -86,7 +96,7 @@ function publish(durable = true) {
   if (durable) queueSave();
   if (queuedPublish) return;
   queuedPublish = true;
-  setImmediate(() => { queuedPublish = false; send('state', stateView()); });
+  setImmediate(() => { queuedPublish = false; send('state', stateView());tabSearch.update(); });
 }
 function publishVault() { send('vault', {items:vaultDocument.items, open:panel === 'vault', error:vaultError, recoveryAvailable:!!vaultRecovery, preview:vaultImport?.preview.summary || null}); }
 function publishAccounts() { send('accounts', {accounts,profiles,open:panel === 'accounts',error:accountError,recoveryAvailable:!!accountRecovery}); }
@@ -244,16 +254,22 @@ function closeTab(id) {
   tabPreview.invalidate(id);
   if (closing) return;
   const index = tabs.findIndex(tab => tab.id === id); if (index < 0) return;
-  const [tab] = tabs.splice(index,1); closed.push({saved:savedTab(tab),position:index}); removeView(tab);runtimeTabs.delete(tab.runtimeId);
+  const workspaceIndex=visibleTabs().findIndex(tab=>tab.id===id);
+  const [tab] = tabs.splice(index,1); closed.push({saved:savedTab(tab),position:index,closedId:crypto.randomUUID()}); removeView(tab);runtimeTabs.delete(tab.runtimeId);
   hostEvent(tab.identity,'tabs.onRemoved',tab.runtimeId,{windowId:win.id,isWindowClosing:false});
   if (splitId === id) splitId = null;
   if (!tabs.length) newTab();
-  else if (activeId === id) {const candidates=visibleTabs();if(candidates.length)activate(candidates[Math.min(index,candidates.length-1)].id);else newTab();}
+  else if (activeId === id) {const candidates=visibleTabs();if(candidates.length)activate(candidates[Math.min(Math.max(workspaceIndex,0),candidates.length-1)].id);else newTab();}
   layout(); publish();
 }
 function restoreTab() {
   const record = closed.pop();
   if (record) newTab(record.saved.url,record.saved.identity,record.saved,record.position);
+}
+function restoreClosed(id) {
+  const index=closed.findIndex(item=>item.closedId===id);
+  if (index<0) throw new Error('That closed tab is no longer available.');
+  const record=closed[index];newTab(record.saved.url,record.saved.identity,record.saved,record.position);closed.splice(index,1);
 }
 function navigate(value) {
   const url = address(value,preferences.searchEngine,preferences.customSearchURL); if (!url) throw new Error('Use an HTTP(S) address without embedded credentials, or a search.');
@@ -471,6 +487,7 @@ async function perform(name, value) {
   switch (name) {
     case 'state': return stateView();
     case 'tab-preview': if (value?.open) {void tabPreview.show(String(value.id||''),value.position).catch(()=>notice('Tab preview is unavailable.'));} else tabPreview.hide(); break;
+    case 'search-tabs': {const width=win.getContentSize()[0],right=preferences.tabSearchPosition==='right',anchor=value?.anchor||{x:right?width-180:38,y:0,width:28,height:34,align:right?'right':'left'};tabPreview.hide();tabSearch.show(anchor);break;}
     case 'new': return newTab(typeof value === 'string' ? value : 'about:blank');
     case 'activate': activate(value); break;
     case 'close':closeTab(value);break;
@@ -671,7 +688,7 @@ function resumeAfterCloseError(message) {
 }
 async function requestClose() {
   if (closing || allowClose || !win || win.isDestroyed()) return;
-  tabPreview.hide();
+  tabPreview.hide();tabSearch.dismiss();
   closing = true; clearTimeout(saveTimer); publish(false);
   const pending = await Promise.allSettled([...pendingOperations]);
   const failed = pending.find(result => result.status === 'rejected');
@@ -746,22 +763,25 @@ async function start() {
     extensions:()=>extensions.list().map(item=>({...item,identities:item.identities.map(grant=>({...grant,session:sessionTargets.get(grant.identity)}))}))});
   session.defaultSession.setPermissionCheckHandler(() => false); session.defaultSession.setPermissionRequestHandler((_wc,_permission,callback) => callback(false));
   writer = new SessionWriter(sessionFile); writer.on('result',result => {saveError = result.error || '';if (result.error) notice(`Session not saved: ${result.error}`);publish(false);});
-  win = new BrowserWindow({title:'Noxviola',width:1320,height:860,minWidth:700,minHeight:480,backgroundColor:'#171122',webPreferences:{preload:path.join(__dirname,'preload.cjs'),nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true}});
+  win = new BrowserWindow({title:'Noxviola',icon:path.join(__dirname,'assets/noxviola.png'),width:1320,height:860,minWidth:700,minHeight:480,backgroundColor:'#171122',autoHideMenuBar:true,
+    ...(process.platform === 'win32' ? {titleBarStyle:'hidden',titleBarOverlay:{color:'#171021',symbolColor:'#d9c7ee',height:38}} : {}),
+    webPreferences:{preload:path.join(__dirname,'preload.cjs'),nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true}});
   win.webContents.setWindowOpenHandler(() => ({action:'deny'})); win.webContents.on('will-navigate',event => event.preventDefault());
   win.webContents.on('context-menu',(_event,params)=>Menu.buildFromTemplate([
     ...spellcheck.contextMenu(win.webContents,params),{role:'copy',enabled:!!params.selectionText},{role:'paste',enabled:params.isEditable},
   ]).popup({window:win}));
-  ipcMain.handle('command',command); win.on('resize',layout);win.on('blur',tabPreview.hide);win.on('minimize',tabPreview.hide);
+  ipcMain.handle('command',command); win.on('resize',()=>{layout();tabSearch.dismiss();});win.on('move',tabSearch.dismiss);win.on('blur',tabPreview.hide);win.on('minimize',()=>{tabPreview.hide();tabSearch.dismiss();});
   win.on('close',event => {if (!allowClose) {event.preventDefault();requestClose().catch(error => resumeAfterCloseError(error.message));}});
   win.webContents.on('did-finish-load',() => {
     eventAction(() => {if (tabs.length) {ensureView(active() || tabs[0]);layout();publish(false);} else newTab();});
     publishVault();publishAccounts();publishExtensions();publishPermissions();publishBookmarks();publishWorkspaces();publishExtensionActions();
   });
   buildMenu();
+  win.setMenuBarVisibility(false);
   await win.loadFile(path.join(__dirname,'index.html'));
 }
 if (!app.requestSingleInstanceLock()) app.quit();
 else app.whenReady().then(start).catch(error => {dialog.showErrorBox('Noxviola could not open safely',`${error.message}\nExisting data was preserved.`);app.quit();});
 app.on('second-instance',() => {win?.show();win?.focus();});
 app.on('before-quit',event => {if (win && !win.isDestroyed() && !allowClose) {event.preventDefault();requestClose().catch(error => resumeAfterCloseError(error.message));}});
-app.on('window-all-closed',() => {tabPreview.destroy();app.quit();});
+app.on('window-all-closed',() => {tabSearch.destroy();tabPreview.destroy();app.quit();});

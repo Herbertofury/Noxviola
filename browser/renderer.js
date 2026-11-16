@@ -14,6 +14,13 @@ let lastProfiles = '', lastSettings = '', lastSaveError = '', addressDirty = fal
 const tabNodes = new Map(), groupNodes=new Map(), painting = new WeakMap();
 let hideTabPreview = () => {};
 let revealedTabKey = '';
+function updateWindowOverlay(){
+  const overlay=navigator.windowControlsOverlay,rect=overlay?.getTitlebarAreaRect();
+  document.body.dataset.windowOverlay=String(Boolean(overlay?.visible));
+  document.documentElement.style.setProperty('--caption-reserve',`${overlay?.visible&&rect?Math.max(0,innerWidth-rect.right-8):0}px`);
+}
+navigator.windowControlsOverlay?.addEventListener('geometrychange',updateWindowOverlay);
+window.addEventListener('resize',updateWindowOverlay);updateWindowOverlay();
 
 function announce(message) { $('notice').textContent = String(message || ''); $('notice').title = String(message || ''); }
 async function run(name, value) {
@@ -156,7 +163,7 @@ bindTabPreviews();
 const themeMedia=window.matchMedia?.('(prefers-color-scheme: light)');
 function applyAppearance(preferences) {
   document.body.dataset.theme=preferences.theme==='system'?(themeMedia?.matches?'light':'dark'):preferences.theme||'dark';
-  document.body.dataset.accent=preferences.accent||'violet';document.body.dataset.density=preferences.density||'comfortable';
+  document.body.dataset.accent=preferences.accent||'violet';document.body.dataset.density=preferences.density||'comfortable';document.body.dataset.tabSearchPosition=preferences.tabSearchPosition||'left';
   document.querySelectorAll('[data-toolbar]').forEach(control=>{control.hidden=preferences.toolbar?.[control.dataset.toolbar]===false;});
   $('bookmarks-bar').hidden=!preferences.showBookmarksBar;
   $('extension-actions').hidden=preferences.toolbar?.extensions===false||!extensionActions.length;
@@ -164,8 +171,8 @@ function applyAppearance(preferences) {
 }
 themeMedia?.addEventListener('change',()=>applyAppearance(currentState.preferences));
 function renderPreferenceForm(state) {
-  const form=$('settings-form'),values={theme:'dark',accent:'violet',density:'comfortable',homePage:'about:blank',customSearchURL:'https://duckduckgo.com/?q={searchTerms}',...state.preferences};
-  editForm(form,values,['searchEngine','tabLayout','theme','accent','density','homePage','customSearchURL']);
+  const form=$('settings-form'),values={theme:'dark',accent:'violet',density:'comfortable',tabSearchPosition:'left',tabSearchStyle:'detailed',homePage:'about:blank',customSearchURL:'https://duckduckgo.com/?q={searchTerms}',...state.preferences};
+  editForm(form,values,['searchEngine','tabLayout','tabSearchPosition','tabSearchStyle','theme','accent','density','homePage','customSearchURL']);
   form.elements.namedItem('showBookmarksBar').checked=Boolean(values.showBookmarksBar);
   form.elements.namedItem('spellcheckEnabled').checked=values.spellcheckEnabled!==false;
   for(const name of ['home','library','extensions','split'])form.elements.namedItem(`toolbar.${name}`).checked=values.toolbar?.[name]!==false;
@@ -250,6 +257,7 @@ $('find-next').onclick=()=>run('find',{query:$('find').value,forward:true,findNe
 $('find').onkeydown=event=>{if(composing(event))return;if(event.key==='Enter'){event.preventDefault();run('find',{query:$('find').value,forward:!event.shiftKey,findNext:true});}else if(event.key==='Escape'){event.preventDefault();closeFind();}};
 api.onFindResult(result=>{$('find-count').textContent=result.matches?`${result.activeMatchOrdinal||0}/${result.matches}`:'';});
 $('open-tools').onclick=()=>run('tools');
+$('tab-search-toggle').onclick=()=>{const rect=$('tab-search-toggle').getBoundingClientRect();void run('search-tabs',{anchor:{x:rect.x,y:rect.y,width:rect.width,height:rect.height,align:currentState.preferences.tabSearchPosition==='right'?'right':'left'}});};
 $('start-search').onclick=()=>{$('address').focus();$('address').select();};
 $('identity').onchange=()=>run('identity-switch',$('identity').value);
 $('add-identity').onclick=()=>{const field=$('identity-name');field.hidden=!field.hidden;if(!field.hidden)field.focus();};
@@ -457,7 +465,7 @@ $('permission-reset').onclick=()=>guarded($('permission-reset'),()=>api.command(
 $('settings-form').addEventListener('input',()=>{settingsDirty=true;});$('settings-form').addEventListener('change',()=>{settingsDirty=true;});
 $('settings-form').onsubmit=event=>{
   event.preventDefault();const form=event.currentTarget,data=new FormData(form),value={toolbar:{},shortcuts:{}};
-  for(const name of ['searchEngine','tabLayout','theme','accent','density','homePage','customSearchURL'])value[name]=data.get(name);
+  for(const name of ['searchEngine','tabLayout','tabSearchPosition','tabSearchStyle','theme','accent','density','homePage','customSearchURL'])value[name]=data.get(name);
   value.showBookmarksBar=form.elements.namedItem('showBookmarksBar').checked;
   value.spellcheckEnabled=form.elements.namedItem('spellcheckEnabled').checked;
   for(const name of ['home','library','extensions','split'])value.toolbar[name]=form.elements.namedItem(`toolbar.${name}`).checked;

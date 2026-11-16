@@ -9,9 +9,11 @@
 <header>
  <div id="tab-strip">
   <img class="chrome-brand" src="assets/noxviola.png" alt="Noxviola">
+  <button id="tab-search-toggle" type="button" title="Search all tabs" aria-label="Search all tabs"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></button>
   <div id="tabs" role="tablist" aria-label="Browser tabs"></div>
   <button id="new-tab" data-command="new" type="button" title="New tab" aria-label="New tab">＋</button>
   <p id="notice" role="status"></p><button id="retry-save" data-command="save-session" hidden>Retry save</button>
+  <div id="titlebar-drag" aria-hidden="true"></div>
  </div>
  <nav aria-label="Browser navigation">
   <select id="identity" aria-label="Browser identity"></select>
@@ -29,6 +31,7 @@
   <button id="find-toggle" type="button" title="Find in page" aria-label="Find in page" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg></button>
   <div id="find-controls" hidden><input id="find" aria-label="Find in page" placeholder="Find in page"><span id="find-count" class="subtle" aria-live="polite"></span><button id="find-previous" aria-label="Previous match" title="Previous match">↑</button><button id="find-next" aria-label="Next match" title="Next match">↓</button><button id="find-close" aria-label="Close find" title="Close find">×</button></div>
   <button id="open-tools" title="Browser tools" aria-label="Browser tools"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <div id="nav-drag" aria-hidden="true"></div>
  </nav>
  <div id="bookmarks-bar" aria-label="Bookmarks bar" hidden></div>
 </header>
@@ -117,6 +120,8 @@
  <form id="settings-form" class="editor">
   <label>Search provider<select name="searchEngine"><option value="duckduckgo">DuckDuckGo</option><option value="google">Google</option><option value="bing">Bing</option><option value="custom">Custom provider</option></select></label>
   <label>Tabs<select name="tabLayout"><option value="horizontal">Horizontal</option><option value="vertical">Vertical</option></select></label>
+  <label>Tab search button<select name="tabSearchPosition"><option value="left">Before tabs</option><option value="right">After tabs</option></select></label>
+  <label>Tab search appearance<select name="tabSearchStyle"><option value="detailed">Detailed</option><option value="compact">Compact</option></select></label>
   <label>Appearance<select name="theme"><option value="dark">Dark</option><option value="light">Light</option><option value="system">Follow system</option></select></label>
   <label>Accent<select name="accent"><option value="violet">Violet</option><option value="blue">Blue</option><option value="teal">Teal</option><option value="rose">Rose</option><option value="amber">Amber</option></select></label>
   <label>Spacing<select name="density"><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></label>

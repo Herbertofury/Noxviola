@@ -109,3 +109,28 @@ body[data-theme=light] #address{background:#fff;border-color:#c8b8d1}
 nav{position:relative}
 #find-controls{position:absolute;z-index:4;top:2px;right:33px;padding:0 3px;border:1px solid #604577;border-radius:8px;background:#21172b;box-shadow:0 4px 14px #08040d88}
 body[data-theme=light] #find-controls{background:#f8f3fb;border-color:#b5a6c4}
+/* On Windows, keep the native caption controls and a draggable area in the tab row. */
+@media (display-mode: window-controls-overlay){
+ #tab-strip{padding-right:calc(100% - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100%));-webkit-app-region:drag}
+ #tab-strip #tabs,#tab-strip button,#tab-strip p{-webkit-app-region:no-drag}
+ body[data-tab-layout=vertical] #tab-strip{padding-right:8px}
+ body[data-tab-layout=vertical] nav{padding-right:calc(100% - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100%));-webkit-app-region:drag}
+ body[data-tab-layout=vertical] nav>*{-webkit-app-region:no-drag}
+}
+body[data-window-overlay=true] #tab-strip{padding-right:var(--caption-reserve);-webkit-app-region:drag}
+body[data-window-overlay=true] #tab-strip #tabs,body[data-window-overlay=true] #tab-strip button,body[data-window-overlay=true] #tab-strip p{-webkit-app-region:no-drag}
+body[data-window-overlay=true][data-tab-layout=vertical] #tab-strip{padding-right:8px}
+body[data-window-overlay=true][data-tab-layout=vertical] nav{padding-right:var(--caption-reserve);-webkit-app-region:drag}
+body[data-window-overlay=true][data-tab-layout=vertical] nav>*{-webkit-app-region:no-drag}
+#tab-strip .chrome-brand{order:0}
+#tab-search-toggle{order:1;display:grid;place-items:center;flex:none;width:27px;min-width:27px;height:27px;min-height:27px;padding:5px;border:0;border-radius:8px;background:#ffffff0b;color:#bca2d7}
+#tab-search-toggle:hover{background:#9a70ca2a;color:#fff}
+#tab-search-toggle svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+#tabs{order:2}#new-tab{order:3}#notice{order:5}#retry-save{order:6}
+body[data-tab-search-position=right] #tab-search-toggle{order:4}
+body[data-theme=light] #tab-search-toggle{background:#70558618;color:#65447f}
+body[data-theme=light] #tab-search-toggle:hover{background:#70558630;color:#30213e}
+#titlebar-drag{display:none}
+body[data-window-overlay=true]:not([data-tab-layout=vertical]) #titlebar-drag{display:block;order:7;flex:1 0 20px;height:30px;-webkit-app-region:drag}
+#nav-drag{display:none}
+body[data-window-overlay=true][data-tab-layout=vertical] #nav-drag{display:block;flex:0 0 20px;height:28px;-webkit-app-region:drag}

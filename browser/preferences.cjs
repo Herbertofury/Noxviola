@@ -10,6 +10,7 @@ const SHORTCUTS = Object.freeze([
   {id:'previous-tab', label:'Previous tab', accelerator:'Ctrl+Shift+Tab'},
   {id:'focus-address', label:'Address or search', accelerator:'CmdOrCtrl+L'},
   {id:'focus-find', label:'Find in page', accelerator:'CmdOrCtrl+F'},
+  {id:'search-tabs', label:'Search tabs', accelerator:'CmdOrCtrl+Shift+A'},
   {id:'bookmark-current', label:'Bookmark current page', accelerator:'CmdOrCtrl+D'},
   {id:'history', label:'History', accelerator:'CmdOrCtrl+H'},
   {id:'bookmarks', label:'Bookmarks', accelerator:'CmdOrCtrl+Shift+O'},
@@ -29,8 +30,9 @@ const SHORTCUTS = Object.freeze([
 const ENUMS = Object.freeze({
   searchEngine:['duckduckgo','google','bing','custom'], tabLayout:['horizontal','vertical'],
   theme:['dark','light','system'], accent:['violet','blue','teal','rose','amber'], density:['comfortable','compact'],
+  tabSearchPosition:['left','right'], tabSearchStyle:['detailed','compact'],
 });
-const DEFAULTS = Object.freeze({searchEngine:'duckduckgo',tabLayout:'horizontal',theme:'dark',accent:'violet',density:'comfortable',
+const DEFAULTS = Object.freeze({searchEngine:'duckduckgo',tabLayout:'horizontal',theme:'dark',accent:'violet',density:'comfortable',tabSearchPosition:'left',tabSearchStyle:'detailed',
   homePage:'about:blank',customSearchURL:'https://duckduckgo.com/?q={searchTerms}',showBookmarksBar:false,spellcheckEnabled:true,
   toolbar:{library:true,extensions:true,split:true,home:true},shortcuts:{}});
 const PREFERENCE_KEYS = Object.freeze(Object.keys(DEFAULTS));
@@ -62,11 +64,15 @@ function accelerator(value) {
 }
 function shortcutList(preferences={}, platform=process.platform) {
   const seen=new Map();
+  const equivalent=value=>value.replace('CmdOrCtrl',platform==='darwin'?'Command':'Ctrl');
+  // A newly introduced default must not invalidate an older custom shortcut.
+  const tabSearchDefault=equivalent('CmdOrCtrl+Shift+A');
+  const defaultSearchConflict=SHORTCUTS.some(item=>item.id!=='search-tabs'&&equivalent(accelerator(Object.hasOwn(preferences.shortcuts||{},item.id)?preferences.shortcuts[item.id]:item.accelerator))===tabSearchDefault);
   return SHORTCUTS.map(item=>{
-    const combination=accelerator(Object.hasOwn(preferences.shortcuts || {},item.id)?preferences.shortcuts[item.id]:item.accelerator);
-    const equivalent=combination.replace('CmdOrCtrl',platform==='darwin'?'Command':'Ctrl');
-    if(equivalent && seen.has(equivalent))fail(`The shortcut ${combination} is assigned to both ${seen.get(equivalent)} and ${item.label}.`);
-    if(equivalent)seen.set(equivalent,item.label);
+    const combination=accelerator(Object.hasOwn(preferences.shortcuts || {},item.id)?preferences.shortcuts[item.id]:item.id==='search-tabs'&&defaultSearchConflict?'':item.accelerator);
+    const key=equivalent(combination);
+    if(key && seen.has(key))fail(`The shortcut ${combination} is assigned to both ${seen.get(key)} and ${item.label}.`);
+    if(key)seen.set(key,item.label);
     return {...item,defaultAccelerator:item.accelerator,accelerator:combination};
   });
 }

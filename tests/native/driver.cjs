@@ -953,6 +953,17 @@ async function firstLaunch() {
     await command('split');
     await captureMetrics('more-than-twelve-duplicate-tabs-loaded');
   });
+  await check('closing an interleaved workspace tab selects its next visible neighbor', async () => {
+    const previous=(await state()).activeId,workspace=await command('workspace-create',{name:'Synthetic close placement',color:'blue'}),ids=[];
+    for(let i=0;i<5;i++)ids.push(await command('new'));
+    await command('tab-assign',{id:ids[0],workspaceId:workspace.id});
+    await command('tab-assign',{id:ids[2],workspaceId:workspace.id});
+    await command('activate',ids[1]);await command('close',ids[1]);
+    assert.equal((await state()).activeId,ids[3],'The next tab in the active workspace must win over a later global-array index.');
+    await command('activate',previous);
+    for(const id of [ids[0],ids[2],ids[3],ids[4]])await command('close',id);
+    await command('workspace-remove',workspace.id);
+  });
   await check('actual DownloadItem completion, pause/resume and cancellation are reflected by browser commands', async () => {
     const view = await activate(expected.personalTab);
     const completed = await selectDownload(view, '/download?identity=personal', 'complete-personal.txt');

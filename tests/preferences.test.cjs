@@ -29,6 +29,15 @@ test('shortcuts resolve platform aliases, reject conflicts and can be individual
   for(const shortcut of ['Ctrl+Ctrl+T','Ctrl++','text','Ctrl+Command+T','Ctrl+Unknown','T'])assert.throws(()=>preference.accelerator(shortcut));
   assert.equal(preference.accelerator('Shift+Control+K'),'Ctrl+Shift+K');
 });
+test('tab search settings persist and the new default does not invalidate an existing shortcut',()=>{
+  const old=preference.preferences({shortcuts:{history:'Ctrl+Shift+A'}},{platform:'win32'});
+  const shortcuts=preference.shortcutList(old,'win32');
+  assert.equal(shortcuts.find(item=>item.id==='history').accelerator,'Ctrl+Shift+A');
+  assert.equal(shortcuts.find(item=>item.id==='search-tabs').accelerator,'');
+  const chosen=preference.applyPreferences(old,{tabSearchPosition:'right',tabSearchStyle:'compact'});
+  assert.equal(chosen.tabSearchPosition,'right');assert.equal(chosen.tabSearchStyle,'compact');
+  assert.equal(preference.previewPreset(preference.preferences({}),preference.exportPreset(chosen)).preferences.tabSearchStyle,'compact');
+});
 test('presets include supported presentation choices only and preview without altering live values',()=>{
   const current=preference.preferences({ownerPrivateMetadata:{secret:'not exported'},toolbar:{futureSecret:'not exported'},shortcuts:{futureSecret:'not exported'}});
   const exported=preference.exportPreset(current);assert.equal(exported.preferences.ownerPrivateMetadata,undefined);assert.equal(exported.preferences.toolbar.futureSecret,undefined);assert.equal(exported.preferences.shortcuts.futureSecret,undefined);

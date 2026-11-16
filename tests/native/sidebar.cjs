@@ -20,10 +20,11 @@ async function exerciseSidebar({window,context,command,state,activate,partitionF
   await command('split');await command('settings-save',{tabLayout:saved.tabLayout,sidebarSide:saved.sidebarSide});
   const history=await command('sidebar-data');assert.equal(history.identity,expected.personalIdentity);assert.ok(history.items.some(item=>item.url===before.tabs.find(tab=>tab.id===expected.personalTab).url));
   await command('sidebar-select','bookmarks');await until(()=>window.webContents.executeJavaScript(`document.querySelector('#sidebar-items').textContent.includes(${JSON.stringify(bookmark.title)})`),'real bookmark in the sidebar');
-  const url=`${context.origin}/page?sidebar=isolated`,app={id:'native-sidebar-fixture',name:'Synthetic sidebar fixture',url};
+  const url=`${context.origin}/sidebar-icon?sidebar=isolated`,app={id:'native-sidebar-fixture',name:'Synthetic sidebar fixture',url};
   await command('settings-save',{sidebarApps:[...saved.sidebarApps,app],sidebarSide:'right',sidebarWidth:300});await command('sidebar-select',`app:${app.id}`);
   const findView=identity=>window.contentView.children.find(view=>view.webContents&&!view.webContents.isDestroyed()&&view.webContents.session===partitionFor(identity)&&view.webContents.getURL()===url);
   const personal=await until(()=>findView(expected.personalIdentity),'personal sidebar document');assert.equal(personal.webContents.getLastWebPreferences().sandbox,true);assert.equal(personal.webContents.getLastWebPreferences().nodeIntegration,false);
+  await until(()=>window.webContents.executeJavaScript("document.querySelector('[data-app-id=native-sidebar-fixture] img')?.src.startsWith('data:image/png;base64,')"),'real sidebar favicon in the launcher');
   await personal.webContents.executeJavaScript("localStorage.setItem('noxviola-sidebar-fixture','personal')");
   await personal.webContents.executeJavaScript(`window.sidebarMessage='';window.addEventListener('message',e=>{window.sidebarMessage=e.data});window.open(${JSON.stringify(`${context.origin}/page?sidebar-popup=personal`)},'_blank','width=480,height=600');true`,true);
   const popup=await until(()=>BrowserWindow.getAllWindows().find(w=>w!==window&&!w.isDestroyed()&&w.webContents.getURL().includes('sidebar-popup=personal')),'sidebar sign-in popup');

@@ -3,7 +3,7 @@
 // executes browser-shell code in the website. Popups remain in that identity.
 const {httpUrl}=require('./state.cjs');
 
-function createSidebarWebPanel({WebContentsView,getWindow,getSession,identityReady=async()=>{},onChange=()=>{}}){
+function createSidebarWebPanel({WebContentsView,getWindow,getSession,identityReady=async()=>{},loadFavicon=async()=>'',onChange=()=>{}}){
   const entries=new Map();let current=null,visible=false,bounds=null,disposed=false;
   const keyFor=(identity,url)=>JSON.stringify([identity,url]);
   function canTraverse(wc,direction){
@@ -19,7 +19,8 @@ function createSidebarWebPanel({WebContentsView,getWindow,getSession,identityRea
     const wc=current?.view.webContents;
     return {visible:Boolean(visible&&current),identity:current?.identity||null,site:current?.site||null,
       url:current?.url||null,title:current?.title||'',loading:Boolean(current?.loading),error:current?.error||'',
-      muted:Boolean(wc&&!wc.isDestroyed()&&wc.isAudioMuted()),canGoBack:canTraverse(wc,'back'),canGoForward:canTraverse(wc,'forward'),loadedPanels:entries.size};
+      muted:Boolean(wc&&!wc.isDestroyed()&&wc.isAudioMuted()),canGoBack:canTraverse(wc,'back'),canGoForward:canTraverse(wc,'forward'),loadedPanels:entries.size,
+      icons:current?[...entries.values()].filter(entry=>entry.identity===current.identity&&entry.favicon).map(entry=>({site:entry.site,icon:entry.favicon})):[]};
   }
   function notify(){onChange(snapshot());}
   function validBounds(rect,win){
@@ -77,10 +78,18 @@ function createSidebarWebPanel({WebContentsView,getWindow,getSession,identityRea
     const view=new WebContentsView({webPreferences:{session,nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true,allowRunningInsecureContent:false,spellcheck:true}});
     const wc=view.webContents;
     if(wc.session!==session){wc.close();throw new Error('The sidebar identity session could not be verified.');}
-    const entry={key:keyFor(identity,site),identity,site,url:site,title:'',view,popups:new Set(),started:false,pending:null,loading:false,error:''};
+    const entry={key:keyFor(identity,site),identity,site,url:site,title:'',favicon:'',faviconRevision:0,view,popups:new Set(),started:false,pending:null,loading:false,error:''};
     view.setBackgroundColor('#171122');view.setVisible(false);win.contentView.addChildView(view);
     protectPopupSource(wc,entry,session);
     for(const eventName of ['will-navigate','will-redirect'])wc.on(eventName,(event,url)=>{if(!httpUrl(url))event.preventDefault();});
+    wc.on('did-start-navigation',(_event,_url,isSameDocument,isMainFrame)=>{if(isMainFrame&&!isSameDocument){entry.faviconRevision++;if(entry.favicon){entry.favicon='';if(current?.identity===entry.identity)notify();}}});
+    wc.on('page-favicon-updated',(_event,urls)=>{
+      const page=wc.getURL(),revision=++entry.faviconRevision;
+      Promise.resolve().then(()=>loadFavicon(session,page,urls)).then(icon=>{
+        if(disposed||entries.get(entry.key)!==entry||wc.isDestroyed()||entry.faviconRevision!==revision)return;
+        if(entry.favicon!==icon){entry.favicon=icon;if(current?.identity===entry.identity)notify();}
+      }).catch(()=>{});
+    });
     wc.on('page-title-updated',(_event,title)=>{entry.title=title;if(current===entry)notify();});
     wc.on('did-start-loading',()=>{entry.loading=true;entry.error='';if(current===entry)notify();});
     wc.on('did-stop-loading',()=>{entry.loading=false;if(current===entry)notify();});

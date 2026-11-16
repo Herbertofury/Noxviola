@@ -46,7 +46,7 @@ const active = () => tabs.find(tab => tab.id === activeId);
 const tabWorkspace = tab => tab.saved.workspaceId || 'default';
 const visibleTabs = () => tabs.filter(tab => tabWorkspace(tab) === activeWorkspaceId);
 const favicons = createFaviconLoader({nativeImage});
-const sidebarWeb=createSidebarWebPanel({WebContentsView,getWindow:()=>win,getSession:identitySession,identityReady,onChange:value=>send('sidebar-web-state',value)});
+const sidebarWeb=createSidebarWebPanel({WebContentsView,getWindow:()=>win,getSession:identitySession,identityReady,loadFavicon:favicons.load,onChange:value=>send('sidebar-web-state',value)});
 const tabPreview = require('./tab-preview-host.cjs').createTabPreview({
   WebContentsView, ipcMain, root:__dirname, getWindow:()=>win, blocked:()=>Boolean(panel)||closing,
   getTabInfo:id=>{const tab=tabs.find(row=>row.id===id && tabWorkspace(row)===activeWorkspaceId);return tab?{title:tab.title,url:tab.url,identity:tab.identity,contents:tab.view?.webContents}:null;},

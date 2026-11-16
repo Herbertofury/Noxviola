@@ -36,6 +36,10 @@ function createFixtureServer() {
         }, 25);
         response.once('close', () => clearInterval(timer));
       }
+    } else if (url.pathname === '/sidebar-icon.png') {
+      response.setHeader('Content-Type', 'image/png');response.end(fs.readFileSync(path.join(__dirname,'../../browser/assets/noxviola.png')));
+    } else if (url.pathname === '/sidebar-icon') {
+      response.setHeader('Content-Type', 'text/html; charset=utf-8');response.end('<!doctype html><html><head><title>Sidebar icon fixture</title><link rel="icon" href="/sidebar-icon.png"></head><body><h1>Sidebar fixture</h1></body></html>');
     } else if (url.pathname === '/page' || url.pathname === '/') {
       response.setHeader('Content-Type', 'text/html; charset=utf-8');
       response.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'");

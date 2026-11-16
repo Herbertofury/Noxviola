@@ -2,14 +2,14 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),{EventEmitter}=require('node:events');
 const {createSidebarWebPanel}=require('../browser/sidebar-web-panel.cjs');
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
-function fixture({ready=async()=>{}}={}){
+function fixture({ready=async()=>{},loadFavicon=async()=>''}={}){
  const sessions={personal:{id:'personal'},work:{id:'work'}},views=[],events=[];
  class View{
-  constructor(options){this.options=options;this.visible=false;this.webContents=new EventEmitter();const wc=this.webContents;wc.session=options.webPreferences.session;wc.destroyed=false;wc.muted=false;wc.isDestroyed=()=>wc.destroyed;wc.isAudioMuted=()=>wc.muted;wc.setAudioMuted=v=>{wc.muted=v;};wc.focus=()=>{throw Error('sidebar must not steal focus');};wc.setWindowOpenHandler=fn=>{wc.popup=fn;};wc.loadURL=async url=>{events.push(['load',wc.session.id,url]);};wc.reload=()=>events.push(['reload',wc.session.id]);wc.close=()=>{wc.destroyed=true;};views.push(this);}
+  constructor(options){this.options=options;this.visible=false;this.webContents=new EventEmitter();const wc=this.webContents;wc.session=options.webPreferences.session;wc.destroyed=false;wc.muted=false;wc.isDestroyed=()=>wc.destroyed;wc.getURL=()=>wc.url||'';wc.isAudioMuted=()=>wc.muted;wc.setAudioMuted=v=>{wc.muted=v;};wc.focus=()=>{throw Error('sidebar must not steal focus');};wc.setWindowOpenHandler=fn=>{wc.popup=fn;};wc.loadURL=async url=>{wc.url=url;events.push(['load',wc.session.id,url]);};wc.reload=()=>events.push(['reload',wc.session.id]);wc.close=()=>{wc.destroyed=true;};views.push(this);}
   setBackgroundColor(){} setVisible(v){this.visible=v;} setBounds(v){this.bounds=v;}
  }
  const win={isDestroyed:()=>false,getContentSize:()=>[800,600],contentView:{addChildView:()=>{},removeChildView:()=>{}}};
- const host=createSidebarWebPanel({WebContentsView:View,getWindow:()=>win,getSession:id=>{if(!sessions[id])throw Error('Unknown identity');return sessions[id];},identityReady:ready});
+ const host=createSidebarWebPanel({WebContentsView:View,getWindow:()=>win,getSession:id=>{if(!sessions[id])throw Error('Unknown identity');return sessions[id];},identityReady:ready,loadFavicon});
  return {host,views,events,sessions};
 }
 test('panels use the selected sandboxed identity session and deny unsafe navigation',async()=>{
@@ -19,6 +19,14 @@ test('panels use the selected sandboxed identity session and deny unsafe navigat
  for(const name of ['will-navigate','will-redirect']){let blocked=false;wc.emit(name,{preventDefault:()=>{blocked=true;}},'file:///example');assert.equal(blocked,true);}
  let blocked=false;wc.emit('will-navigate',{preventDefault:()=>{blocked=true;}},'https://next.test/');assert.equal(blocked,false);wc.emit('did-navigate',{},'https://next.test/');assert.equal(f.host.state().url,'https://next.test/');
  f.host.mute(true);assert.equal(wc.muted,true);f.host.reload();assert.ok(f.events.some(e=>e[0]==='reload'));f.host.destroy();assert.equal(wc.destroyed,true);assert.throws(()=>f.host.open({identity:'personal',url:'https://site.test/'}),/closed/);
+});
+test('favicon results are scoped by identity, discarded on navigation and ignored after unload',async()=>{
+ const pending=[],f=fixture({loadFavicon:(session,page,urls)=>new Promise(resolve=>pending.push({session,page,urls,resolve}))});assert.equal(pending.length,0);
+ f.host.open({identity:'personal',url:'https://site.test/'});await tick();const personal=f.views[0].webContents;personal.emit('page-favicon-updated',{},['https://site.test/icon.png']);await tick();assert.equal(pending[0].session,f.sessions.personal);
+ personal.emit('did-start-navigation',{},'https://site.test/next',false,true);pending[0].resolve('data:image/png;base64,b2xk');await tick();assert.deepEqual(f.host.state().icons,[]);
+ personal.url='https://site.test/next';personal.emit('page-favicon-updated',{},['https://site.test/new.png']);await tick();pending[1].resolve('data:image/png;base64,bmV3');await tick();assert.deepEqual(f.host.state().icons,[{site:'https://site.test/',icon:'data:image/png;base64,bmV3'}]);
+ f.host.open({identity:'work',url:'https://site.test/'});await tick();const work=f.views[1].webContents;assert.deepEqual(f.host.state().icons,[]);work.emit('page-favicon-updated',{},['https://site.test/work.png']);await tick();assert.equal(pending[2].session,f.sessions.work);f.host.release({identity:'work',url:'https://site.test/'});pending[2].resolve('data:image/png;base64,d29yaw==');await tick();assert.deepEqual(f.host.state().icons,[]);
+ f.host.open({identity:'personal',url:'https://site.test/'});assert.equal(f.host.state().icons[0].icon,'data:image/png;base64,bmV3');
 });
 test('sidebar popups retain their identity and sandbox, show the origin, and close on unload',async()=>{
  const f=fixture();f.host.open({identity:'personal',url:'https://site.test/'});await tick();const wc=f.views[0].webContents;

@@ -11,7 +11,7 @@ const {JSDOM, VirtualConsole} = require('jsdom');
 const html = fs.readFileSync(path.join(__dirname, '../browser/index.html'), 'utf8');
 const source = fs.readFileSync(path.join(__dirname, '../browser/renderer.js'), 'utf8');
 const inventory = JSON.parse(fs.readFileSync(path.join(__dirname, '../browser/capabilities.json'), 'utf8'));
-const ipcMethods = ['onState', 'onVault', 'onVaultDraft', 'onAccounts', 'onExtensions', 'onExtensionPreview', 'onDownloads', 'onPermissions', 'onCapabilities', 'onNotice', 'onAddress', 'onFind', 'onHistory','onBookmarks','onFollows','onWorkspaces','onResources','onSettingsPreview','onFindResult','onExtensionActions'];
+const ipcMethods = ['onState', 'onVault', 'onVaultDraft', 'onAccounts', 'onExtensions', 'onExtensionPreview', 'onDownloads', 'onPermissions', 'onCapabilities', 'onNotice', 'onAddress', 'onFind', 'onHistory','onBookmarks','onFollows','onWorkspaces','onResources','onSettingsPreview','onFindResult','onExtensionActions','onSidebarWebState'];
 const profiles = [{id: 'personal', name: 'Personal'}, {id: 'work', name: 'Work'}];
 const copy = value => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
 const tick = () => new Promise(resolve => setImmediate(resolve));
@@ -109,6 +109,13 @@ test('DOM: background state updates keep the focused sidebar app button',async t
   const initial=state({sidebarGeometry:{rail:48,panel:320,panelTarget:320,railX:0,panelX:48,tabX:368,pageX:368,pageRight:0},preferences:{searchEngine:'duckduckgo',tabLayout:'horizontal',sidebarVisible:true,sidebarExpanded:true,sidebarActive:'app:chat',sidebarApps:[{id:'chat',name:'Chat',url:'https://example.test/'}]}});
   const h=await harness(t,{initial}),control=h.document.querySelector('.sidebar-app-button');control.focus();h.update({canBack:true});
   assert.equal(h.document.querySelector('.sidebar-app-button'),control);assert.equal(h.document.activeElement,control);
+});
+test('DOM: sidebar site icons keep focus, respect identity and reject remote images',async t=>{
+  const initial=state({sidebarGeometry:{rail:48,panel:320,panelTarget:320,railX:0,panelX:48,tabX:368,pageX:368,pageRight:0},preferences:{searchEngine:'duckduckgo',tabLayout:'horizontal',sidebarVisible:true,sidebarExpanded:true,sidebarActive:'app:chat',sidebarApps:[{id:'chat',name:'Chat',url:'https://example.test'}]}});
+  const h=await harness(t,{initial}),control=h.document.querySelector('.sidebar-app-button');control.focus();
+  h.emit('onSidebarWebState',{identity:'personal',icons:[{site:'https://example.test/',icon:'data:image/png;base64,cG5n'}]});assert.equal(control.querySelector('img').getAttribute('src'),'data:image/png;base64,cG5n');assert.equal(h.document.activeElement,control);
+  h.update({currentIdentity:'work'});assert.equal(control.querySelector('img'),null);assert.equal(control.querySelector('.sidebar-app-icon').textContent,'CH');
+  h.emit('onSidebarWebState',{identity:'work',icons:[{site:'https://example.test/',icon:'https://tracker.test/icon.png'}]});assert.equal(control.querySelector('img'),null);
 });
 test('DOM: sidebar tool visibility and ordering are saved through the real settings form',async t=>{
   const h=await harness(t,{initial:state({panel:'settings'})});

@@ -190,10 +190,16 @@ function renderSidebarChrome(){
   $('sidebar-apps').style.order=String(tools.length+1);
   const container=$('sidebar-apps'),appsKey=JSON.stringify(apps.map(item=>[item.id,item.name]));
   if(appsKey!==sidebarAppsKey){container.replaceChildren(...apps.map(item=>{
-    const control=button(item.name.trim().slice(0,2).toLocaleUpperCase(),()=>api.command('sidebar-select',`app:${item.id}`),'sidebar-app-button');
+    const control=button('',()=>api.command('sidebar-select',`app:${item.id}`),'sidebar-app-button');control.append(node('span',item.name.trim().slice(0,2).toLocaleUpperCase(),'sidebar-app-icon'));
     control.dataset.appId=item.id;control.title=item.name;control.setAttribute('aria-label',item.name);return control;
   }));sidebarAppsKey=appsKey;}
-  for(const control of container.children)control.setAttribute('aria-pressed',String(Boolean(pref.sidebarVisible!==false&&pref.sidebarExpanded&&active===`app:${control.dataset.appId}`)));
+  const appsById=new Map(apps.map(item=>[item.id,item])),icons=sidebarWebState.identity===currentState.currentIdentity&&Array.isArray(sidebarWebState.icons)?new Map(sidebarWebState.icons.map(item=>[item.site,item.icon])):new Map();
+  for(const control of container.children){
+    control.setAttribute('aria-pressed',String(Boolean(pref.sidebarVisible!==false&&pref.sidebarExpanded&&active===`app:${control.dataset.appId}`)));
+    const app=appsById.get(control.dataset.appId),badge=control.querySelector('.sidebar-app-icon');if(!app||!badge)continue;
+    let site='';try{site=new URL(app.url).href;}catch{}const candidate=icons.get(site),icon=typeof candidate==='string'&&/^data:image\/(?:png|x-icon);base64,[a-z0-9+/=]+$/i.test(candidate)?candidate:'';
+    const image=badge.querySelector('img');if(icon){if(image?.getAttribute('src')!==icon){const next=node('img');next.alt='';next.src=icon;badge.replaceChildren(next);}}else if(image||badge.textContent!==app.name.trim().slice(0,2).toLocaleUpperCase())badge.textContent=app.name.trim().slice(0,2).toLocaleUpperCase();
+  }
   const app=apps.find(item=>`app:${item.id}`===active),names={bookmarks:'Bookmarks',history:'History',downloads:'Downloads',tabs:'Open tabs'};
   $('sidebar-title').textContent=web&&sidebarWebState.error?'Page failed':app?.name||names[active]||'Sidebar';
   $('sidebar-title').title=sidebarWebState.error||sidebarWebState.url||'';

@@ -213,7 +213,8 @@ test('DOM: exact extension consent and selected identities are required; rejecte
   const h = await harness(t, {command: async name => { if (name === 'extension-install') throw new Error('Inspected bytes changed; inspect again'); }});
   h.update({panel: 'extensions'});
   h.emit('onExtensions', {items: [], profiles, currentIdentity: 'personal', open: true, error: '', busy: false});
-  h.emit('onExtensionPreview', preview({token: 'exact-xpi-token', format: 'xpi', requiresUnsignedImportAcceptance: true}));
+  h.emit('onExtensionPreview', preview({token: 'exact-xpi-token', format: 'xpi', requiresUnsignedImportAcceptance: true, apiProfileSuggestion: 'firefox'}));
+  assert.equal(h.$('extension-api-profile').value, 'firefox');
   assert.equal(h.$('extension-accept').checked, false);
   assert.equal(h.$('extension-unsigned').checked, false);
   assert.equal(h.$('extension-install').disabled, true);
@@ -227,15 +228,17 @@ test('DOM: exact extension consent and selected identities are required; rejecte
   assert.equal(h.$('extension-install').disabled, false);
   h.$('extension-install').click(); await tick();
   const request = h.calls.find(call => call.name === 'extension-install');
-  assert.deepEqual(request.value, {token: 'exact-xpi-token', identities: ['work'], permissionsAccepted: true, unsignedImportAccepted: true});
+  assert.deepEqual(request.value, {token: 'exact-xpi-token', identities: ['work'], permissionsAccepted: true, unsignedImportAccepted: true, apiProfile: 'firefox'});
   assert.equal(h.$('extension-preview').hidden, false);
   assert.equal(h.$('extension-accept').checked, true);
+  assert.equal(h.$('extension-api-profile').value, 'firefox', 'failed installation preserves the reviewed compatibility choice');
   assert.deepEqual([...h.$('extension-preview-identities').querySelectorAll('input:checked')].map(control => control.value), ['work']);
   assert.match(h.$('notice').textContent, /Inspected bytes changed/);
   assert.doesNotMatch(h.$('notice').textContent, /installed|loaded in/i);
   h.emit('onExtensionPreview', preview({token: 'different-package'}));
   assert.equal(h.$('extension-accept').checked, false, 'consent does not carry to another package');
   assert.equal(h.$('extension-unsigned').checked, false);
+  assert.equal(h.$('extension-api-profile').value, 'chromium', 'a new package starts with its own suggested profile');
   assert.equal(h.$('extension-install').disabled, true);
 });
 

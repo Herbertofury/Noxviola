@@ -14,6 +14,9 @@ const SUPPORT_URL = 'https://github.com/electron/electron/blob/v44.11.3/docs/api
 const LIFECYCLE_URL = 'https://github.com/electron/electron/blob/v44.11.3/docs/api/extensions-api.md';
 const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const HASH = /^[0-9a-f]{64}$/;
+// Verification inventories stay in main-process memory. They are not registry
+// metadata, renderer-controlled paths, or a second copy of package contents.
+const inspectionResources = new WeakMap();
 
 class ExtensionError extends Error {
   constructor(code, message, details) {
@@ -298,7 +301,7 @@ function compatibility(manifest, detectedApis, electronVersion) {
     if (bare.startsWith('storage.sync')) add('STORAGE_SYNC_UNSUPPORTED', 'Electron 44.11.3 documents storage.sync as unsupported. No local or cloud substitute is injected.', api, 'unsupported');
     else if (bare.startsWith('storage.managed')) add('MANAGED_STORAGE_UNSUPPORTED', 'Electron 44.11.3 documents storage.managed as unsupported. Enterprise policy storage is not integrated.', api, 'unsupported');
     else if (HOST_METHODS.has(method)) add('BROWSER_HOST_SUBSET', 'The browser host implements this API for authenticated extension documents with identity and grant checks. Supported options are limited; added content-context APIs, sleeping-worker delivery and exact-package functionality still require verification.', api, 'limited');
-    else if (/^windows\.(?:create|remove)$|^(?:action|browserAction)\.(?:setIcon|openPopup)$/.test(bare)) add('HOST_API_UNSUPPORTED','This host method is explicitly rejected. Window creation/removal, dynamic icons and programmatic popup opening are not implemented by this adapter.',api,'unsupported');
+    else if (/^windows\.(?:create|remove)$|^(?:action|browserAction)\.openPopup$/.test(bare)) add('HOST_API_UNSUPPORTED','This host method is explicitly rejected. Window creation/removal and programmatic popup opening are not implemented by this adapter.',api,'unsupported');
     else if (bare.startsWith('storage.local') || bare === 'storage.onChanged' || /^(scripting|webRequest|devtools\.(inspectedWindow|network|panels))\./.test(bare)) { /* documented subset */ }
     else if (DOCUMENTED_METHODS.has(bare) || (/\.on\w+\.(addListener|removeListener|hasListener|hasListeners)$/.test(bare) && DOCUMENTED_METHODS.has(bare.split('.').slice(0, -1).join('.')))) {
       if (bare === 'tabs.query' || bare === 'tabs.update') add('PARTIAL_TABS_API', 'Electron documents partial tab semantics; active/current-window behavior and unsupported fields need functional verification.', api, 'limited');
@@ -341,6 +344,7 @@ async function inspectTree(root, electronVersion) {
   let bytes = 0;
   let files = 0;
   let signatureFiles = false;
+  const inventory = new Map();
   await walk(root, async (name, stat, file) => {
     if (!stat.isFile()) return;
     files++;
@@ -363,6 +367,7 @@ async function inspectTree(root, electronVersion) {
       }
     } finally { await handle.close(); }
     const fileHash = hash.digest('hex');
+    inventory.set(name,{bytes:fileBytes,sha256:fileHash});
     if (name === 'manifest.json' && fileHash !== manifestHash) fail('PACKAGE_CHANGED_DURING_INSPECTION', 'The manifest changed while its permissions were being inspected.');
     digest.update(JSON.stringify([name, fileBytes, fileHash]) + '\n');
     if (/^META-INF\/.+\.(?:rsa|sf|mf)$/i.test(name)) signatureFiles = true;
@@ -383,13 +388,15 @@ async function inspectTree(root, electronVersion) {
       sourceIdentity = `gecko:${gecko}`;
     }
   }
-  return {
+  const inspection = {
     name: manifest.name, version: manifest.version,
     description: typeof manifest.description === 'string' ? manifest.description : '',
     manifestVersion: manifest.manifest_version, packageDigest: digest.digest('hex'),
     sourceIdentity, permissions, pages, bytes, files, signatureFiles,
     compatibility: compatibility(manifest, [...apis].sort(), electronVersion),
   };
+  inspectionResources.set(inspection,{root:{dev:rootStat.dev,ino:rootStat.ino},files:inventory});
+  return inspection;
 }
 
 function validateRegistry(state) {
@@ -397,6 +404,7 @@ function validateRegistry(state) {
   const ids = new Set();
   for (const item of state.items) {
     if (!item || !ID.test(item.id) || ids.has(item.id) || !HASH.test(item.packageDigest) || typeof item.name !== 'string' || typeof item.version !== 'string' || !Array.isArray(item.identities)) fail('REGISTRY_INVALID', 'Invalid or duplicate extension registry entry. Existing bytes were preserved.');
+    if (item.apiProfile!==undefined && !['chromium','firefox'].includes(item.apiProfile)) fail('REGISTRY_INVALID','Unknown extension API behavior profile. Existing bytes were preserved.');
     ids.add(item.id);
     const identities = new Set();
     for (const grant of item.identities) {
@@ -431,6 +439,7 @@ class ExtensionManager {
     this._runtimeEpochs = new Map();
     this._runtimeObservers = new Set();
     this._runtimeAdmissions = new Map();
+    this._runtimeResources = new Map();
     this._tail = Promise.resolve();
     this._opened = false;
     this._disposed = false;
@@ -516,6 +525,7 @@ class ExtensionManager {
     this._runtimeEpochs.delete(key);
     this._pendingLoads.delete(key);
     this._runtimeAdmissions.delete(key);
+    this._runtimeResources.delete(key);
     for (const observer of this._runtimeObservers) {
       try { observer({kind: 'revoked', id, identity, runtimeId}); }
       catch (error) { console.error('Extension runtime observer failed:', error.message); }
@@ -543,7 +553,7 @@ class ExtensionManager {
       admission = {epoch,runtimeId,permissions,pages,manifest:clone(extension.manifest)};
       this._runtimeAdmissions.set(key,admission);
     }
-    return {id, identity, runtimeId, epoch, session, name: item.name, permissions: clone(admission.permissions),
+    return {id, identity, runtimeId, epoch, session, name: item.name, apiProfile:this._runtimeResources.get(key)?.apiProfile || 'chromium', permissions: clone(admission.permissions),
       manifest: clone(admission.manifest), pages: clone(admission.pages), allowFileAccess: grant.allowFileAccess};
   }
   runtimeContexts(identity) {
@@ -556,6 +566,45 @@ class ExtensionManager {
       }
     }
     return result;
+  }
+  async readRuntimeResource(context, resourcePath) {
+    const name = safeRelative(resourcePath);
+    const requireEnrollment = () => {
+      const current = this.runtimeContext(context?.session,context?.runtimeId);
+      if (!current || current.epoch !== context.epoch || current.id !== context.id || current.identity !== context.identity) fail('EXTENSION_REVOKED','The extension resource has no current accepted enrollment.');
+      const snapshot = this._runtimeResources.get(this._key(current.id,current.identity));
+      if (!snapshot || snapshot.epoch !== current.epoch) fail('RESOURCE_UNVERIFIED','The extension resource inventory is unavailable.');
+      return snapshot;
+    };
+    const snapshot = requireEnrollment(), expected = snapshot.files.get(name);
+    if (!expected) fail('RESOURCE_UNVERIFIED','The requested resource was not part of the verified package: '+name);
+    const root = path.join(this.packagesPath,context.id), directories = [];
+    let directory = root;
+    for (const component of [null,...name.split('/').slice(0,-1)]) {
+      if (component !== null) directory = path.join(directory,component);
+      const stat = await fsp.lstat(directory);
+      if (!stat.isDirectory() || stat.isSymbolicLink()) fail('UNSAFE_PACKAGE_FILE','An extension resource ancestor is not an owned regular directory.');
+      if (component === null && (stat.dev !== snapshot.root.dev || stat.ino !== snapshot.root.ino)) fail('INSTALLED_PACKAGE_CHANGED','The verified package directory was replaced.');
+      directories.push({directory,dev:stat.dev,ino:stat.ino});
+    }
+    const file = path.join(root,...name.split('/')), before = await fsp.lstat(file);
+    if (!before.isFile() || before.isSymbolicLink()) fail('UNSAFE_PACKAGE_FILE','Extension resources must be regular package files.');
+    let handle, bytes;
+    try {
+      handle = await fsp.open(file,fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0) | (fs.constants.O_NONBLOCK || 0));
+      const opened = await handle.stat();
+      if (!opened.isFile() || opened.dev !== before.dev || opened.ino !== before.ino || opened.size !== expected.bytes) fail('INSTALLED_PACKAGE_CHANGED','The extension resource changed before it could be read.');
+      bytes = await handle.readFile();
+      const after = await handle.stat();
+      if (after.size !== opened.size || after.mtimeMs !== opened.mtimeMs || after.ctimeMs !== opened.ctimeMs) fail('INSTALLED_PACKAGE_CHANGED','The extension resource changed while it was read.');
+    } finally { await handle?.close(); }
+    for (const item of directories) {
+      const current = await fsp.lstat(item.directory);
+      if (!current.isDirectory() || current.isSymbolicLink() || current.dev !== item.dev || current.ino !== item.ino) fail('INSTALLED_PACKAGE_CHANGED','The extension resource directory changed while it was read.');
+    }
+    requireEnrollment();
+    if (bytes.length !== expected.bytes || crypto.createHash('sha256').update(bytes).digest('hex') !== expected.sha256) fail('INSTALLED_PACKAGE_CHANGED','The resource bytes differ from the package whose permissions were accepted.');
+    return bytes;
   }
   async _save(next) {
     validateRegistry(next);
@@ -586,6 +635,7 @@ class ExtensionManager {
   list() {
     return this._state.items.map(item => {
       const result = clone(item);
+      result.apiProfile=item.apiProfile || 'chromium';
       result.identities = item.identities.map(grant => ({
         ...clone(grant), status: grant.enabled ? 'not-loaded' : 'disabled', runtimeId: null, error: null,
         ...clone(this._runtime.get(this._key(item.id, grant.identity)) || {}),
@@ -629,7 +679,7 @@ class ExtensionManager {
         const {root, wrapped} = await packageRoot(unpacked);
         const inspection = await inspectTree(root, this.electronVersion);
         const value = {
-          token, ...inspection, format,
+          token, ...inspection, format, apiProfileSuggestion:format==='xpi'?'firefox':'chromium',
           provenance: {source: 'local-user-selected', filename: path.basename(source), archiveDigest, signature: 'not-verified', signatureFilesPresent: inspection.signatureFiles, publisherVerified: false, adaptation: wrapped ? 'single-wrapper-directory-removed' : 'unpacked-copy', codeRewritten: false},
           requiresUnsignedImportAcceptance: format === 'xpi',
           consent: 'Review required and optional permissions, content-script sites and compatibility limitations. File access is off unless separately selected. This package is not publisher-verified and loading is not proof of functionality.',
@@ -650,13 +700,14 @@ class ExtensionManager {
       this._previews.delete(token);
     });
   }
-  install(token, {identities, permissionsAccepted = false, allowFileAccess = false, unsignedImportAccepted = false} = {}) {
+  install(token, {identities, permissionsAccepted = false, allowFileAccess = false, unsignedImportAccepted = false, apiProfile = 'chromium'} = {}) {
     return this._enqueue(async () => {
       const preview = this._previews.get(token);
       if (!preview) fail('PREVIEW_EXPIRED', 'Inspect the package again before installing.');
       if (permissionsAccepted !== true) fail('PERMISSION_ACCEPTANCE_REQUIRED', 'The displayed package permissions require explicit acceptance.');
       if (preview.value.requiresUnsignedImportAcceptance && unsignedImportAccepted !== true) fail('XPI_TRUST_ACCEPTANCE_REQUIRED', 'Firefox signature trust is not verified here. Explicitly accept this as an unsigned local import before continuing.');
       if (typeof allowFileAccess !== 'boolean') fail('PERMISSION_ACCEPTANCE_REQUIRED', 'File access must be selected explicitly.');
+      if (!['chromium','firefox'].includes(apiProfile)) fail('API_PROFILE_INVALID','Choose the Chromium or Firefox API behavior profile shown in the package preview.');
       if (!Array.isArray(identities) || !identities.length) fail('IDENTITY_REQUIRED', 'Select at least one browser identity.');
       identities = [...new Set(identities.map(identity => this._identity(identity)))];
       const inspection = await inspectTree(preview.root, this.electronVersion);
@@ -664,7 +715,7 @@ class ExtensionManager {
       if (this._state.items.some(item => item.packageDigest === inspection.packageDigest || (inspection.sourceIdentity && item.sourceIdentity === inspection.sourceIdentity))) fail('EXTENSION_ALREADY_INSTALLED', 'This extension package or publisher identity is already installed. Enable it for another identity instead; reviewed updates are not implemented yet.');
       const id = crypto.randomUUID();
       const installedAt = new Date().toISOString();
-      const item = {...inspection, id, installedAt, format: preview.value.format, provenance: preview.value.provenance,
+      const item = {...inspection, id, installedAt, format: preview.value.format, provenance: preview.value.provenance, apiProfile,
         identities: identities.map(identity => ({identity, enabled: true, allowFileAccess, acceptedAt: installedAt}))};
       const target = path.join(this.packagesPath, id);
       await syncPackageDirectories(preview.root);
@@ -687,11 +738,11 @@ class ExtensionManager {
       }
       await fsp.rm(preview.staging, {recursive: true, force: true});
       this._previews.delete(token);
-      for (const grant of item.identities) await this._load(item, grant, inspection.packageDigest);
+      for (const grant of item.identities) await this._load(item, grant, inspection);
       return this.list().find(record => record.id === id);
     });
   }
-  async _load(item, grant, verifiedDigest) {
+  async _load(item, grant, verifiedInspection) {
     const key = this._key(item.id, grant.identity);
     let adapter;
     let loadedId;
@@ -704,11 +755,13 @@ class ExtensionManager {
         if (existing.status !== 'loaded') this._runtime.set(key, {...existing, status: 'disable-failed', error: existing.error || 'Extension code may still be running without confirmed readiness. Disable it before loading again.'});
         return;
       }
-      if ((verifiedDigest || (await inspectTree(packagePath, this.electronVersion)).packageDigest) !== item.packageDigest) fail('INSTALLED_PACKAGE_CHANGED', 'Installed bytes differ from the package whose permissions were accepted. The extension was not loaded.');
+      const inspection = verifiedInspection || await inspectTree(packagePath, this.electronVersion);
+      if (inspection.packageDigest !== item.packageDigest) fail('INSTALLED_PACKAGE_CHANGED', 'Installed bytes differ from the package whose permissions were accepted. The extension was not loaded.');
       const expectedId = item.sourceIdentity?.startsWith('chromium-key:') ? item.sourceIdentity.slice('chromium-key:'.length, 'chromium-key:'.length + 32).replace(/[0-9a-f]/g, char => String.fromCharCode(97 + parseInt(char, 16))) : null;
       if (expectedId && adapter.getExtension(expectedId)) fail('RUNTIME_ID_CONFLICT', 'An extension with this publisher identity is already running outside this manager. It was not replaced.');
       previousIds = new Set(adapter.getAllExtensions().map(extension => extension.id));
       this._runtimeEpochs.set(key, crypto.randomUUID());
+      this._runtimeResources.set(key,{...inspectionResources.get(inspection),epoch:this._runtimeEpochs.get(key),apiProfile:item.apiProfile || 'chromium'});
       this._pendingLoads.add(key);
       const extension = await this.loadExtension(this._sessions.get(grant.identity), packagePath, {allowFileAccess: grant.allowFileAccess});
       loadedId = extension?.id;

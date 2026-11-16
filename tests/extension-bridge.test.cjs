@@ -4,11 +4,12 @@ const assert = require('node:assert/strict');
 const {EventEmitter} = require('node:events');
 const {createExtensionBridge,CHANNEL,MAP_CHANNEL,SUBSCRIBE_CHANNEL} = require('../browser/extension-bridge.cjs');
 const policy = require('../browser/extension-policy.cjs');
+const {rgbaPNG,pngDimensions} = require('../browser/extension-icons.cjs');
 // Actual production router; only Electron primitives and canonical host services
 // are substituted. These tests establish admission/routing contracts, not native
 // preload execution or marketplace extension compatibility.
 const EXT = 'a'.repeat(32), OTHER = 'b'.repeat(32);
-function fixture(t,{permissions=['tabs','cookies','bookmarks','contextMenus','activeTab'],hosts=['https://allowed.test/*']}={}) {
+function fixture(t,{permissions=['tabs','cookies','bookmarks','contextMenus','activeTab'],hosts=['https://allowed.test/*'],nativeImage,readResource,defaultIcon,apiProfile='chromium'}={}) {
   const ipc = Object.assign(new EventEmitter(),{handlers:new Map(),handle(name,fn){this.handlers.set(name,fn);},removeHandler(name){this.handlers.delete(name);}});
   const sessions = ['personal','work'].map(() => {
     const jar = Object.assign(new EventEmitter(),{values:[],calls:[],async get(query){this.calls.push(['get',query]);return this.values.filter(cookie => (!query.name || cookie.name === query.name) && (!query.url || new URL(query.url).hostname === cookie.domain.replace(/^\./,'')));},async set(value){this.calls.push(['set',value]);this.values.push({name:value.name,value:value.value,domain:value.domain || new URL(value.url).hostname,path:value.path || '/',hostOnly:!value.domain,secure:!!value.secure,session:value.expirationDate===undefined,expirationDate:value.expirationDate});},async remove(url,name){this.calls.push(['remove',url,name]);this.values=this.values.filter(cookie=>!(cookie.name===name&&cookie.domain===new URL(url).hostname));}});
@@ -16,18 +17,89 @@ function fixture(t,{permissions=['tabs','cookies','bookmarks','contextMenus','ac
     return {cookies:jar,serviceWorkers:workers,preloads:new Map(),registerPreloadScript(value){this.preloads.set(value.id,value);return value.id;},unregisterPreloadScript(id){this.preloads.delete(id);}};
   });
   const contexts = new Map(sessions.map((session,index) => [session,{id:'package-1',identity:index?'work':'personal',runtimeId:EXT,epoch:'epoch-1',session,name:'Real fixture',permissions:{required:permissions,hosts},manifest:{action:{default_title:'Fixture action'}},pages:{popup:null},allowFileAccess:false}]));
+  if(defaultIcon!==undefined)for(const context of contexts.values())context.manifest.action.default_icon=defaultIcon;
+  for(const context of contexts.values())context.apiProfile=apiProfile;
   let runtimeObserver, hostObserver, bookmarkObserver;
   const manager = {runtimeContext(session,id){return id===EXT?contexts.get(session)||null:null;},runtimeContexts(identity){return [...contexts.values()].filter(value=>identity===undefined||value.identity===identity);},subscribeRuntime(fn){runtimeObserver=fn;return()=>{runtimeObserver=null;};}};
+  if(readResource)manager.readRuntimeResource=readResource;
   const tabs = new Map([[10,{id:10,identity:'personal',windowId:1,url:'https://allowed.test/page',title:'Allowed secret',active:true,pinned:false,mutedInfo:{muted:false}}],[11,{id:11,identity:'personal',windowId:1,url:'https://private.test/',title:'Private title',active:false,pinned:false,mutedInfo:{muted:false}}],[20,{id:20,identity:'work',windowId:1,url:'https://allowed.test/work',title:'Work private',active:true}]]);
   const mutations=[], opened=[], bookmarkCalls=[]; let nextId=30;
   const host={tabs:{list:identity=>[...tabs.values()].filter(tab=>tab.identity===identity),get:(identity,id)=>tabs.get(id)?.identity===identity?tabs.get(id):undefined,nativeId:(identity,id)=>tabs.get(id)?.identity===identity&&id!==11?id+100:undefined,browserId:(identity,id)=>tabs.get(id-100)?.identity===identity?id-100:undefined,async create(identity,options){const tab={id:nextId++,identity,windowId:1,url:'about:blank',title:'New tab',active:true,...options};tabs.set(tab.id,tab);mutations.push(['create',identity,options]);return tab;},async update(identity,id,options){Object.assign(tabs.get(id),options);mutations.push(['update',identity,id,options]);return tabs.get(id);},async remove(identity,id){tabs.delete(id);mutations.push(['remove',identity,id]);},async move(identity,ids,options){return (Array.isArray(ids)?ids:[ids]).map(id=>{Object.assign(tabs.get(id),options);return tabs.get(id);});},async reload(identity,id,options){mutations.push(['reload',identity,id,options]);}},windows:{getCurrent:(identity,options={})=>({id:1,type:'normal',focused:true,...(options.populate?{tabs:[...tabs.values()].filter(tab=>tab.identity===identity)}:{})}),getAll:(identity,options)=>[host.windows.getCurrent(identity,options)],update:(identity,id,options)=>({...host.windows.getCurrent(identity),...options})},bookmarks:{getTree(identity){bookmarkCalls.push(['getTree',identity]);return[{id:identity+'-root',identity,children:[]}];},create(identity,options){bookmarkCalls.push(['create',identity,options]);const node={id:'new-bookmark',...options};bookmarkObserver?.({type:'created',identity,id:node.id,node});return node;},subscribe(fn){bookmarkObserver=fn;return()=>{bookmarkObserver=null;};}},subscribe(fn){hostObserver=fn;return()=>{hostObserver=null;};},openExtensionPage(value){opened.push(value);},actionsChanged() {}};
-  const bridge=createExtensionBridge({ipcMain:ipc,manager,host});for(const session of sessions)bridge.attachSession(session);
+  const bridge=createExtensionBridge({ipcMain:ipc,manager,host,nativeImage});for(const session of sessions)bridge.attachSession(session);
   t.after(()=>bridge.dispose());
   function event(index=0,runtimeId=EXT){const frame={url:'chrome-extension://'+runtimeId+'/popup.html',detached:false,sent:[],send(...args){this.sent.push(args);},isDestroyed:()=>false};return {type:'frame',sender:{session:sessions[index],isDestroyed:()=>false},senderFrame:frame};}
   const personal=event();
   async function call(method,args=[],sender=personal){const result=await ipc.handlers.get(CHANNEL)(sender,method,args);if(!result.ok)throw Object.assign(new Error(result.error.message),{code:result.error.code});return result.value;}
   return {bridge,ipc,sessions,contexts,manager,host,tabs,mutations,opened,bookmarkCalls,event,personal,call,emit:payload=>hostObserver?.(payload),revoke(index=0){const session=sessions[index],context=contexts.get(session);contexts.delete(session);runtimeObserver?.({kind:'revoked',id:context.id,identity:context.identity,runtimeId:context.runtimeId});},bookmark:payload=>bookmarkObserver?.(payload)};
 }
+function iconCodec(){return {createFromBuffer:png=>({isEmpty:()=>false,getSize:()=>pngDimensions(png),toPNG:()=>png})};}
+const imageData=color=>({width:1,height:1,data:new Uint8ClampedArray(color)});
+test('action icons load manifest defaults once and apply real global/per-tab ImageData and reset inheritance',async t=>{
+  const png=Buffer.from((await rgbaPNG(imageData([100,80,60,255]))).dataUrl.split(',')[1],'base64');let reads=0;
+  const f=fixture(t,{apiProfile:'firefox',defaultIcon:{16:'icons/default.png',32:'icons/default.png'},nativeImage:iconCodec(),readResource:async()=>{reads++;return png;}});
+  assert.equal(f.bridge.actionState('personal',10)[0].icon,null);
+  f.bridge.actionState('personal',10);
+  await f.bridge.actions.get('personal\0package-1').defaultIconPromise;
+  const manifest=f.bridge.actionState('personal',10)[0].icon;
+  assert.deepEqual(manifest.variants.map(item=>item.size),[16,32]);assert.equal(reads,1);
+  await f.call('action.setIcon',[{imageData:imageData([1,2,3,255])}]);const global=f.bridge.actionState('personal',10)[0].icon;
+  assert.notEqual(global.variants[0].dataUrl,manifest.variants[0].dataUrl);
+  await f.call('browserAction.setIcon',[{tabId:10,imageData:{16:imageData([4,5,6,128]),32:imageData([7,8,9,255])}}]);
+  assert.equal(f.bridge.actionState('personal',10)[0].icon.variants.length,2);
+  assert.deepEqual(f.bridge.actionState('personal',11)[0].icon,global);
+  await f.call('action.setIcon',[{tabId:10,imageData:null,path:{}}]);assert.deepEqual(f.bridge.actionState('personal',10)[0].icon,global);
+  await f.call('action.setIcon',[{}]);assert.deepEqual(f.bridge.actionState('personal',10)[0].icon,manifest);
+  await assert.rejects(f.call('action.setIcon',[{path:'https://outside.test/icon.png'}]),{code:'ICON_ORIGIN_DENIED'});
+  assert.deepEqual(f.bridge.actionState('personal',10)[0].icon,manifest);
+  await assert.rejects(f.call('action.setIcon',[{tabId:20,imageData:imageData([1,2,3,4])}]),{code:'TAB_NOT_FOUND'});
+});
+test('failed default icon reports its cause while a valid explicit icon remains usable',async t=>{
+  const f=fixture(t,{apiProfile:'firefox',defaultIcon:'missing.png',nativeImage:iconCodec(),readResource:async()=>{throw new Error('Verified resource is missing');}});
+  f.bridge.actionState('personal',10);await f.bridge.actions.get('personal\0package-1').defaultIconPromise;
+  assert.equal(f.bridge.actionState('personal',10)[0].icon,null);assert.match(f.bridge.actionState('personal',10)[0].iconError,/missing/);
+  await f.call('action.setIcon',[{imageData:imageData([10,20,30,255])}]);assert.equal(f.bridge.actionState('personal',10)[0].iconError,'');
+  await f.call('action.setIcon',[{}]);assert.match(f.bridge.actionState('personal',10)[0].iconError,/missing/);
+});
+test('revocation, navigation or tab removal while reading an icon cannot publish stale image state',async t=>{
+  const png=Buffer.from((await rgbaPNG(imageData([1,2,3,255]))).dataUrl.split(',')[1],'base64');
+  for(const change of ['revoke','navigate','remove']){
+    let finish;const f=fixture(t,{nativeImage:iconCodec(),readResource:()=>new Promise(resolve=>{finish=resolve;})});
+    const pending=f.call('action.setIcon',[{tabId:10,path:'icon.png'}]);await Promise.resolve();
+    if(change==='revoke')f.revoke();else if(change==='navigate')f.personal.senderFrame.url='https://outside.test/';else{f.tabs.delete(10);f.emit({identity:'personal',event:'tabs.onRemoved',args:[10,{windowId:1,isWindowClosing:false}]});}
+    finish(png);await assert.rejects(pending,{code:change==='revoke'?'EXTENSION_REVOKED':change==='navigate'?'UNAUTHENTICATED_EXTENSION':'TAB_NOT_FOUND'});
+    if(change==='revoke'){assert.equal(f.bridge.actions.size,0);assert.equal(f.bridge.icons.cache.size,0);}else assert.equal(f.bridge.actions.get('personal\0package-1').tabs.has(10),false);
+  }
+});
+test('an earlier slow icon decode cannot overwrite a later successful icon or reset',async t=>{
+  const png=Buffer.from((await rgbaPNG(imageData([1,2,3,255]))).dataUrl.split(',')[1],'base64');let finish;
+  const f=fixture(t,{apiProfile:'firefox',nativeImage:iconCodec(),readResource:()=>new Promise(resolve=>{finish=resolve;})});
+  const older=f.call('action.setIcon',[{path:'older.png'}]);await Promise.resolve();
+  await f.call('action.setIcon',[{imageData:imageData([50,60,70,255])}]);const later=f.bridge.actionState('personal',10)[0].icon;
+  finish(png);await older;assert.deepEqual(f.bridge.actionState('personal',10)[0].icon,later);
+  const pending=f.call('action.setIcon',[{path:'another.png'}]);await Promise.resolve();await f.call('action.setIcon',[{}]);finish(png);await pending;
+  assert.equal(f.bridge.actionState('personal',10)[0].icon,null);
+});
+test('chosen API profile controls empty setters and full-document navigation without trusting public method arguments',async t=>{
+  const chromium=fixture(t),firefox=fixture(t,{apiProfile:'firefox'});
+  for(const f of [chromium,firefox])await f.call('action.setIcon',[{tabId:10,imageData:{width:32,height:1,data:new Uint8ClampedArray(128)}}]);
+  assert.deepEqual(chromium.bridge.actionState('personal',10)[0].icon.variants.map(({size,width,height})=>({size,width,height})),[{size:16,width:32,height:1}]);
+  await assert.rejects(chromium.call('action.setIcon',[{}]),{code:'INVALID_ICON_ARGUMENT'});
+  await assert.rejects(chromium.call('action.setIcon',[{apiProfile:'firefox'}]),{code:'UNSUPPORTED_ARGUMENT'});
+  for(const f of [chromium,firefox]){
+    f.emit({identity:'personal',event:'tab-navigation-committed',args:[10,{sameDocument:true}]});assert.ok(f.bridge.actionState('personal',10)[0].icon);
+    f.emit({identity:'work',event:'tab-navigation-committed',args:[10,{sameDocument:false}]});assert.ok(f.bridge.actionState('personal',10)[0].icon);
+    f.emit({identity:'personal',event:'tab-navigation-committed',args:[10,{sameDocument:false}]});
+  }
+  assert.ok(chromium.bridge.actionState('personal',10)[0].icon);assert.equal(firefox.bridge.actionState('personal',10)[0].icon,null);
+});
+test('Firefox navigation invalidates an older pending tab icon while allowing the global icon to remain',async t=>{
+  const png=Buffer.from((await rgbaPNG(imageData([1,2,3,255]))).dataUrl.split(',')[1],'base64');let finish;
+  const f=fixture(t,{apiProfile:'firefox',nativeImage:iconCodec(),readResource:()=>new Promise(resolve=>{finish=resolve;})});
+  await f.call('action.setIcon',[{imageData:imageData([9,8,7,255])}]);const global=f.bridge.actionState('personal',10)[0].icon;
+  const pending=f.call('action.setIcon',[{tabId:10,path:'pending.png'}]);await Promise.resolve();
+  f.emit({identity:'personal',event:'tab-navigation-committed',args:[10,{sameDocument:false}]});finish(png);await pending;
+  assert.deepEqual(f.bridge.actionState('personal',10)[0].icon,global);
+});
 test('extension principals come from committed native origin and exact Session, never payload claims',async t=>{
   const f=fixture(t);
   assert.deepEqual((await f.call('tabs.query',[{}])).map(tab=>tab.id),[10,11]);

@@ -10,7 +10,15 @@ const { readContext, preflight, sourceEvidence } = require('../../scripts/native
 const { createIdentitySessionResolver, identityStoragePaths } = require('../../browser/session-path.cjs');
 const { DOWNLOAD } = require('./fixture-server.cjs');
 const bridgeManifest = require('./fixtures/extension-bridge/manifest.json');
-const BRIDGE_CHECKS = ['chrome-callback-query', 'browser-promise-query', 'first-tab-event', 'canonical-tabs', 'native-message-ids', 'bookmark-service', 'cookie-host-and-identity', 'foreign-tab-denied', 'callback-last-error', 'promise-rejection', 'action-state', 'cleanup'];
+const BRIDGE_CHECKS = ['chrome-callback-query', 'browser-promise-query', 'first-tab-event', 'canonical-tabs', 'native-message-ids', 'bookmark-service', 'cookie-host-and-identity', 'foreign-tab-denied', 'callback-last-error', 'promise-rejection', 'action-state', 'action-icons', 'cleanup'];
+const BRIDGE_ICON_STAGES = [
+  { stage: 'manifest-default', rgba: [120, 50, 170, 255], sizes: [16, 32] },
+  { stage: 'path-map', rgba: [22, 163, 74, 255], sizes: [16, 32] },
+  { stage: 'global-imagedata', rgba: [37, 99, 235, 255], sizes: [16, 32] },
+  { stage: 'tab-imagedata', rgba: [234, 88, 12, 255], sizes: [16] },
+  { stage: 'tab-reset', rgba: [37, 99, 235, 255], sizes: [16, 32] },
+  { stage: 'global-reset', rgba: [120, 50, 170, 255], sizes: [16, 32] },
+];
 const context = readContext(process.argv[2]);
 const phase = Number(process.argv[3]);
 assert.ok([1, 2].includes(phase), 'Only the two explicit fixture phases may run');
@@ -448,7 +456,7 @@ async function previewFixture(name) {
   assert.ok(preview?.token && preview?.permissions, 'Actual package inspection and consent preview required');
   return preview;
 }
-async function installPreviewThroughRenderer(preview, identity) {
+async function installPreviewThroughRenderer(preview, identity, { apiProfile = null } = {}) {
   const identities = Array.isArray(identity) ? identity : [identity];
   assert.ok(identities.length && new Set(identities).size === identities.length, 'Explicit distinct fixture identities are required');
   await until(() => window.webContents.executeJavaScript(`(() => {
@@ -462,13 +470,20 @@ async function installPreviewThroughRenderer(preview, identity) {
     const choices = [...document.querySelectorAll('#extension-preview-identities input')];
     if (!identities.every(identity => choices.some(input => input.value === identity))) throw new Error('An intended fixture identity is not available in the real preview');
     for (const input of choices) if (input.checked !== identities.includes(input.value)) input.click();
+    const profile = document.getElementById('extension-api-profile');
+    if (${JSON.stringify(apiProfile)} !== null) {
+      if (profile.disabled || ![...profile.options].some(option => option.value === ${JSON.stringify(apiProfile)})) throw new Error('The requested API behavior profile is not available in the real preview');
+      profile.value = ${JSON.stringify(apiProfile)};
+      profile.dispatchEvent(new Event('change', { bubbles: true }));
+    }
     const consent = document.getElementById('extension-accept');
     if (consent.checked) throw new Error('The real preview must require fresh permission consent');
     consent.click();
-    return { identities: choices.filter(input => input.checked).map(input => input.value), permissionsAccepted: consent.checked, installEnabled: !document.getElementById('extension-install').disabled };
+    return { identities: choices.filter(input => input.checked).map(input => input.value), apiProfile: profile.value, permissionsAccepted: consent.checked, installEnabled: !document.getElementById('extension-install').disabled };
   })()`);
   assert.deepEqual([...selected.identities].sort(), [...identities].sort());
   assert.equal(selected.permissionsAccepted, true);
+  assert.equal(selected.apiProfile, apiProfile || preview.apiProfileSuggestion);
   assert.equal(selected.installEnabled, true, 'The actual Install control must become enabled after fixture consent');
   await window.webContents.executeJavaScript("void document.getElementById('extension-install').click()");
   const installed = await until(async () => {
@@ -477,17 +492,83 @@ async function installPreviewThroughRenderer(preview, identity) {
     return (await command('extension-list')).find(item => item.packageDigest === preview.packageDigest) || null;
   }, 'real renderer installation, cleared consent preview and matching installed package');
   assert.deepEqual(installed.identities.map(grant => grant.identity).sort(), [...identities].sort());
+  assert.equal(installed.apiProfile, selected.apiProfile, 'The reviewed API behavior profile must be retained by the installed package');
   await until(() => window.webContents.executeJavaScript(`(() => {
     const items = document.getElementById('extension-items');
     if (document.getElementById('extensions').hidden || items.hasAttribute('aria-busy')) return false;
     return [...items.querySelectorAll('article')].some(card => card.querySelector('h2')?.textContent === ${JSON.stringify(`${installed.name} · ${installed.version}`)} && card.textContent.includes(${JSON.stringify(installed.packageDigest)}));
   })()`), 'the actual installed package card rendered by the production shell');
   result.extensionRendererInstalls ||= [];
-  result.extensionRendererInstalls.push({ name: installed.name, id: installed.id, packageDigest: installed.packageDigest, selectedIdentities: selected.identities, permissionsAccepted: true, previewCleared: true, installedCardRendered: true });
+  result.extensionRendererInstalls.push({ name: installed.name, id: installed.id, packageDigest: installed.packageDigest, selectedIdentities: selected.identities, apiProfile: selected.apiProfile, permissionsAccepted: true, previewCleared: true, installedCardRendered: true });
   return installed;
 }
 
+async function observeBridgeIcons(view, expected, runId) {
+  for (const { stage, rgba, sizes } of BRIDGE_ICON_STAGES) {
+    const variants = sizes.map(size => ({ size, width: size, height: size, rgba }));
+    const announced = await until(async () => {
+      const status = await view.webContents.executeJavaScript('({stage:document.documentElement.dataset.noxviolaBridgeIconStage||null,result:document.documentElement.dataset.noxviolaBridgeResult||null,error:document.documentElement.dataset.noxviolaBridgeResultError||null})');
+      assert.equal(status.error, null, 'Native icon message transport must succeed');
+      if (status.result) throw new Error(`The native bridge completed before icon stage ${stage}: ${status.result}`);
+      const value = status.stage ? JSON.parse(status.stage) : null;
+      return value?.stage === stage ? value : null;
+    }, `the native fixture’s one-shot ${stage} icon message`);
+    assert.equal(announced.kind, 'noxviola-bridge-icon-stage');
+    assert.equal(announced.runId, runId);
+    assert.deepEqual(announced.expected, { variants });
+    const record = { runId, stage, expected: { variants }, acknowledged: false };
+    (result.bridgeIconStages ||= []).push(record);
+    const observed = await until(async () => {
+      record.observed = await window.webContents.executeJavaScript(`(async () => {
+        const expected = ${JSON.stringify({ id: expected.bridgeId, identity: expected.personalIdentity, runtimeId: expected.bridgeRuntimeIds[expected.personalIdentity], variants, rgba })};
+        const item = window.__noxviolaNativeActions?.find(value => value.id === expected.id);
+        if (!item) return { ready: false, reason: 'Action update has not arrived' };
+        if (item.iconError) throw new Error('Production action icon error: '+item.iconError);
+        const actual = item.icon?.variants;
+        if (!actual?.length) return { ready: false, reason: 'Action icon is not populated' };
+        const root = document.getElementById('extension-actions');
+        const controls = [...root.querySelectorAll('button')].filter(button => button.title === 'Bridge native accepted');
+        if (controls.length !== 1) return { ready: false, reason: 'The actual action control is not present' };
+        const control = controls[0], rendered = control.querySelector('img.extension-icon');
+        if (!rendered) return { ready: false, reason: 'The actual action image is not present' };
+        control.scrollIntoView({block:'nearest',inline:'nearest'});
+        function pixels(image,width,height) {
+          const canvas = document.createElement('canvas');canvas.width=width;canvas.height=height;
+          const context = canvas.getContext('2d');context.drawImage(image,0,0,width,height);
+          const data = context.getImageData(0,0,width,height).data;
+          return { firstPixel: [...data.slice(0,4)], allPixelsMatch: data.every((value,index) => value === expected.rgba[index%4]) };
+        }
+        const decoded = [];
+        for (const variant of actual) {
+          const image = new Image();image.src=variant.dataUrl;await image.decode();
+          decoded.push({size:variant.size,width:variant.width,height:variant.height,naturalWidth:image.naturalWidth,naturalHeight:image.naturalHeight,dataUrl:variant.dataUrl,...pixels(image,image.naturalWidth,image.naturalHeight)});
+        }
+        await rendered.decode();
+        const rect=rendered.getBoundingClientRect(),area=root.getBoundingClientRect();
+        const visible=!root.hidden && !control.disabled && rect.width===16 && rect.height===16 && rect.left>=area.left && rect.right<=area.right && rect.top>=0 && rect.bottom<=innerHeight;
+        const shown={src:rendered.src,currentSrc:rendered.currentSrc,srcset:rendered.getAttribute('srcset'),width:rect.width,height:rect.height,visible,...pixels(rendered,16,16)};
+        const sameShape=JSON.stringify(decoded.map(({size,width,height})=>({size,width,height})))===JSON.stringify(expected.variants.map(({size,width,height})=>({size,width,height})));
+        const ready=item.identity===expected.identity && item.runtimeId===expected.runtimeId && sameShape && decoded.every(icon=>icon.width===icon.naturalWidth && icon.height===icon.naturalHeight && icon.allPixelsMatch) && visible && shown.allPixelsMatch && actual.some(icon=>icon.dataUrl===shown.currentSrc) && shown.srcset===actual.map(icon=>icon.dataUrl+' '+(icon.size/16)+'x').join(', ');
+        return {ready,identity:item.identity,runtimeId:item.runtimeId,variants:decoded,rendered:shown};
+      })()`);
+      return record.observed.ready ? record.observed : null;
+    }, `actual decoded toolbar pixels for ${stage}`, 8_000);
+    assert.equal(observed.ready, true);
+    if (runId === 'phase1-first') {
+      const image = await window.webContents.capturePage();
+      record.screenshot = `synthetic-extension-icon-${stage}.png`;
+      fs.writeFileSync(path.join(context.output, record.screenshot), image.toPNG());
+    }
+    // Acknowledge only after the actual model, PNG variants and visible toolbar
+    // image have matched. This is native extension messaging in a fixture page,
+    // not a test command or alternate permission route in the shipped browser.
+    await view.webContents.executeJavaScript(`void window.postMessage(${JSON.stringify({ kind: 'noxviola-bridge-icon-observed', runId, stage })}, location.origin)`);
+    record.acknowledged = true;
+  }
+}
+
 async function runBridgeFixture(expected, runId) {
+  assert.equal((await command('extension-list')).find(item => item.id === expected.bridgeId)?.apiProfile, 'firefox', 'Every fixture run and restart must retain the explicitly reviewed Firefox reset behavior');
   const foreignBackground = backgroundPages(expected.bridgeRuntimeIds[expected.secondIdentity], expected.secondIdentity);
   assert.equal(foreignBackground.length, 1, 'The actual authorized second-identity background context must exist');
   // Read the genuine public numeric tab ID through the installed extension's
@@ -505,6 +586,7 @@ async function runBridgeFixture(expected, runId) {
   address.searchParams.set('expectedCookie', 'personal');
   const view = await navigate(address.href);
   assert.equal(await view.webContents.executeJavaScript('typeof window.__noxviolaExtensionHost'), 'undefined', 'The webpage must never receive the extension-document host transport');
+  await observeBridgeIcons(view, expected, runId);
   const response = await extensionData(view, 'noxviolaBridgeResult');
   result.bridgeRuns ||= [];
   result.bridgeRuns.push({ runId, foreignPublicTabId: foreign.id, response });
@@ -512,6 +594,7 @@ async function runBridgeFixture(expected, runId) {
   assert.equal(response.runId, runId);
   assert.equal(response.passed, true, `The installed bridge fixture failed: ${JSON.stringify(response.failure || response.cleanupErrors || response)}`);
   assert.deepEqual(response.checks.map(check => check.name).sort(), [...BRIDGE_CHECKS].sort());
+  assert.deepEqual(response.details.iconStages, BRIDGE_ICON_STAGES.map(({ stage, rgba, sizes }) => ({ stage, expected: { variants: sizes.map(size => ({ size, width: size, height: size, rgba })) } })));
   assert.ok(response.checks.every(check => check.passed === true));
   assert.deepEqual(response.cleanupErrors || [], []);
   assert.equal(response.details.createdTabId, response.details.readySenderTabId, 'Native messaging must round-trip the public tab ID');
@@ -749,7 +832,7 @@ async function firstLaunch() {
   await check('authenticated native extension host routes real APIs, identity denials and revocation', async () => {
     await window.webContents.executeJavaScript('window.__noxviolaNativeActions = null; void window.browser.onExtensionActions(value => { window.__noxviolaNativeActions = value; });');
     const preview = await previewFixture('extension-bridge');
-    const record = await installPreviewThroughRenderer(preview, [expected.personalIdentity, expected.secondIdentity]);
+    const record = await installPreviewThroughRenderer(preview, [expected.personalIdentity, expected.secondIdentity], { apiProfile: 'firefox' });
     expected.bridgeId = record.id;
     expected.bridgeRuntimeIds = Object.fromEntries(record.identities.map(grant => {
       assert.equal(grant.status, 'loaded');

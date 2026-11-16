@@ -110,3 +110,25 @@ test('packaged navigation observes the selected target commit before accepting a
   assert.equal(observed, documents[2]);
   await assert.rejects(waitForDocument(async () => { throw new Error('Actual renderer inspection failed'); }, target, { address }), /Actual renderer inspection failed/);
 });
+
+test('packaged close addresses only an explicit child PID through the ordinary native-window helper', () => {
+  const { nativeWindowCloseArguments } = require('./native/packaged-driver.cjs');
+  assert.deepEqual(nativeWindowCloseArguments(314), ['-B', path.join(__dirname, 'native', 'window-close.py'), '--pid', '314']);
+  for (const pid of [0, -1, NaN, Infinity, '314', undefined]) assert.throws(() => nativeWindowCloseArguments(pid), /positive launched browser PID/);
+  require('node:child_process').execFileSync('python', ['-B', path.join(__dirname, 'native', 'test_window_close.py')], { stdio: 'pipe' });
+});
+
+test('post-exit session comparison detects stale last navigation, ordering and preference loss', () => {
+  const { assertSavedSession } = require('./native/packaged-driver.cjs');
+  const expected = { profiles: [{ id: 'personal', name: 'Personal' }], preferences: { theme: 'light' }, activeId: 'two', activeWorkspaceId: 'default', tabs: [
+    { id: 'one', identity: 'personal', url: 'http://127.0.0.1/page?first', title: 'First', workspaceId: 'default', groupId: null, pinned: false, muted: false },
+    { id: 'two', identity: 'personal', url: 'http://127.0.0.1/page?last', title: 'Last', workspaceId: 'default', groupId: null, pinned: false, muted: false },
+  ] };
+  const saved = structuredClone(expected);
+  for (const tab of saved.tabs) for (const key of ['workspaceId', 'groupId', 'pinned', 'muted']) delete tab[key];
+  assert.doesNotThrow(() => assertSavedSession(saved, expected));
+  const stale = structuredClone(saved); stale.tabs[1].url = 'https://developer.mozilla.org/en-US/docs/Web/JavaScript'; stale.tabs[1].title = 'JavaScript | MDN';
+  assert.throws(() => assertSavedSession(stale, expected), /final ordered tab state/);
+  assert.throws(() => assertSavedSession({ ...saved, tabs: [...saved.tabs].reverse() }, expected), /final ordered tab state/);
+  assert.throws(() => assertSavedSession({ ...saved, preferences: { theme: 'dark' } }, expected), /durably save preferences/);
+});

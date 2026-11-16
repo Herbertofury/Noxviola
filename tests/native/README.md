@@ -82,9 +82,25 @@ tabs, light/teal/compact appearance and the bookmarks bar; the page's measured
 viewport must match the real sidebar and enlarged browser header without losing
 any tabs or identity data.
 Persistent and session-only cookie lifetimes are checked independently through
-the actual renderer cookie jar. DOM `window.close()` reaches the production
-close lifecycle; the gate requires clean exit and real files under its selected
-fresh profile. It does not add a test-only storage flush.
+the actual renderer cookie jar. The external Python 3 standard-library helper
+requests `WM_CLOSE` on Windows or `WM_PROTOCOLS/WM_DELETE_WINDOW` on Linux X11.
+It selects only the exact launched browser PID and a unique visible top-level
+window, refuses ambiguity, and verifies ownership again before delivery. Linux
+uses the runner's existing X11 client library and display; there is no elevated
+installation or window/process destruction. The receipt retains the selected
+window, PID and native protocol, complete generated expected/pre-close state,
+the selected public-page target's actual document metadata, and the session
+read after process exit. Clean exit and an immediate exact saved-state comparison
+are required before the second launch. There is no test-only storage flush.
+
+Earlier packaged attempts used renderer `window.close()`. Pinned Electron's
+[WebContents close implementation](https://github.com/electron/electron/blob/v44.11.3/shell/browser/api/electron_api_web_contents.cc)
+destroys that WebContents, after which
+[BrowserWindow closes immediately](https://github.com/electron/electron/blob/v44.11.3/shell/browser/api/electron_api_browser_window.cc).
+That route bypassed the preventable window-close event and did not qualify the
+normal save lifecycle; its failed restart receipts remain preserved. The OS
+helper uses the documented [Windows close message](https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-close)
+or [X11 client close protocol](https://xorg.freedesktop.org/releases/X11R7.7/doc/xorg-docs/icccm/icccm.html).
 
 `--public-https` adds exactly two public documents: RFC Editor's RFC 9110 and
 MDN's JavaScript documentation. Each must render the expected document over a
@@ -167,12 +183,20 @@ Two subsequent actual Noxviola processes exercise:
 - A separate MV2 background page responding through `runtime.sendMessage`,
   destruction on disable and restoration on re-enable/restart.
 - A third, persistent MV2 host-bridge package, installed through real consent
-  in both identities. Its actual background exercises Chrome callbacks and the
+  in both identities with the visible API behavior profile explicitly set to
+  Firefox for its reset semantics. Its actual background exercises Chrome callbacks and the
   browser Promise namespace, first-event registration, stable public tab IDs,
   inactive tab creation/read/update/move/remove and native content messaging,
   durable bookmark events and edits, own-identity cookie writes/readback,
   rejected ungranted hosts and foreign tabs, callback-scoped errors, rejected
-  unsupported operations, and real toolbar action title/badge state. A target
+  unsupported operations, and real toolbar action title/badge state. Six icon
+  stages cover the manifest default, package-path size map, real ImageData,
+  tab-specific ImageData, tab reset and global reset. Each stage waits for a
+  single content-message acknowledgment only after the driver has decoded every
+  actual action-model PNG variant and the visible toolbar image, checked their
+  dimensions, pixels and source set, and retained the observation. First-run
+  screenshots show each stage. The normal fixture run, re-enable and real restart
+  must all retain the reviewed profile and complete the same checks. A target
   content-ready message gates its single message attempt; no retry hides a
   missing receiver. The fixture removes only its own temporary tab/bookmark/
   cookie and verifies all pre-existing ordered tabs remain intact. Disable,

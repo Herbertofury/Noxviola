@@ -1,6 +1,6 @@
 'use strict';
 // Browser lifecycle adapted from Herbertofury/Enderloom main.js (GPL-3.0-only).
-const {app, BrowserWindow, WebContentsView, ipcMain, session, dialog, Menu, shell, webContents} = require('electron');
+const {app, BrowserWindow, WebContentsView, ipcMain, session, dialog, Menu, shell, webContents, nativeImage} = require('electron');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
@@ -153,11 +153,12 @@ function ensureView(tab) {
   wc.on('did-stop-loading', () => {tab.loading=false;publish(false);hostEvent(tab.identity,'tabs.onUpdated',tab.runtimeId,{status:'complete'},tabDescriptor(tab));});
   wc.on('audio-state-changed',()=>{publish(false);hostEvent(tab.identity,'tabs.onUpdated',tab.runtimeId,{audible:wc.isCurrentlyAudible()},tabDescriptor(tab));});
   wc.on('found-in-page',(_event,result)=>{if(tab.id===activeId)send('find-result',result);});
-  function navigated(_event,url,isMainFrame=true) {
+  function navigated(_event,url,isMainFrame=true,sameDocument=false) {
     if(isMainFrame===false)return;const target=httpUrl(url);
-    if(!closing&&target){tab.url=target;recordHistory(tab,target);const zoom=originalSession.siteZooms?.[tab.identity]?.[new URL(target).origin];if(zoom!==undefined)wc.setZoomFactor(zoom);publish();hostEvent(tab.identity,'tabs.onUpdated',tab.runtimeId,{url:target},tabDescriptor(tab));}else publish(false);
+    if(!closing&&target){tab.url=target;recordHistory(tab,target);const zoom=originalSession.siteZooms?.[tab.identity]?.[new URL(target).origin];if(zoom!==undefined)wc.setZoomFactor(zoom);publish();hostEvent(tab.identity,'tab-navigation-committed',tab.runtimeId,{sameDocument});hostEvent(tab.identity,'tabs.onUpdated',tab.runtimeId,{url:target},tabDescriptor(tab));}else publish(false);
   }
-  wc.on('did-navigate', navigated); wc.on('did-navigate-in-page', navigated);
+  wc.on('did-navigate', (event,url)=>navigated(event,url,true,false));
+  wc.on('did-navigate-in-page', (event,url,isMainFrame)=>navigated(event,url,isMainFrame,true));
   wc.on('render-process-gone', (_event,details) => { tab.loading = false; notice(`Tab stopped (${details.reason}). Reload to recover.`); publish(false); });
   wc.on('did-fail-load', (_event,code,description,_url,mainFrame) => { if (mainFrame && code !== -3) notice(`Page could not load: ${description}`); });
   wc.on('context-menu', (_event,params) => Menu.buildFromTemplate([
@@ -215,7 +216,7 @@ function navigate(value) {
   const url = address(value,preferences.searchEngine,preferences.customSearchURL); if (!url) throw new Error('Use an HTTP(S) address without embedded credentials, or a search.');
   let tab = active(); if (!tab) return newTab(url);
   showPage(); tab.url = url;tab.pendingTransition='typed';
-  if (url === 'about:blank') { removeView(tab); tab.title = 'New tab'; }
+  if (url === 'about:blank') { removeView(tab); tab.title = 'New tab';hostEvent(tab.identity,'tab-navigation-committed',tab.runtimeId,{sameDocument:false}); }
   else if (!tab.view) ensureView(tab);
   else if (!tab.initializing) tab.view.webContents.loadURL(url).catch(error => notice(`Navigation failed: ${error.message}`));
   layout(); publish();
@@ -288,7 +289,7 @@ function extensionHost() {
         const tab=id===undefined?tabs.find(row=>row.identity===identity&&row.id===activeId):runtimeTab(identity,id);
         if(!tab)throw new Error('No active tab in this browser identity.');
         if(properties.url!==undefined){if(properties.url!=='about:blank'&&!httpUrl(properties.url))throw new Error('This tab URL is not supported.');tab.url=properties.url;tab.pendingTransition='link';
-          if(tab.url==='about:blank'){removeView(tab);tab.title='New tab';}else if(!tab.view)ensureView(tab);else if(!tab.initializing)tab.view.webContents.loadURL(tab.url).catch(error=>notice(error.message));}
+          if(tab.url==='about:blank'){removeView(tab);tab.title='New tab';hostEvent(tab.identity,'tab-navigation-committed',tab.runtimeId,{sameDocument:false});}else if(!tab.view)ensureView(tab);else if(!tab.initializing)tab.view.webContents.loadURL(tab.url).catch(error=>notice(error.message));}
         if(properties.pinned!==undefined)pinTab(tab,properties.pinned);if(properties.muted!==undefined)muteTab(tab,properties.muted);
         if(properties.active===true)activate(tab.id);else if(properties.active!==undefined&&properties.active!==false)throw new Error('active must be a boolean.');
         layout();publish();return tabDescriptor(tab);
@@ -570,7 +571,7 @@ async function perform(name, value) {
       const preview = await extensions.preview(chosen.filePaths[0]); send('extension-preview',preview); return preview;
     });
     case 'extension-preview-cancel': return extensionOperation(() => extensions.cancelPreview(value));
-    case 'extension-install': return extensionOperation(() => extensions.install(value?.token,{identities:value?.identities,permissionsAccepted:value?.permissionsAccepted === true,unsignedImportAccepted:value?.unsignedImportAccepted === true,allowFileAccess:false}));
+    case 'extension-install': return extensionOperation(() => extensions.install(value?.token,{identities:value?.identities,permissionsAccepted:value?.permissionsAccepted === true,unsignedImportAccepted:value?.unsignedImportAccepted === true,allowFileAccess:false,apiProfile:value?.apiProfile}));
     case 'extension-authorize': return extensionOperation(() => extensions.authorizeIdentity(value?.id,value?.identity,{permissionsAccepted:value?.permissionsAccepted === true,allowFileAccess:false}));
     case 'extension-enable': return extensionOperation(async () => { if (value?.enabled === false) closeExtensionWindows(value.id,value.identity); return extensions.setEnabled(value?.id,value?.identity,value?.enabled); });
     case 'extension-uninstall': return extensionOperation(async () => {
@@ -656,7 +657,7 @@ async function start() {
   downloads.on('change', rows => { if (panel === 'downloads') send('downloads',rows); });
   extensions = new ExtensionManager({directory:path.join(dataDirectory,'extensions'),getSession:identitySession,getIdentities:() => profiles.map(profile => profile.id),loadExtension:createExtensionLoader({app,webContents})});
   const {createExtensionBridge}=require('./extension-bridge.cjs');
-  extensionBridge=createExtensionBridge({ipcMain,manager:extensions,host:extensionHost()});
+  extensionBridge=createExtensionBridge({ipcMain,manager:extensions,host:extensionHost(),nativeImage});
   try {await extensions.open();} catch (error) {extensionError = error.message;}
   resourceMonitor=new ResourceMonitor({app,webContents,tabs:()=>tabs.map(tab=>({id:tab.id,title:tab.title,identity:tab.identity,webContentsId:tab.view?.webContents.id})),
     extensions:()=>extensions.list().map(item=>({...item,identities:item.identities.map(grant=>({...grant,session:sessionTargets.get(grant.identity)}))}))});

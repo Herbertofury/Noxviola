@@ -4,10 +4,12 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { spawn } = require('node:child_process');
+const { spawn, execFile } = require('node:child_process');
+const { promisify } = require('node:util');
 const { performance } = require('node:perf_hooks');
 const { fileURLToPath } = require('node:url');
 const { CdpConnection, loopbackWebSocket } = require('./cdp.cjs');
+const executeFile = promisify(execFile);
 
 const HTTPS_CASES = Object.freeze([
   { url: 'https://www.rfc-editor.org/rfc/rfc9110.html', title: 'RFC 9110' },
@@ -30,6 +32,23 @@ function packagedLaunchArguments(context, phase) {
     '--remote-debugging-port=0',
     `--log-net-log=${path.join(context.output, `packaged-phase-${phase}-netlog.json`)}`,
   ];
+}
+
+function nativeWindowCloseArguments(pid) {
+  if (!Number.isSafeInteger(pid) || pid <= 0) throw new Error('An exact positive launched browser PID is required.');
+  return ['-B', path.join(__dirname, 'window-close.py'), '--pid', String(pid)];
+}
+
+async function requestNativeWindowClose(pid) {
+  const { stdout } = await executeFile('python', nativeWindowCloseArguments(pid), { encoding: 'utf8', windowsHide: true, timeout: 10_000 });
+  const outcome = JSON.parse(stdout);
+  assert.equal(outcome.pid, pid);
+  assert.equal(outcome.window.pid, pid);
+  assert.equal(outcome.window.visible, true);
+  assert.equal(outcome.window.topLevel, true);
+  assert.equal(outcome.protocol, process.platform === 'win32' ? 'WM_CLOSE' : 'WM_PROTOCOLS/WM_DELETE_WINDOW');
+  assert.equal(process.platform === 'win32' ? outcome.messageProcessed : outcome.messageSubmitted, true);
+  return outcome;
 }
 
 function assertStores(data, expected, { sessionCookieExpected = true } = {}) {
@@ -94,6 +113,20 @@ function stateTabs(value) {
   return value.tabs.map(tab => Object.fromEntries(['id', 'url', 'title', 'identity', 'workspaceId', 'groupId', 'pinned', 'muted'].filter(key => Object.hasOwn(tab, key)).map(key => [key, tab[key]])));
 }
 
+function assertSavedSession(saved, expected) {
+  // stateView spells out default tab flags; the saved format may omit them.
+  // Normalize only these documented defaults, retaining every ordered tab and
+  // comparing URL/title, identity, workspace/group membership and flags.
+  const normalized = { tabs: saved.tabs.map(tab => ({ ...tab,
+    workspaceId: tab.workspaceId || 'default', groupId: tab.groupId ?? null,
+    pinned: tab.pinned ?? false, muted: tab.muted ?? false,
+  })) };
+  assert.deepEqual(stateTabs(normalized), stateTabs(expected), 'Normal OS close must durably save the final ordered tab state');
+  for (const field of ['profiles', 'preferences', 'activeId', 'activeWorkspaceId']) {
+    assert.deepEqual(saved[field], expected[field], `Normal OS close must durably save ${field}`);
+  }
+}
+
 function flattenBookmarks(tree) {
   const found = [], pending = [...tree];
   while (pending.length) { const item = pending.shift(); found.push(item); pending.unshift(...item.children || []); }
@@ -126,13 +159,14 @@ async function runPackagedPhase(packaged, context, phase, { publicHttps = false 
       caveat: 'Explicit milestone samples under instrumentation, not comparative benchmarks. Process working-set totals can count shared pages more than once. CDP process CPU time is seconds. Renderer heap metrics do not measure total browser memory.',
       samples: [],
     },
-    screenshots: [],
+    screenshots: [], persistence: {},
   };
   const log = fs.createWriteStream(path.join(context.output, `${label}.log`), { flags: 'wx', mode: 0o600 });
   const network = fs.createWriteStream(path.join(context.output, result.network.rendererEventsFile), { flags: 'wx', mode: 0o600 });
   let child, connection, shell, normalCloseRequested = false, exitResult = null, attachmentError = null;
   const attached = new Map();
   const documentResponses = new Map();
+  let selectedPublicTarget = null;
   let exitPromise;
   let timeout;
   const writeNetwork = value => network.write(JSON.stringify({ capturedAt: new Date().toISOString(), ...value }) + '\n');
@@ -429,10 +463,18 @@ async function runPackagedPhase(packaged, context, phase, { publicHttps = false 
         await until(() => evaluate(shell, `!!(${findCard})`), 'the real workspace tab row');
         await evaluate(shell, `(() => { const card = ${findCard}; const group = card.querySelectorAll('select')[1]; group.value = ${JSON.stringify(group.id)}; group.dispatchEvent(new Event('change',{bubbles:true})); [...card.querySelectorAll('button')].find(button => button.textContent === 'Apply').click(); })()`);
         await until(async () => (await state()).tabs.find(tab => tab.id === expected.personal)?.groupId === group.id, 'the real tab group assignment');
+        await until(() => evaluate(shell, `(() => {
+          const card = document.querySelector('#group-items [data-group-id="'+${JSON.stringify(group.id)}+'"]');
+          return card?.querySelector('.workspace-count')?.textContent === '1 tab · Expanded' && card.querySelector('[data-remove-group]').disabled;
+        })()`), 'the rendered nonempty group count and disabled removal');
         await evaluate(shell, `(() => { const card = ${findCard}; [...card.querySelectorAll('button')].find(button => button.textContent === 'Pin').click(); })()`);
         await until(async () => (await state()).tabs.find(tab => tab.id === expected.personal)?.pinned, 'the real pinned tab');
         await evaluate(shell, `(() => { const card = ${findCard}; [...card.querySelectorAll('button')].find(button => button.textContent === 'Mute').click(); })()`);
         await until(async () => (await state()).tabs.find(tab => tab.id === expected.personal)?.muted, 'the real muted tab');
+        await until(() => evaluate(shell, `(() => {
+          const card = ${findCard};
+          return card?.querySelector('[data-tab-pin]')?.textContent === 'Unpin' && card.querySelector('[data-tab-mute]')?.textContent === 'Unmute';
+        })()`), 'the rendered current Unpin and Unmute controls');
         const assigned = (await state()).tabs.find(tab => tab.id === expected.personal);
         assert.equal(assigned.identity, 'personal');
         assert.equal(assigned.workspaceId, workspace.id);
@@ -466,12 +508,11 @@ async function runPackagedPhase(packaged, context, phase, { publicHttps = false 
         const spare = (await state()).tabs.find(tab => tab.url === `${context.origin}/page?packaged=duplicate`);
         assert.ok(spare, 'Public browsing must not overwrite either identity storage fixture tab');
         await command('activate', spare.id);
-        let publicTarget;
         for (const test of HTTPS_CASES) {
           const start = performance.now();
           await command('navigate', test.url);
           const target = await targetAt(test.url);
-          publicTarget = target;
+          selectedPublicTarget = target;
           await ready(target, false);
           const document = await evaluate(target, `({url:location.href,title:document.title,secureContext:isSecureContext,bodyCharacters:document.body?.innerText.length || 0,nodeRequire:typeof require,privilegedBridge:typeof window.browser,navigation:performance.getEntriesByType('navigation').map(entry=>entry.toJSON())})`);
           assert.equal(new URL(document.url).protocol, 'https:');
@@ -489,17 +530,20 @@ async function runPackagedPhase(packaged, context, phase, { publicHttps = false 
         // Public documents are not reopened as part of the deterministic restart fixture.
         // Several other targets already have this duplicate URL. Observe the
         // exact public-page target returning, never another tab's ready document.
-        await navigate(`${context.origin}/page?packaged=duplicate`, publicTarget);
+        await navigate(`${context.origin}/page?packaged=duplicate`, selectedPublicTarget);
       });
       await command('activate', expected.personal);
       const final = await state();
       expected.tabs = stateTabs(final); expected.profiles = final.profiles; expected.activeId = final.activeId;
       expected.preferences = final.preferences; expected.activeWorkspaceId = final.activeWorkspaceId;
+      result.persistence.expectedRestart = expected;
       fs.writeFileSync(expectationsFile, JSON.stringify(expected, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
     } else {
       const expected = JSON.parse(fs.readFileSync(expectationsFile, 'utf8'));
+      result.persistence.expectedRestart = expected;
       await check('packaged normal restart restores ordered tabs, identities and preferences', async () => {
         const restored = await state();
+        result.persistence.restoredState = restored;
         assert.deepEqual(stateTabs(restored), expected.tabs);
         assert.deepEqual(restored.profiles, expected.profiles);
         assert.deepEqual(restored.preferences, expected.preferences);
@@ -551,13 +595,27 @@ async function runPackagedPhase(packaged, context, phase, { publicHttps = false 
       });
     }
     await sample('before-normal-packaged-close', shell);
+    result.persistence.preCloseState = await state();
+    result.persistence.preCloseTargets = await targets();
+    if (selectedPublicTarget) {
+      result.persistence.selectedPublicTarget = {
+        id: selectedPublicTarget.id, sessionId: selectedPublicTarget.sessionId,
+        target: result.persistence.preCloseTargets.find(target => target.targetId === selectedPublicTarget.id),
+        frameTree: (await connection.send('Page.getFrameTree', {}, selectedPublicTarget.sessionId)).frameTree,
+        document: await evaluate(selectedPublicTarget, '({url:location.href,title:document.title,readyState:document.readyState})'),
+      };
+    }
     normalCloseRequested = true;
     result.normalCloseRequested = true;
-    // DOM Window.close reaches the production BrowserWindow close handler, which
-    // flushes its real services. No app.exit(), process kill or test-only flush.
-    await evaluate(shell, 'window.close(); undefined', { awaitPromise: false }).catch(error => {
-      if (!/connection closed|not connected/i.test(error.message)) throw error;
-    });
+    result.closeRequest = { pid: child.pid, method: 'ordinary OS window close', attempted: true };
+    // Renderer window.close() destroys Electron WebContents directly and skips
+    // the preventable BrowserWindow close event. Request the actual desktop
+    // protocol instead; production must admit it and flush its own services.
+    try { result.closeRequest = await requestNativeWindowClose(child.pid); }
+    catch (error) {
+      result.closeRequest.error = { message: error.message, stdout: error.stdout || '', stderr: error.stderr || '' };
+      throw error;
+    }
     const closing = await bounded(exitPromise, 30_000, 'Packaged application did not complete normal close within 30 seconds.');
     assert.equal(closing.code, 0, 'The packaged process must exit successfully after its real close lifecycle');
     assert.equal(closing.signal, null);
@@ -566,6 +624,10 @@ async function runPackagedPhase(packaged, context, phase, { publicHttps = false 
     const saved = JSON.parse(fs.readFileSync(path.join(context.profile, 'browser-session.json'), 'utf8'));
     assert.equal(saved.profiles.length, 2);
     result.profileEvidence = { directory: fs.realpathSync(context.profile), session: digest(path.join(context.profile, 'browser-session.json')), library: digest(path.join(context.profile, 'private-vault.json')) };
+    result.persistence.savedSession = saved;
+    await check('ordinary OS close durably saves the complete final session before another launch', async () => {
+      assertSavedSession(saved, result.persistence.preCloseState);
+    });
     result.network.netLogSummary = summarizeNetLog(path.join(context.output, result.network.netLogFile));
     result.passed = true;
     return result;
@@ -601,4 +663,4 @@ async function runPackagedPhase(packaged, context, phase, { publicHttps = false 
   }
 }
 
-module.exports = { runPackagedPhase, packagedLaunchArguments, publicAddress, assertStores, summarizeNetLog, waitForDocument, HTTPS_CASES };
+module.exports = { runPackagedPhase, packagedLaunchArguments, nativeWindowCloseArguments, publicAddress, assertStores, assertSavedSession, summarizeNetLog, waitForDocument, HTTPS_CASES };

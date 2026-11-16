@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Noxviola</title><link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -82,6 +82,8 @@
   <h2 id="extension-preview-title"></h2><p id="extension-preview-description"></p>
   <h3>Requested permissions and site access</h3><pre id="extension-preview-permissions"></pre>
   <h3>Compatibility and provenance</h3><pre id="extension-preview-compatibility"></pre><p id="extension-preview-provenance"></p>
+  <label for="extension-api-profile">Browser compatibility behavior</label><select id="extension-api-profile" aria-describedby="extension-api-profile-help"><option value="chromium">Chrome, Edge or Opera</option><option value="firefox">Firefox</option></select>
+  <p id="extension-api-profile-help" class="subtle">Suggested from the package format. Change this if the extension targets another browser. This selects supported API behavior; it does not grant extra permissions or guarantee compatibility.</p>
   <fieldset><legend>Enable for these identities</legend><div id="extension-preview-identities" class="choices"></div></fieldset>
   <label class="consent"><input type="checkbox" id="extension-accept">I accept the displayed permissions and compatibility limitations for the selected identities.</label>
   <label id="extension-unsigned-label" class="consent" hidden><input type="checkbox" id="extension-unsigned">Import this XPI as an unsigned local package; Firefox publisher trust has not been verified.</label>

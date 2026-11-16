@@ -94,6 +94,96 @@ test('extension action badges render their actual background color and retain au
   assert.equal(h.$('extension-actions').querySelector('.extension-badge').style.color,'rgb(255, 255, 255)');assert.equal(h.$('extension-actions').querySelector('button').disabled,true);
 });
 
+test('extension toolbar icons preserve host PNG resolutions and reject remote or active image sources',async t=>{
+  const h=await harness(t),png='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+cjD8AAAAASUVORK5CYII=';
+  const item={runtimeId:'runtime-icon',name:'Image action',title:'Visible title',enabled:true,icon:{variants:[{size:16,width:1,height:1,dataUrl:png},{size:32,width:1,height:1,dataUrl:png}]}};
+  h.emit('onExtensionActions',[item]);
+  const control=h.$('extension-actions').querySelector('button'),img=control.querySelector('img');
+  assert.equal(img.src,png);assert.equal(img.getAttribute('srcset'),`${png} 1x, ${png} 2x`);assert.equal(img.width,16);assert.equal(img.height,16);assert.equal(img.alt,'');
+  assert.equal(control.textContent,'Image action');assert.equal(control.title,'Visible title');
+  img.dispatchEvent(new h.window.Event('error'));assert.equal(control.querySelector('img'),null);assert.match(h.$('notice').textContent,/could not be displayed/);
+  for(const dataUrl of ['https://remote.invalid/image.png','data:image/svg+xml,<svg></svg>','file:///private/icon.png']){
+    h.emit('onExtensionActions',[{...item,icon:{variants:[{size:16,width:16,height:16,dataUrl}]}}]);assert.equal(h.$('extension-actions').querySelector('img'),null);
+  }
+  h.emit('onExtensionActions',[{...item,icon:null,iconError:'The accepted package icon could not be read.'}]);
+  const fallback=h.$('extension-actions').querySelector('button');assert.equal(fallback.textContent,'Image action');assert.match(fallback.title,/could not be read/);assert.equal(fallback.getAttribute('aria-description'),'The accepted package icon could not be read.');
+  const policy=h.document.querySelector('meta[http-equiv="Content-Security-Policy"]').content;
+  assert.match(policy,/img-src 'self' data:/);assert.match(policy,/script-src 'self'/);assert.match(policy,/connect-src 'none'/);
+});
+
+test('workspace state refreshes actual counts and toggles while preserving focused assignment and form drafts',async t=>{
+  const initial=state({panel:'workspaces'});
+  initial.tabs[1].workspaceId='project';
+  const h=await harness(t,{initial});
+  h.emit('onWorkspaces',{items:[{id:'default',name:'Default',protected:true},{id:'project',name:'Project'}],
+    groups:[{id:'assigned',workspaceId:'default',name:'Assigned',collapsed:false},{id:'draft',workspaceId:'default',name:'Draft',collapsed:false}]});
+  await Promise.all(['workspace-items','group-items','workspace-tabs'].map(id=>painted(h,id)));
+  const assignment=h.$('workspace-tabs').querySelector('[data-assignment-tab-id="tab-personal"]');
+  const group=assignment.querySelectorAll('select')[1];
+  const groupCard=h.$('group-items').querySelector('[data-group-id="assigned"]');
+  assert.equal(groupCard.querySelector('.workspace-count').textContent,'0 tabs · Expanded');
+  assert.equal(groupCard.querySelector('[data-remove-group]').disabled,false);
+  h.select(group,'draft');group.focus();
+  h.input(field(h.$('workspace-form'),'name'),'Unfinished workspace name');
+  h.input(field(h.$('group-form'),'name'),'Unfinished group name');
+  const changed={...initial.tabs[0],groupId:'assigned',pinned:true,muted:true,title:'Updated page',loading:true};
+  h.update({tabs:[changed,initial.tabs[1]]});
+  assert.equal(h.$('workspace-tabs').querySelector('[data-assignment-tab-id="tab-personal"]'),assignment);
+  assert.equal(h.document.activeElement,group);
+  assert.equal(group.value,'draft','incoming saved state must not erase an unsaved assignment');
+  assert.equal(field(h.$('workspace-form'),'name').value,'Unfinished workspace name');
+  assert.equal(field(h.$('group-form'),'name').value,'Unfinished group name');
+  assert.equal(groupCard.querySelector('.workspace-count').textContent,'1 tab · Expanded');
+  assert.equal(groupCard.querySelector('[data-remove-group]').disabled,true);
+  assert.equal(assignment.querySelector('h2').textContent,'Updated page');
+  assert.equal(group.getAttribute('aria-label'),'Group for Updated page');
+  const pin=assignment.querySelector('[data-tab-pin]'),mute=assignment.querySelector('[data-tab-mute]');
+  assert.equal(pin.textContent,'Unpin');assert.equal(mute.textContent,'Unmute');
+  pin.click();mute.click();await tick();
+  assert.deepEqual(h.calls.find(call=>call.name==='tab-pin'),{name:'tab-pin',value:{id:'tab-personal',pinned:false}});
+  assert.deepEqual(h.calls.find(call=>call.name==='tab-mute'),{name:'tab-mute',value:{id:'tab-personal',muted:false}});
+  [...assignment.querySelectorAll('button')].find(button=>button.textContent==='Apply').click();await tick();
+  assert.deepEqual(h.calls.find(call=>call.name==='tab-assign'),{name:'tab-assign',value:{id:'tab-personal',workspaceId:'default',groupId:'draft'}});
+  h.update({tabs:[{...changed,loading:false},initial.tabs[1]]});
+  assert.equal(group.value,'assigned','after a completed assignment, the current canonical state is displayed');
+  h.update({tabs:[{...initial.tabs[1],workspaceId:'default'}],activeId:'tab-work'});
+  await Promise.all(['workspace-items','group-items','workspace-tabs'].map(id=>painted(h,id)));
+  assert.equal(h.$('workspace-tabs').querySelector('[data-assignment-tab-id="tab-personal"]'),null);
+  const emptyGroup=h.$('group-items').querySelector('[data-group-id="assigned"]');
+  assert.equal(emptyGroup.querySelector('.workspace-count').textContent,'0 tabs · Expanded');
+  assert.equal(emptyGroup.querySelector('[data-remove-group]').disabled,false);
+  const project=h.$('workspace-items').querySelector('[data-workspace-id="project"]');
+  assert.equal(project.querySelector('.workspace-count').textContent,'0 tabs');
+  assert.equal(project.querySelector('[data-remove-workspace]').disabled,false);
+  assert.equal(field(h.$('workspace-form'),'name').value,'Unfinished workspace name');
+  assert.equal(field(h.$('group-form'),'name').value,'Unfinished group name');
+});
+
+test('a completed workspace assignment cannot erase a newer selection made while its save was pending',async t=>{
+  let finish;
+  const pending=new Promise(resolve=>{finish=resolve;});
+  const initial=state({panel:'workspaces'}),h=await harness(t,{initial,command:async name=>name==='tab-assign'?pending:undefined});
+  h.emit('onWorkspaces',{items:[{id:'default',name:'Default',protected:true}],
+    groups:[{id:'first',workspaceId:'default',name:'First'},{id:'next',workspaceId:'default',name:'Next'}]});
+  await painted(h,'workspace-tabs');
+  const row=h.$('workspace-tabs').querySelector('[data-assignment-tab-id="tab-personal"]'),group=row.querySelectorAll('select')[1];
+  const apply=[...row.querySelectorAll('button')].find(button=>button.textContent==='Apply');
+  h.select(group,'first');apply.click();await tick();
+  assert.equal(group.disabled,false);
+  h.select(group,'next');group.focus();
+  finish();await tick();
+  h.update({tabs:[{...initial.tabs[0],groupId:'first'},initial.tabs[1]]});
+  assert.equal(h.document.activeElement,group);assert.equal(group.value,'next');
+  assert.deepEqual(h.calls.filter(call=>call.name==='tab-assign').map(call=>call.value),[{id:'tab-personal',workspaceId:'default',groupId:'first'}]);
+  apply.click();await tick();
+  assert.deepEqual(h.calls.filter(call=>call.name==='tab-assign').map(call=>call.value),[
+    {id:'tab-personal',workspaceId:'default',groupId:'first'},
+    {id:'tab-personal',workspaceId:'default',groupId:'next'},
+  ]);
+  h.update({tabs:[{...initial.tabs[0],groupId:'next'},initial.tabs[1]]});
+  assert.equal(group.value,'next');
+});
+
 function recordButton(h, title, label) {
   const card = [...h.$('bookmark-items').querySelectorAll('article')].find(item => item.querySelector('h2')?.textContent === title);
   assert.ok(card,'bookmark card '+title+' exists');

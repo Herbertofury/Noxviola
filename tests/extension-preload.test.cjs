@@ -17,10 +17,10 @@ function fixture({address='chrome-extension://'+EXT+'/popup.html',contextIsolate
   const nativeRuntime={id:EXT,getManifest:()=>({permissions:['tabs','contextMenus']}),onMessage:nativeEvent(),onConnect:nativeEvent(),getURL:value=>'chrome-extension://'+EXT+'/'+value};
   const nativePort={name:'real-port',sender:{tab:{id:110,url:'https://allowed.test/'}},postMessage:value=>nativeCalls.push(['port.postMessage',value]),disconnect:()=>nativeCalls.push(['port.disconnect']),onMessage:nativeEvent(),onDisconnect:nativeEvent()};
   const main=vm.createContext({crypto:webcrypto,chrome:{runtime:nativeRuntime,tabs:{sendMessage:(...args)=>{nativeCalls.push(['sendMessage',...args]);if(typeof args.at(-1)==='function'){args.at(-1)('native reply');return;}return Promise.resolve('native reply');},executeScript:(id,details,callback)=>{nativeCalls.push(['tabs.executeScript',id,details]);callback(['actual native result']);},connect:(...args)=>{nativeCalls.push(['connect',...args]);return nativePort;}},scripting:{executeScript:details=>{nativeCalls.push(['executeScript',details]);return Promise.resolve([{result:true}]);}}},console:{error:error=>errors.push(error.message),log(){},warn(){}}});
+  main.location={href:address};main.URL=URL;
   let required=0;
   const contextBridge={exposeInMainWorld:(key,value)=>{assert.equal(contextIsolated,true,'Native contextBridge rejects non-isolated contexts.');contextBridgeCalls.push('expose');Object.defineProperty(main,key,{value,configurable:true});},executeInMainWorld:({func})=>{assert.equal(contextIsolated,true);contextBridgeCalls.push('execute');return vm.runInContext('('+func.toString()+')()',main);}};
   const executionContext=contextIsolated?vm.createContext({location:{href:address},console:main.console}):main;
-  if(!contextIsolated)main.location={href:address};
   // Electron passes require/process into its sandboxed preload wrapper. With
   // native background pages, that wrapper shares the extension's main world.
   const execute=vm.runInContext('(function(require,process){'+source+'\n})',executionContext);
@@ -119,4 +119,21 @@ test('subscription failure throws before local success and generated menu IDs ar
   const denied=fixture({subscribe:()=>({ok:false,error:{message:'No accepted permission'}})}),listener=()=>{};
   assert.throws(()=>denied.chrome.bookmarks.onCreated.addListener(listener),/No accepted permission/);assert.equal(denied.chrome.bookmarks.onCreated.hasListener(listener),false);
   const a=fixture(),b=fixture();assert.notEqual(a.chrome.contextMenus.create({title:'A'}),b.chrome.contextMenus.create({title:'B'}));
+});
+test('setIcon serializes real ImageData getters and stable byte snapshots while retaining path maps and document bases',async()=>{
+  for(const contextIsolated of [true,false]){
+    const f=fixture({contextIsolated,address:'chrome-extension://'+EXT+'/background/index.html'});
+    f.main.document={baseURI:'chrome-extension://'+EXT+'/ui/popup.html'};
+    const value=vm.runInContext('(()=>{const pixels=new Uint8ClampedArray([10,20,30,128]);return {pixels,image:Object.create({get width(){return 1},get height(){return 1},get data(){return pixels},get colorSpace(){return "srgb"}})};})()',f.main);
+    const pending=f.browser.browserAction.setIcon({tabId:10,imageData:{16:value.image},path:{16:'https://unused.example/icon.png'}});
+    value.pixels[0]=99;await pending;
+    const sent=f.calls.at(-1);assert.equal(sent[1],'browserAction.setIcon');assert.equal(sent[2][0].tabId,10);
+    assert.equal(sent[2][0].imageData[16].width,1);assert.deepEqual([...sent[2][0].imageData[16].data],[10,20,30,128]);
+    await f.browser.action.setIcon({path:{19:'../icons/dr_active_19.png',38:'/icons/dr_active_38.png'}});
+    assert.deepEqual(JSON.parse(JSON.stringify(f.calls.at(-1)[2][0].path)),{19:'chrome-extension://'+EXT+'/icons/dr_active_19.png',38:'chrome-extension://'+EXT+'/icons/dr_active_38.png'});
+    await f.browser.action.setIcon({imageData:{},path:{}});assert.deepEqual(JSON.parse(JSON.stringify(f.calls.at(-1)[2])),[{imageData:{},path:{}}]);
+    const before=f.calls.length;
+    await assert.rejects(f.browser.action.setIcon({imageData:{width:1,height:1,data:[1,2,3,4],colorSpace:'display-p3'}}),/8-bit sRGB/);
+    assert.equal(f.calls.length,before);
+  }
 });

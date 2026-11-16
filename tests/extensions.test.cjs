@@ -97,6 +97,18 @@ test('runtime admission is bound to verified native Session, owned path and mani
   await manager.setEnabled(item.id,'personal',true);
   assert.notEqual(manager.runtimeContext(session,runtimeId).epoch,epoch);
 });
+test('reviewed API behavior profile is explicit, persistent and captured for the enrollment without changing grants',async t=>{
+  const {root,manager,fake,options}=await setup(t),source=await fixture(root,{browser_specific_settings:{gecko:{id:'cross-browser@example.test'}}});
+  const preview=await manager.preview(source);assert.equal(preview.apiProfileSuggestion,'chromium','Manifest hints do not silently pick an ecosystem');
+  await assert.rejects(manager.install(preview.token,{identities:['personal'],permissionsAccepted:true,apiProfile:'universal'}),{code:'API_PROFILE_INVALID'});
+  assert.equal(manager.list().length,0);
+  const item=await manager.install(preview.token,{identities:['personal'],permissionsAccepted:true,apiProfile:'firefox'}),session=fake.getSession('personal'),runtimeId=item.identities[0].runtimeId;
+  assert.equal(item.apiProfile,'firefox');assert.equal(manager.runtimeContext(session,runtimeId).apiProfile,'firefox');
+  assert.deepEqual(manager.runtimeContext(session,runtimeId).permissions.required,['storage']);
+  manager._records.get(item.id).apiProfile='chromium';assert.equal(manager.runtimeContext(session,runtimeId).apiProfile,'firefox');
+  await manager.dispose();const reopened=new ExtensionManager(options);await reopened.open();await reopened.restoreIdentity('personal');
+  assert.equal(reopened.list()[0].apiProfile,'firefox');assert.equal(reopened.runtimeContext(session,runtimeId).apiProfile,'firefox');await reopened.dispose();
+});
 test('failed native unload still revokes browser-host admission and emits cleanup', async t => {
   const {root,manager,fake} = await setup(t);
   const item = await install(manager,await fixture(root));
@@ -109,6 +121,38 @@ test('failed native unload still revokes browser-host admission and emits cleanu
   assert.equal(manager.runtimeContext(session,runtimeId),null);
   assert.equal(manager.list()[0].identities[0].status,'disable-failed');
   assert.ok(revocations.some(event=>event.id===item.id&&event.identity==='personal'));
+});
+test('runtime resources are byte-bound to accepted files, exact case and current enrollment without persisting inventories',async t=>{
+  const {root,manager,fake,options}=await setup(t),source=await fixture(root,{}, {'icons/Case.png':Buffer.from('accepted')});
+  const item=await install(manager,source),session=fake.getSession('personal'),runtimeId=item.identities[0].runtimeId;
+  const context=manager.runtimeContext(session,runtimeId);
+  assert.equal((await manager.readRuntimeResource(context,'icons/Case.png')).toString(),'accepted');
+  for(const name of ['icons/case.png','icons/missing.png'])await assert.rejects(manager.readRuntimeResource(context,name),{code:'RESOURCE_UNVERIFIED'});
+  for(const name of ['../outside','/outside','icons/../Case.png','icons\\Case.png'])await assert.rejects(manager.readRuntimeResource(context,name),{code:'UNSAFE_PACKAGE_PATH'});
+  assert.equal(JSON.stringify(JSON.parse(await fs.readFile(manager.registryPath,'utf8'))).includes('sha256'),false);
+  const file=path.join(manager.packagesPath,item.id,'icons','Case.png');await fs.writeFile(file,'modified');
+  await assert.rejects(manager.readRuntimeResource(context,'icons/Case.png'),{code:'INSTALLED_PACKAGE_CHANGED'});
+  await fs.writeFile(file,'accepted');await manager.dispose();
+  await assert.rejects(manager.readRuntimeResource(context,'icons/Case.png'),{code:'EXTENSION_REVOKED'});
+  const restarted=new ExtensionManager(options);await restarted.open();await restarted.restoreIdentity('personal');
+  const newContext=restarted.runtimeContext(session,runtimeId);assert.notEqual(newContext.epoch,context.epoch);
+  assert.equal((await restarted.readRuntimeResource(newContext,'icons/Case.png')).toString(),'accepted');await restarted.dispose();
+});
+test('runtime resource reads refuse a linked ancestor even when its external bytes match the accepted hash',async t=>{
+  const {root,manager,fake}=await setup(t),source=await fixture(root,{}, {'icons/image.png':'accepted'}),item=await install(manager,source);
+  const context=manager.runtimeContext(fake.getSession('personal'),item.identities[0].runtimeId),icons=path.join(manager.packagesPath,item.id,'icons');
+  await fs.rename(icons,icons+'-original');const outside=path.join(root,'outside');await fs.mkdir(outside);await fs.writeFile(path.join(outside,'image.png'),'accepted');
+  await fs.symlink(outside,icons,process.platform==='win32'?'junction':'dir');
+  await assert.rejects(manager.readRuntimeResource(context,'icons/image.png'),{code:'UNSAFE_PACKAGE_FILE'});
+});
+test('disabling during an admitted resource read rejects its result and releases the inventory',async t=>{
+  const {root,manager,fake}=await setup(t),source=await fixture(root,{}, {'icons/image.png':'accepted'}),item=await install(manager,source);
+  const context=manager.runtimeContext(fake.getSession('personal'),item.identities[0].runtimeId),file=path.join(manager.packagesPath,item.id,'icons','image.png');
+  let release,entered;const opened=new Promise(resolve=>{entered=resolve;}),original=fs.open;
+  fs.open=async(target,...args)=>{if(target===file){entered();await new Promise(resolve=>{release=resolve;});}return original(target,...args);};
+  t.after(()=>{fs.open=original;release?.();});
+  const pending=manager.readRuntimeResource(context,'icons/image.png');await opened;await manager.setEnabled(item.id,'personal',false);release();
+  await assert.rejects(pending,{code:'EXTENSION_REVOKED'});assert.equal(manager._runtimeResources.size,0);fs.open=original;
 });
 function archive(entries) {
   const local = [], central = [];

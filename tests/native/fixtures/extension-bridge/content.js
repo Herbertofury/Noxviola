@@ -17,6 +17,18 @@
   const runId = query.get('noxviolaBridgeRun');
   if (!runId) return;
   document.documentElement.dataset.noxviolaBridgeInjected = 'true';
+  chrome.runtime.onMessage.addListener((message,_sender,respond) => {
+    if (message?.kind!=='noxviola-bridge-icon-stage' || message.runId!==runId) return;
+    let finished=false;
+    const finish=value=>{if(finished)return;finished=true;clearTimeout(deadline);window.removeEventListener('message',observed);respond(value);};
+    const observed=event=>{
+      if(event.source===window && event.origin===location.origin && event.data?.kind==='noxviola-bridge-icon-observed' && event.data.runId===runId && event.data.stage===message.stage) finish({observed:true,stage:message.stage});
+    };
+    const deadline=setTimeout(()=>finish({observed:false,error:'The actual toolbar icon was not acknowledged before its failure deadline.'}),10000);
+    window.addEventListener('message',observed);
+    document.documentElement.dataset.noxviolaBridgeIconStage=JSON.stringify(message);
+    return true;
+  });
   const url = new URL('/page',location.origin); url.searchParams.set('noxviolaBridgeTarget',runId);
   chrome.runtime.sendMessage({kind:'noxviola-bridge-run',runId,personalFixtureUrl:url.href,foreignTabId:Number(query.get('foreignTabId')),expectedCookie:query.get('expectedCookie')},response => {
     if (chrome.runtime.lastError) document.documentElement.dataset.noxviolaBridgeResultError = chrome.runtime.lastError.message;

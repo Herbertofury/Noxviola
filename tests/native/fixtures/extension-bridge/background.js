@@ -25,7 +25,12 @@ async function mustReject(work,label) {
   try { await work(); } catch (error) { assert(typeof error?.message === 'string' && error.message.length,label+' lost the failure reason.'); return error.message; }
   throw new Error(label+' unexpectedly succeeded.');
 }
-async function run(message) {
+function solidImageData(size,rgba) {
+  const image=new ImageData(size,size);
+  for(let offset=0;offset<image.data.length;offset+=4)image.data.set(rgba,offset);
+  return image;
+}
+async function run(message,originatingTabId) {
   const result = {version:1,runId:message.runId,passed:false,checks:[],details:{}};
   let step = 'input', created, bookmark, cookieName, readiness, createdEvent, bookmarkEvent;
   const check = name => { step = name; };
@@ -120,6 +125,29 @@ async function run(message) {
     assert(await browser.browserAction.getBadgeText({}) === 'OK','Action badge readback failed.');
     assert(JSON.stringify(await browser.browserAction.getBadgeBackgroundColor({})) === '[37,99,235,255]','Action badge color readback failed.');
     result.details.actionTitle = 'Bridge native accepted'; result.details.actionBadge = 'OK'; result.details.actionColor = [37,99,235,255]; pass(step);
+
+    check('action-icons');
+    assert(Number.isSafeInteger(originatingTabId),'The icon observer requires the real originating content tab.');
+    result.details.iconStages=[];
+    const observeIcon=async(stage,rgba,sizes=[16,32])=>{
+      const expected={variants:sizes.map(size=>({size,width:size,height:size,rgba}))};
+      const response=await browser.tabs.sendMessage(originatingTabId,{kind:'noxviola-bridge-icon-stage',runId:message.runId,stage,expected});
+      assert(response?.observed===true && response.stage===stage,response?.error || 'The actual toolbar icon stage was not observed.');
+      result.details.iconStages.push({stage,expected});
+    };
+    const purple=[120,50,170,255],green=[22,163,74,255],blue=[37,99,235,255],orange=[234,88,12,255];
+    await observeIcon('manifest-default',purple);
+    await browser.browserAction.setIcon({path:{16:'icons/path16.png',32:'icons/path32.png'}});
+    await observeIcon('path-map',green);
+    await browser.browserAction.setIcon({imageData:{16:solidImageData(16,blue),32:solidImageData(32,blue)},path:{16:'https://unused.invalid/icon.png'}});
+    await observeIcon('global-imagedata',blue);
+    await browser.browserAction.setIcon({tabId:originatingTabId,imageData:solidImageData(16,orange)});
+    await observeIcon('tab-imagedata',orange,[16]);
+    await browser.browserAction.setIcon({tabId:originatingTabId,imageData:null,path:{}});
+    await observeIcon('tab-reset',blue);
+    await mustReject(()=>browser.browserAction.setIcon({path:'https://ungranted.invalid/icon.png'}),'Remote action icon');
+    await browser.browserAction.setIcon({imageData:{},path:{}});
+    await observeIcon('global-reset',purple);pass(step);
   } catch (error) {
     result.failure = {step,message:String(error?.message || error),stack:String(error?.stack || '')};
   } finally {
@@ -147,5 +175,5 @@ browser.runtime.onMessage.addListener((message,sender) => {
   if (message?.kind !== 'noxviola-bridge-run') return undefined;
   if (running) return Promise.resolve({version:1,runId:message.runId,passed:false,checks:[],failure:{step:'concurrent-run',message:'Concurrent fixture dispatch is refused.'}});
   running = true;
-  return run(message).finally(() => { running = false; });
+  return run(message,sender.tab?.id).finally(() => { running = false; });
 });

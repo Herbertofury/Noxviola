@@ -3,6 +3,7 @@
 const path = require('node:path');
 const policy = require('./extension-policy.cjs');
 const {ExtensionMenus} = require('./extension-menus.cjs');
+const {ExtensionIcons} = require('./extension-icons.cjs');
 const CHANNEL = 'noxviola-extension:invoke';
 const MAP_CHANNEL = 'noxviola-extension:tab-id';
 const SUBSCRIBE_CHANNEL = 'noxviola-extension:subscription';
@@ -49,11 +50,12 @@ function badgeColor(value) {
 }
 
 class ExtensionBridge {
-  constructor({ipcMain, manager, host}) {
+  constructor({ipcMain, manager, host, nativeImage}) {
     if (!ipcMain?.handle || !ipcMain?.on || !manager?.runtimeContext || !host?.tabs) throw new TypeError('Native IPC, canonical extension manager and browser host are required.');
     this.ipcMain = ipcMain; this.manager = manager; this.host = host;
     this.sessions = new Map(); this.listeners = new Map(); this.bindings = new WeakMap();
     this.actions = new Map(); this.activeGrants = new Map(); this.disposed = false;
+    this.icons = new ExtensionIcons({nativeImage,readResource:manager.readRuntimeResource?.bind(manager)});
     this.menus = new ExtensionMenus({admit:(context,tab) => {
       if (!this.current(context)) return false;
       try { return this.host.tabs.get(context.identity,tab.id)?.identity === context.identity; }
@@ -97,6 +99,7 @@ class ExtensionBridge {
         if (!records.size) this.listeners.delete(name);
       }
       this.actions.delete(event.identity+'\0'+event.id);
+      this.icons.revoke(event.id,event.identity);
       this.activeGrants.delete(event.identity+'\0'+event.id);
       this.menus.revoke(event.id,event.identity);
       this.host.actionsChanged?.(event.identity);
@@ -190,7 +193,7 @@ class ExtensionBridge {
     if (namespace === 'bookmarks') { this.permission(context,'bookmarks'); return this.bookmarks(context,name,args); }
     if (namespace === 'history') { this.permission(context,'history'); return this.history(context,name,args); }
     if (namespace === 'contextMenus') { this.permission(context,'contextMenus'); return this.menus.invoke(context,name,args); }
-    if (namespace === 'action' || namespace === 'browserAction') return this.action(context,name,args);
+    if (namespace === 'action' || namespace === 'browserAction') return this.action(context,event,name,args);
     reject('UNSUPPORTED_API','This browser-host API is not implemented: '+method);
   }
   async tabs(context,name,args,event) {
@@ -343,11 +346,42 @@ class ExtensionBridge {
   actionRecord(context) {
     if (!(context.manifest.action || context.manifest.browser_action)) reject('ACTION_UNDECLARED','The extension does not declare a toolbar action.');
     const key = context.identity+'\0'+context.id;
-    if (!this.actions.has(key)) this.actions.set(key,{epoch:context.epoch,defaults:{title:(context.manifest.action || context.manifest.browser_action).default_title || context.name,popup:context.pages?.popup ? new URL(context.pages.popup,'chrome-extension://'+context.runtimeId+'/').href : '',badgeText:'',color:[95,99,104,255],enabled:true},tabs:new Map()});
+    if (!this.actions.has(key)) {
+      const manifest=context.manifest.action || context.manifest.browser_action;
+      const record={epoch:context.epoch,defaults:{title:manifest.default_title || context.name,popup:context.pages?.popup ? new URL(context.pages.popup,'chrome-extension://'+context.runtimeId+'/').href : '',badgeText:'',color:[95,99,104,255],enabled:true},tabs:new Map(),manifestIcon:null,manifestIconError:'',iconSequence:0,committedIcons:new Map()};
+      this.actions.set(key,record);
+      if (manifest.default_icon!==undefined) {
+        record.defaultIconPromise=this.icons.resolve(context,{path:manifest.default_icon},'chrome-extension://'+context.runtimeId+'/').then(icon=>{
+          if (this.current(context) && this.actions.get(key)===record) { record.manifestIcon=icon;this.host.actionsChanged?.(context.identity); }
+        },error=>{
+          if (this.current(context) && this.actions.get(key)===record) { record.manifestIconError=error.message;this.host.actionsChanged?.(context.identity); }
+        });
+      }
+    }
     return this.actions.get(key);
   }
-  action(context,name,args) {
+  async setActionIcon(context,event,record,args) {
+    const details=keys(args[0],['tabId','path','imageData']),tabId=details.tabId;
+    if (tabId!==undefined) this.getTab(context,tabId);
+    const sequence=++record.iconSequence;
+    const baseURL=event.type==='service-worker' ? event.serviceWorker.scriptURL || event.serviceWorker.scope : event.senderFrame.url;
+    const icon=await this.icons.resolve(context,details,baseURL);
+    this.requireCurrent(context);
+    if (this.authenticate(event).epoch!==context.epoch) reject('EXTENSION_REVOKED','The icon caller enrollment changed while its image was prepared.');
+    if (tabId!==undefined) this.getTab(context,tabId);
+    // Prepare concurrently, but a late earlier decode cannot undo a newer
+    // successful update/reset. A failed later decode never erases prior intent.
+    if (sequence>(record.committedIcons.get(tabId) || 0)) {
+      const target=tabId===undefined?record.defaults:record.tabs.get(tabId)||{};
+      if (icon===null) delete target.icon; else target.icon=icon;
+      if (tabId!==undefined) record.tabs.set(tabId,target);
+      record.committedIcons.set(tabId,sequence);
+      this.host.actionsChanged?.(context.identity);
+    }
+  }
+  action(context,event,name,args) {
     const record = this.actionRecord(context);
+    if (name === 'setIcon') return this.setActionIcon(context,event,record,args);
     if (name === 'openPopup') reject('USER_GESTURE_REQUIRED','Open the extension action through a browser control.');
     if (name === 'enable' || name === 'disable') {
       const tabId = args[0]; if (tabId !== undefined) this.getTab(context,tabId);
@@ -379,7 +413,9 @@ class ExtensionBridge {
   actionState(identity,tabId) {
     return this.manager.runtimeContexts(identity).filter(context => context.manifest.action || context.manifest.browser_action).map(context => {
       const record = this.actionRecord(context);
-      return {id:context.id,runtimeId:context.runtimeId,identity,name:context.name,...record.defaults,...record.tabs.get(tabId)};
+      const tab=record.tabs.get(tabId),overridden=Object.hasOwn(tab||{},'icon') || Object.hasOwn(record.defaults,'icon');
+      return {id:context.id,runtimeId:context.runtimeId,identity,name:context.name,...record.defaults,...tab,
+        icon:tab?.icon || record.defaults.icon || record.manifestIcon,iconError:overridden?'':record.manifestIconError};
     });
   }
   async activateAction(identity,runtimeId,tabId) {
@@ -432,8 +468,22 @@ class ExtensionBridge {
   }
   emitIdentity(session,name,args) { for (const context of this.manager.runtimeContexts()) if (context.session === session) this.emitTo(context,name,args); }
   hostEvent(event) {
+    if (event?.event==='tab-navigation-committed') {
+      if (event.args?.[1]?.sameDocument!==false) return;
+      let changed=false;
+      for (const context of this.manager.runtimeContexts(event.identity)) {
+        if (context.apiProfile!=='firefox') continue;
+        const record=this.actions.get(context.identity+'\0'+context.id);
+        if (!record) continue;
+        const tab=record.tabs.get(event.args[0]);
+        if (tab && Object.hasOwn(tab,'icon')) {delete tab.icon;changed=true;}
+        record.committedIcons.set(event.args[0],++record.iconSequence);
+      }
+      if (changed) this.host.actionsChanged?.(event.identity);
+      return;
+    }
     if (!event || !EVENTS.has(event.event)) return;
-    if (event.event === 'tabs.onRemoved') { for (const grants of this.activeGrants.values()) grants.delete(event.args[0]); for (const record of this.actions.values()) record.tabs.delete(event.args[0]); }
+    if (event.event === 'tabs.onRemoved') { for (const grants of this.activeGrants.values()) grants.delete(event.args[0]); for (const record of this.actions.values()) {record.tabs.delete(event.args[0]);record.committedIcons.delete(event.args[0]);} }
     if (event.event === 'tabs.onUpdated') for (const grants of this.activeGrants.values()) if (grants.has(event.args[0]) && grants.get(event.args[0]) !== this.origin(event.args[2]?.url)) grants.delete(event.args[0]);
     for (const context of this.manager.runtimeContexts(event.identity)) {
       let args = event.args;
@@ -474,7 +524,7 @@ class ExtensionBridge {
     this.ipcMain.removeHandler(CHANNEL); this.ipcMain.removeListener(MAP_CHANNEL,this.mapId); this.ipcMain.removeListener(SUBSCRIBE_CHANNEL,this.subscribe);
     this.unsubscribeManager?.(); this.unsubscribeHost?.(); this.unsubscribeBookmarks?.(); this.unsubscribeHistory?.();
     for (const [session,state] of this.sessions) this.detachSession(session,state);
-    this.listeners.clear(); this.actions.clear(); this.activeGrants.clear(); this.menus.owners.clear();
+    this.listeners.clear(); this.actions.clear(); this.activeGrants.clear(); this.menus.owners.clear();this.icons.clear();
   }
 }
 function createExtensionBridge(options) { return new ExtensionBridge(options); }

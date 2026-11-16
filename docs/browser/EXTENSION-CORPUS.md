@@ -82,7 +82,7 @@ The [cookie adapter](https://github.com/violentmonkey/violentmonkey/blob/f3f4e7f
 
 ## Next bounded implementation target
 
-**Implement real `action.setIcon` / `browserAction.setIcon` next, after the current native bridge gate is diagnosed.** It is an observed dependency in two independent reviewed packages and can use the existing authenticated action record and visible toolbar without changing engine permissions, persistence policy or background lifetime. This is a small useful step; it does not make either package pass as a whole.
+The initial inspection selected **real `action.setIcon` / `browserAction.setIcon`** as the first bounded implementation target. It is an observed dependency in two independent reviewed packages and uses the existing authenticated action record and visible toolbar without changing engine permissions, persistence policy or background lifetime. That implementation is now present with verified package PNGs, ImageData and an explicit reviewed Chromium/Firefox behavior profile; 86 focused portable contracts pass. Its native visible-image gate remains pending, as recorded in [the extension architecture](EXTENSION-ARCHITECTURE.md). This step does not make either package pass as a whole. Earlier references in this report to rejected `setIcon` describe the inspected bridge baseline.
 
 The implementation must resolve resource paths under the correct extension-document base, require the same currently verified package/enrollment, validate size maps and ImageData dimensions/channel data, and produce an actual displayed image. Default and per-tab overrides must have real behavior. Paths into another extension, websites or arbitrary host files must not be admitted. Resource decode/read failures must leave the prior icon intact and reject the operation. Epoch revocation, tab removal and uninstall must clear owned UI resources.
 
@@ -90,13 +90,14 @@ The focused test plan is:
 
 1. Contract tests for valid package-relative size maps, ImageData, default/per-tab selection, Chrome callback errors, Promise errors, path-origin refusal, malformed data and in-flight revocation.
 2. A native generated package switches two visibly distinct known icons, reads actual toolbar state and captures the rendered pixels. Exercise tab switching, disable/re-enable and restart; require cleanup with no image/resource retention after removal.
-3. Run the exact pinned Dark Reader and Violentmonkey variants through reviewed local installation in fresh isolated profiles only when their prerequisite startup APIs are understood. Preserve the first actual failure and named workflow boundary. Do not remove features, edit their manifests, disable sandbox protection or count a caught failure as compatibility.
+3. After the icon checkpoint, run the exact pinned Dark Reader Chrome MV2 ZIP first through reviewed local installation in a fresh generated profile using Chromium behavior. Require original artifact SHA-256 and installed package digest, capture startup console/API failures before any probe, open a deterministic light fixture page, and inspect whether Dark Reader actually changes its computed appearance and its real action/options controls. Preserve the first actual failure and named workflow boundary. No prerequisites are guessed away: implement blockers in the order the unchanged package demonstrates them. Then repeat the corresponding Firefox XPI with explicit unsigned-import acknowledgement and Firefox behavior. Do not remove features, edit manifests, disable sandbox protection or count a caught failure as compatibility. Violentmonkey is the next independent implementation after these bounded observed cases.
 
 ### Larger dependency order
 
 | Priority | Work | Required evidence before a compatibility claim |
 | --- | --- | --- |
-| First | Finish the current authenticated bridge/native fixture gate; then real action icons | Exact source-bound native receipts; actual visual state and cleanup |
+| First | The original bridge fixture passed on both platforms at b31e398; finish the real action-icon native gate | Exact source-bound native receipts; actual visual state and cleanup |
+| Next real package | Execute unchanged pinned Dark Reader Chrome MV2, then its Firefox variant | First actual startup/feature failure; real page appearance and action/options behavior; no modified package or skipped requirements |
 | Next | Actual grant introspection plus user-reviewed optional request/remove; commands bound to the canonical shortcut service | Denied/default scopes remain denied; native and host grants agree after restart/revocation; actual keyboard events, collision handling and identity isolation |
 | Next | Real alarms and downloads backed by canonical services | Deadlines, recurrence, restart, disable/uninstall, actual file result and events; no polling/keepalive that changes extension lifetime |
 | Product expansion | Real multiple-window ownership, tab groups, safe same-package tab navigation and discarded restoration | Lossless session restore with duplicate/order/group/window fidelity; all identities isolated |

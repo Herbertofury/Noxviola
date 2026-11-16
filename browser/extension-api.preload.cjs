@@ -104,6 +104,39 @@
       for (const event of definition.events) api[event] = new ExtensionEvent(namespace+'.'+event);
       apis[namespace] = api;
     }
+    function iconImageData(value) {
+      if (!value || typeof value!=='object') throw new TypeError('An ImageData object is required.');
+      if ((value.colorSpace!==undefined && value.colorSpace!=='srgb') || (value.pixelFormat!==undefined && value.pixelFormat!=='rgba-unorm8')) throw new TypeError('Action icons currently accept 8-bit sRGB ImageData.');
+      const data=value.data,tag=Object.prototype.toString.call(data);
+      const bytes=ArrayBuffer.isView(data) && ['[object Uint8Array]','[object Uint8ClampedArray]'].includes(tag);
+      if ((!bytes && !Array.isArray(data)) || (!bytes && !data.every(item=>Number.isInteger(item)&&item>=0&&item<=255))) throw new TypeError('ImageData must contain RGBA bytes.');
+      return {width:value.width,height:value.height,colorSpace:value.colorSpace,pixelFormat:value.pixelFormat,data:Uint8Array.from(data)};
+    }
+    function iconDetails(details) {
+      if (!details || typeof details!=='object' || Array.isArray(details)) throw new TypeError('Icon details must be an object.');
+      const result={...details},data=details.imageData;
+      // DOM ImageData is not sent through IPC. Transfer a stable clone of its
+      // numeric dimensions, color format and bytes; main validates these again.
+      const imagePresent=data!==undefined && data!==null && !(typeof data==='object' && !Array.isArray(data) && !Object.keys(data).length && !('width' in data || 'height' in data || 'data' in data));
+      if (imagePresent && typeof data==='object' && !Array.isArray(data)) {
+        if ('width' in data || 'height' in data || 'data' in data) result.imageData=iconImageData(data);
+        else result.imageData=Object.fromEntries(Object.entries(data).map(([size,image])=>[size,iconImageData(image)]));
+      }
+      // Browser image paths resolve against the document base. Main still
+      // authenticates the native sender and rejects every foreign URL origin.
+      if (!imagePresent && result.path!==undefined && result.path!==null) {
+        const resolve=value=>typeof value==='string'?new URL(value,globalThis.document?.baseURI || globalThis.location?.href).href:value;
+        if (typeof result.path==='string') result.path=resolve(result.path);
+        else if (typeof result.path==='object' && !Array.isArray(result.path)) result.path=Object.fromEntries(Object.entries(result.path).map(([size,value])=>[size,resolve(value)]));
+      }
+      return result;
+    }
+    for (const namespace of ['action','browserAction']) apis[namespace].setIcon=(details,callback)=>{
+      let normalized;
+      try { normalized=iconDetails(details); }
+      catch(error) { if(typeof callback==='function')throw error;return Promise.reject(error); }
+      return call(namespace+'.setIcon')(normalized,...(typeof callback==='function'?[callback]:[]));
+    };
     apis.windows.WINDOW_ID_NONE = -1; apis.windows.WINDOW_ID_CURRENT = -2;
     // Native message/script targets use WebContents IDs. Browser-host descriptors
     // use stable tab IDs, including lazy tabs. Translation never creates a view.

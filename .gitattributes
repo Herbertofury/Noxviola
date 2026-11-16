@@ -18,3 +18,4 @@
 /tests/native/**/*.json text eol=lf
 /tests/native/**/*.md text eol=lf
 /tests/native/**/*.py text eol=lf
+/tests/native/**/*.png -text

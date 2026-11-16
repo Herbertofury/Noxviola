@@ -5,6 +5,7 @@ const api = window.browser;
 let currentState = {profiles:[],tabs:[],preferences:{},currentIdentity:'personal',panel:null};
 let vaultItems = [], accountItems = [], extensionData = {items:[],profiles:[],busy:false};
 let permissionData = {items:[]}, downloadItems = [], capabilityData = null, extensionPreview = null;
+const followCompatibilityDrafts=new Map();
 let followData={items:[]},followDraftIdentity=null,followDeadlineTimer;
 let historyData={items:[]},bookmarkData={tree:[]},workspaceData={items:[],groups:[]},resourceData=null,bookmarkFolder=null,extensionActions=[];
 let settingsDirty=false,historySettingsDirty=false;
@@ -712,7 +713,7 @@ function renderFollows(){
   $('follow-count').textContent=`${sources.length} sources · ${(followData.items||[]).reduce((n,s)=>n+s.items.filter(i=>!i.read).length,0)} unread updates`;
   paintList($('follow-items'),sources,source=>{
     const card=node('article',undefined,'follow-card'),key={id:source.id,identity:source.identity};
-    card.append(node('p',`${source.kind.toUpperCase()} · ${source.provider==='manual'?'MANUAL CHECK':source.provider==='github-releases'?'GITHUB RELEASES + TAGS':'GITHUB REPOSITORIES'}`,'subtle'),node('h2',source.name),node('p',source.url,'follow-address'));
+    card.append(node('p',`${source.kind.toUpperCase()} · ${source.provider==='manual'?'MANUAL CHECK':source.provider==='modrinth-versions'?'MODRINTH VERSIONS':source.provider==='github-releases'?'GITHUB RELEASES + TAGS':'GITHUB REPOSITORIES'}`,'subtle'),node('h2',source.name),node('p',source.url,'follow-address'));
     card.append(node('p',source.paused?'Paused · saved updates retained':source.busy?'Checking public source…':source.provider==='manual'?'Saved only · automatic tracking unavailable':source.automatic?'Hourly checks enabled while browser is open':'Manual refresh · automatic checks off','follow-status'));
     card.append(node('p',source.lastSuccess?`Last successful check: ${new Date(source.lastSuccess).toLocaleString()}`:'Not checked yet.','subtle'));
     if(source.coverage)card.append(node('p',source.coverage,'subtle'));
@@ -720,14 +721,23 @@ function renderFollows(){
     if(source.providerNotBefore>Date.now())card.append(node('p',`Provider requested no checks before ${new Date(source.providerNotBefore).toLocaleString()}.`,'subtle'));
     if(source.error)card.append(node('p',source.error,'error'));
     const actions=node('div',undefined,'card-actions');actions.append(action('Open source','follow-open',key),action(source.paused?'Resume':'Pause','follow-change',{...key,paused:!source.paused}));
+    if(source.adapterAvailable)actions.append(action('Enable Modrinth version adapter','follow-change',{...key,enableAdapter:true}));
     if(source.provider!=='manual'){
       const refresh=action('Check now','follow-refresh',key);refresh.disabled=source.busy||source.paused||source.providerNotBefore>Date.now();actions.append(refresh,action(source.automatic?'Turn off automatic checks':'Enable hourly checks','follow-change',{...key,automatic:!source.automatic}));
     }
     if(source.items.length)actions.append(action('Mark all read','follow-change',{...key,read:true}));card.append(actions);
+    if(source.provider==='modrinth-versions'){
+      const draftKey=`${source.identity}:${source.id}`,draft=followCompatibilityDrafts.get(draftKey)||source.compatibility||{loader:'',gameVersion:''};
+      const form=node('form',undefined,'controls'),loader=node('input'),game=node('input');loader.value=draft.loader;game.value=draft.gameVersion;loader.placeholder='Any loader';game.placeholder='Any Minecraft version';
+      const loaderLabel=node('label','Loader'),gameLabel=node('label','Minecraft version');loaderLabel.append(loader);gameLabel.append(game);const save=node('button','Save compatibility filter');save.type='submit';form.append(loaderLabel,gameLabel,save);
+      const changed=()=>followCompatibilityDrafts.set(draftKey,{loader:loader.value,gameVersion:game.value});loader.oninput=changed;game.oninput=changed;
+      form.onsubmit=event=>{event.preventDefault();const wanted={loader:loader.value,gameVersion:game.value};guarded(save,async()=>{await api.command('follow-change',{...key,compatibility:wanted});if(JSON.stringify(followCompatibilityDrafts.get(draftKey))===JSON.stringify(wanted))followCompatibilityDrafts.delete(draftKey);renderFollows();announce('Compatibility filter saved. Matching metadata is not a runtime test.');});};
+      card.append(form,node('p',`${(source.matchingVersionIds||[]).length} versions in the last successful snapshot match both saved filters${source.compatibility?.loader||source.compatibility?.gameVersion?` (${source.compatibility.loader||'any loader'} / ${source.compatibility.gameVersion||'any Minecraft version'})`:''}. This is declared metadata, not verified installation compatibility.`,'subtle'));
+    }
     const updates=node('details');updates.open=source.items.some(item=>!item.read);updates.append(node('summary',`${source.items.filter(i=>!i.read).length} unread · ${source.items.length} saved updates`));
     const list=node('div',undefined,'follow-updates');
     for(const item of [...source.items].sort((a,b)=>b.observedAt-a.observedAt)){
-      const row=node('div',undefined,'follow-update');row.append(node('span',item.read?'Read':'New','follow-badge'),node('strong',item.title),node('small',item.publishedAt?`Source date: ${item.publishedAt}`:item.kind==='tag'?'Tag date is not provided by the source API.':'Source date unavailable'),node('small',`Observed on this device: ${new Date(item.observedAt).toLocaleString()}`),...(item.commit?[node('small',`Commit: ${item.commit}`)]:[]),...(item.presentInLastSnapshot===false?[node('small','Not returned in last successful snapshot; saved record retained.')]:[]),action('Open update','follow-open',{...key,itemId:item.id}));list.append(row);
+      const row=node('div',undefined,'follow-update');row.append(node('span',item.read?'Read':'New','follow-badge'),node('strong',item.title),node('small',item.publishedAt?`Source date: ${item.publishedAt}`:item.kind==='tag'?'Tag date is not provided by the source API.':'Source date unavailable'),node('small',`Observed on this device: ${new Date(item.observedAt).toLocaleString()}`),...(item.kind==='modrinth-version'?[node('small',`Loaders: ${item.loaders.join(', ')||'not declared'} · Minecraft: ${item.gameVersions.join(', ')||'not declared'}`),node('small',`Version: ${item.versionNumber} · ${item.releaseType}`)]:[]),...(item.commit?[node('small',`Commit: ${item.commit}`)]:[]),...(item.presentInLastSnapshot===false?[node('small','Not returned in last successful snapshot; saved record retained.')]:[]),action('Open update','follow-open',{...key,itemId:item.id}));list.append(row);
     }
     if(!source.items.length)list.append(node('p',source.lastSuccess?'No items returned by the last successful check. This does not establish that no other activity exists.':'Check this source to load its supported updates.','subtle'));
     updates.append(list);card.append(updates);return card;
@@ -737,4 +747,4 @@ api.onFollows(data=>{followData=data;if(currentState.panel==='following')renderF
 $('follow-search').oninput=renderFollows;$('follow-filter').onchange=renderFollows;
 $('follow-form').addEventListener('input',()=>{followDraftIdentity ||= followData.identity||currentState.currentIdentity;renderFollows();});
 $('follow-form').onsubmit=event=>{event.preventDefault();const form=event.currentTarget,fields=form.elements;
-  saveForm(form,'follow-add',{identity:followDraftIdentity||followData.identity||currentState.currentIdentity,name:fields.namedItem('name').value,url:fields.namedItem('url').value,kind:fields.namedItem('kind').value,automatic:fields.namedItem('automatic').checked},()=>{form.reset();followDraftIdentity=null;renderFollows();announce('Source saved. Supported updates can now be checked.');});};
+  saveForm(form,'follow-add',{identity:followDraftIdentity||followData.identity||currentState.currentIdentity,name:fields.namedItem('name').value,url:fields.namedItem('url').value,kind:fields.namedItem('kind').value,compatibility:{loader:fields.namedItem('loader').value,gameVersion:fields.namedItem('gameVersion').value},automatic:fields.namedItem('automatic').checked},()=>{form.reset();followDraftIdentity=null;renderFollows();announce('Source saved. Supported updates can now be checked.');});};

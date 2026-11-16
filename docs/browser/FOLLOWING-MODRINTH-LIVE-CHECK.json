@@ -1,0 +1,30 @@
+{
+  "checkedAt": "2026-11-16T17:08:55.499Z",
+  "source": "https://modrinth.com/mod/sodium",
+  "projectId": "AANobbMI",
+  "versions": 272,
+  "declaredForge1201": 0,
+  "declaredFabric1201": 13,
+  "sameItems": true,
+  "responses": [
+    {
+      "path": "/v2/project/sodium",
+      "query": "",
+      "status": 200,
+      "remaining": "299"
+    },
+    {
+      "path": "/v2/project/AANobbMI/version",
+      "query": "?include_changelog=false",
+      "status": 200,
+      "remaining": "300"
+    },
+    {
+      "path": "/v2/project/AANobbMI/version",
+      "query": "?include_changelog=false",
+      "status": 200,
+      "remaining": "300"
+    }
+  ],
+  "scope": "Public metadata smoke check. No runtime compatibility test, file download, account follow or SPMovesets association."
+}

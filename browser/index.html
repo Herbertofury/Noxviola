@@ -152,10 +152,11 @@
   <label>Name<input name="name" required placeholder="Creator or project name"></label>
   <label>Source URL<input name="url" type="url" required placeholder="https://github.com/creator/project"></label>
   <label>Type<select name="kind"><option value="project">Project</option><option value="creator">Creator</option></select></label>
-  <label><input name="automatic" type="checkbox">Check public GitHub updates hourly while Noxviola is open</label>
+  <label><input name="automatic" type="checkbox">Check supported public updates hourly while Noxviola is open</label>
+  <label>Modrinth loader (optional)<input name="loader" placeholder="e.g. forge"></label><label>Minecraft version (optional)<input name="gameVersion" placeholder="e.g. 1.20.1"></label>
   <button>Follow source</button>
  </form>
- <p class="subtle">GitHub projects: public releases and current Git tags. GitHub creators: public owned repositories and their latest reported activity. These are periodic snapshots, not a complete history: intermediate changes, deleted tags and private activity may be missed. Other HTTPS sources are saved for manual checking, not automatically scraped. Checks use GitHub’s public API without your website cookies; no assets are downloaded or executed. Rate/access failures stay visible.</p>
+ <p class="subtle">GitHub projects: public releases and current Git tags. GitHub creators: public owned repositories and their latest reported activity. These are periodic snapshots, not a complete history: intermediate changes, deleted tags and private activity may be missed. Modrinth project links collect public per-version metadata, not project-level compatibility aggregates; changelogs and files are not downloaded. Other HTTPS sources are saved for manual checking, not automatically scraped. Checks use GitHub’s public API without your website cookies; no assets are downloaded or executed. Rate/access failures stay visible.</p>
  <div class="controls"><input id="follow-search" type="search" aria-label="Search following" placeholder="Find creators, projects or updates"><label>Show<select id="follow-filter"><option value="all">All follows</option><option value="unread">With unread updates</option><option value="creator">Creators</option><option value="project">Projects</option><option value="paused">Paused</option></select></label></div>
  <p id="follow-count" role="status" aria-live="polite"></p><div id="follow-items" class="follow-grid"></div>
 </section>

@@ -2,6 +2,8 @@
 
 ## Standalone creator/project following · 2026-11-16
 
+- [ ] Modrinth follow-up: collect real public project versions with durable identity and per-version loader/game-version metadata, same-version compatibility filters, separate provider backoff and explicit metadata-only coverage. Do not infer SPMovesets is on Modrinth. Preserve snapshot/freshness and last-good data on incomplete or oversized responses.
+
 - [ ] Follow-up: cover bare Git tags separately from releases, honor provider-requested polling/rate-limit pauses, and expose snapshot/freshness/history gaps. Existing repository lists are not the bounded GitHub Events feed. Validate source/date semantics, restart and concurrent-check behavior before claiming complete version tracking.
 
 - [ ] Deliver Noxviola’s premium-quality independent creator/project follow and update center. No Athena runtime dependency. Current implementation checkpoint adds an identity-scoped native watchlist, actual public GitHub releases/repository discovery, opt-in hourly checks, all-page/ETag collection, last-good/error state, pause/read controls and explicit manual-only unsupported sources. [Scope, evidence and open gates](docs/browser/FOLLOWING.md). Full cross-social discovery, version/changelog/compatibility history, Obscura’s isolated equivalent-work evaluation and end-to-end native acceptance remain open; this is not a claim of flawless/no-loss universal scraping. Existing parity/PR holds remain unchanged.

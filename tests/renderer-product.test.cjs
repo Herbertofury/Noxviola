@@ -372,3 +372,10 @@ test('following distinguishes snapshot gaps, source dates and provider pauses wi
  assert.match(text,/Check overdue/);assert.match(text,/not a complete change history/);assert.match(text,/Tag date is not provided/);assert.match(text,/Not returned in last successful snapshot/);assert.match(text,/Observed on this device/);
  assert.equal([...h.$('follow-items').querySelectorAll('button')].find(b=>b.textContent==='Check now').disabled,true);
 });
+
+test('Modrinth following shows same-version declarations and saves identity-scoped compatibility without changing the source',async t=>{
+ const h=await harness(t,{initial:state({panel:'following'})});
+ h.emit('onFollows',{identity:'work',items:[{id:'mod',identity:'work',name:'Versioned mod',kind:'project',provider:'modrinth-versions',url:'https://modrinth.com/mod/example',lastSuccess:1000,compatibility:{loader:'forge',gameVersion:'1.20.1'},matchingVersionIds:[],items:[{id:'modrinth:version1',kind:'modrinth-version',title:'Forge version',versionNumber:'1.0',releaseType:'release',loaders:['forge'],gameVersions:['1.19.2'],observedAt:1000,publishedAt:'2026-11-16',read:false},{id:'modrinth:version2',kind:'modrinth-version',title:'Fabric version',versionNumber:'2.0',releaseType:'beta',loaders:['fabric'],gameVersions:['1.20.1'],observedAt:1000,publishedAt:'2026-11-16',read:false}]}]});
+ await painted(h,'follow-items');assert.match(h.$('follow-items').textContent,/0 versions in the last successful snapshot match both saved filters/);assert.match(h.$('follow-items').textContent,/Loaders: forge · Minecraft: 1.19.2/);assert.match(h.$('follow-items').textContent,/Loaders: fabric · Minecraft: 1.20.1/);
+ const form=h.$('follow-items').querySelector('form'),inputs=form.querySelectorAll('input');h.input(inputs[0],'fabric');h.submit(form);await tick();assert.deepEqual(h.calls.at(-1),{name:'follow-change',value:{id:'mod',identity:'work',compatibility:{loader:'fabric',gameVersion:'1.20.1'}}});
+});

@@ -439,3 +439,37 @@ test('DOM: new tab remains next to the tab list in both layouts and invokes the 
   create.click(); await tick();
   assert.equal(h.calls.at(-1).name, 'new');
 });
+
+test('DOM: IME confirmation and cancellation do not execute browser input commands', async t => {
+  const h = await harness(t);
+  const key = (field, name, extra={}) => field.dispatchEvent(new h.window.KeyboardEvent('keydown', {key:name,bubbles:true,cancelable:true,...extra}));
+  for (const id of ['identity-name','find','address']) {
+    const field=h.$(id); field.hidden=false; h.input(field,'日本語');
+    const before=h.calls.length;
+    for (const extra of [{isComposing:true},{keyCode:229}]) {
+      key(field,'Enter',extra); key(field,'Escape',extra);
+      assert.equal(field.value,'日本語'); assert.equal(field.hidden,false);
+    }
+    field.dispatchEvent(new h.window.CompositionEvent('compositionstart',{bubbles:true}));
+    key(field,'Enter'); key(field,'Escape');
+    if(id==='address')h.submit(h.$('navigate'));
+    await tick(); assert.equal(h.calls.length,before);
+    assert.equal(field.value,'日本語'); assert.equal(field.hidden,false);
+    field.dispatchEvent(new h.window.CompositionEvent('compositionend',{bubbles:true,data:'日本語'}));
+  }
+  key(h.$('identity-name'),'Enter'); await tick();
+  assert.ok(h.calls.some(call=>call.name==='identity-add'&&call.value==='日本語'));
+  key(h.$('find'),'Enter'); await tick();
+  assert.ok(h.calls.some(call=>call.name==='find'&&call.value?.findNext===true));
+  h.submit(h.$('navigate'));await tick();
+  assert.ok(h.calls.some(call=>call.name==='navigate'&&call.value==='日本語'));
+});
+
+test('DOM: focus loss clears an abandoned address composition without losing its draft', async t => {
+  const h=await harness(t), field=h.$('address');
+  h.input(field,'draft after cancelled IME');
+  field.dispatchEvent(new h.window.CompositionEvent('compositionstart'));
+  field.dispatchEvent(new h.window.Event('blur'));
+  h.submit(h.$('navigate'));await tick();
+  assert.ok(h.calls.some(call=>call.name==='navigate'&&call.value==='draft after cancelled IME'));
+});

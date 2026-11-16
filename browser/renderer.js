@@ -205,25 +205,37 @@ function renderPanel(panel) {
   else if(panel==='resources')renderResources();
 }
 
+// IME candidate confirmation/cancellation belongs to the input method, not to
+// browser commands. Keep composition state for form submits without key metadata.
+const composingInputs = new WeakSet();
+for (const id of ['address', 'find', 'identity-name']) {
+  const field = $(id);
+  field.addEventListener('compositionstart',()=>composingInputs.add(field));
+  field.addEventListener('compositionend',()=>composingInputs.delete(field));
+  field.addEventListener('blur',()=>composingInputs.delete(field));
+}
+function composing(event) { return event.isComposing || event.keyCode === 229 || composingInputs.has(event.currentTarget); }
 $('address').addEventListener('input',()=>{addressDirty=true;});
 $('address').addEventListener('keydown',event=>{
+  if (composing(event)) return;
   if (event.key === 'Escape') {addressDirty=false;const tab=currentState.tabs.find(row=>row.id===currentState.activeId);$('address').value=tab?.url === 'about:blank' ? '' : tab?.url || '';}
 });
 $('navigate').addEventListener('submit',async event=>{
-  event.preventDefault(); const value=$('address').value;
+  event.preventDefault(); if (composingInputs.has($('address'))) return; const value=$('address').value;
   try {await api.command('navigate',value);if($('address').value===value)addressDirty=false;} catch(error) {announce(error.message);}
 });
 document.querySelectorAll('[data-command]').forEach(control=>control.addEventListener('click',()=>guarded(control,()=>api.command(control.dataset.command))));
 $('back').onclick=()=>run('back');$('forward').onclick=()=>run('forward');$('find').oninput=()=>run('find',$('find').value);
 $('find-previous').onclick=()=>run('find',{query:$('find').value,forward:false,findNext:true});
 $('find-next').onclick=()=>run('find',{query:$('find').value,forward:true,findNext:true});
-$('find').onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();run('find',{query:$('find').value,forward:!event.shiftKey,findNext:true});}else if(event.key==='Escape'){$('find').value='';run('find','');}};
+$('find').onkeydown=event=>{if(composing(event))return;if(event.key==='Enter'){event.preventDefault();run('find',{query:$('find').value,forward:!event.shiftKey,findNext:true});}else if(event.key==='Escape'){$('find').value='';run('find','');}};
 api.onFindResult(result=>{$('find-count').textContent=result.matches?`${result.activeMatchOrdinal||0}/${result.matches}`:'';});
 $('open-tools').onclick=()=>run('tools');
 $('start-search').onclick=()=>{$('address').focus();$('address').select();};
 $('identity').onchange=()=>run('identity-switch',$('identity').value);
 $('add-identity').onclick=()=>{const field=$('identity-name');field.hidden=!field.hidden;if(!field.hidden)field.focus();};
 $('identity-name').onkeydown=async event=>{
+  if (composing(event)) return;
   if (event.key === 'Escape') {event.currentTarget.hidden=true;return;}
   if (event.key !== 'Enter' || !event.currentTarget.value.trim()) return;
   const field=event.currentTarget;field.disabled=true;

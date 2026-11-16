@@ -98,7 +98,7 @@ Search by capability ID or name. The application exposes the same JSON in its ex
 | gx-volume | Per-tab volume amplification | media | absent | Evaluate a consented audio graph; expose real gain and quality cost rather than a decorative slider. |
 | gx-equalizer | Per-tab audio equalizer | media | absent | Prototype a genuine tab-scoped DSP path and compare fidelity/latency before integration. |
 | gx-rgx-enhancement | Image and video enhancement | media | absent | Evaluate an optional maintained filter pipeline with accessible bypass and no unverified quality claims. |
-| toolbar-customization | Customizable toolbar and sidebar | customization | partial | Extend the recorded bookmarks-bar/density geometry and restart evidence with control reordering, placement/reset and native keyboard/accessibility acceptance. |
+| toolbar-customization | Customizable toolbar and sidebar | customization | partial | Implement and verify remaining launcher behavior, broader customization, focus/accessibility and equivalent-work transition tests. |
 | themes | Composable themes and colors | customization | partial | Qualify mixed appearance combinations, high contrast/reduced motion and complete accessibility; then add independently configurable fonts/assets with provenance. |
 | gx-mod-components | Composable GX-style mod components | customization | absent | Define a permissionless declarative mod schema and preserve licenses/provenance. |
 | live-wallpaper | Optional animated wallpaper | customization | absent | Load wallpaper on demand with pause and accessibility policy. |
@@ -130,8 +130,8 @@ Search by capability ID or name. The application exposes the same JSON in its ex
 | browser-games | Browser game discovery | optional-services | absent | Reuse ordinary sandboxed web tabs with explicit discovery providers. |
 | personal-news | Optional news feeds | optional-services | absent | Use an opt-in feed reader; avoid recommendation telemetry. |
 | smart-home-panel | Optional smart-home panel | optional-services | absent | Investigate provider-supported APIs; do not imply access from a browser feature label. |
-| music-sidebar | Shared music-service panel | optional-services | absent | Reuse an identity-scoped panel host and media-session controls. |
-| messenger-sidebar | Shared messenger and social panel | optional-services | absent | Implement one optional panel service, then validate each provider separately. |
+| music-sidebar | Shared music-service panel | optional-services | partial | Verify each provider workflow, authentication, notifications and identity-specific integration; preserve unsupported behavior as open. |
+| messenger-sidebar | Shared messenger and social panel | optional-services | partial | Verify each provider workflow, authentication, notifications and identity-specific integration; preserve unsupported behavior as open. |
 | flow-transfer | Optional cross-device transfer | optional-services | absent | Evaluate a consented encrypted transfer protocol rather than silently copying provider accounts. |
 | panel-twitch | Twitch panel variant | optional-services | absent | Audit provider-specific embedding, permissions and terms before enabling this adapter. |
 | panel-discord | Discord panel variant | optional-services | absent | Audit provider-specific embedding, permissions and terms before enabling this adapter. |
@@ -148,7 +148,7 @@ Search by capability ID or name. The application exposes the same JSON in its ex
 | music-deezer | Deezer music variant | optional-services | absent | Verify provider-supported playback and licensing; retain a blocker for unavailable native or DRM dependencies. |
 | music-tidal | Tidal music variant | optional-services | absent | Verify provider-supported playback and licensing; retain a blocker for unavailable native or DRM dependencies. |
 | vpn-proxy-provider | Optional browser proxy/VPN provider | optional-services | absent | Evaluate an explicit provider adapter and privacy terms; do not relabel a proxy as universal anonymity. |
-| ai-sidebar | Optional AI assistant panel | optional-services | absent | Use a provider-independent opt-in adapter and a preview of transmitted context. |
+| ai-sidebar | Optional AI assistant panel | optional-services | partial | Verify each provider workflow, authentication, notifications and identity-specific integration; preserve unsupported behavior as open. |
 | ai-tab-actions | Reviewed natural-language tab actions | optional-services | absent | Route accepted actions through canonical tab/library commands; page text cannot grant authority. |
 | ai-compare-tabs | Optional cross-tab comparison | optional-services | absent | Add an explicit multi-page context picker after permission and identity boundaries are proven. |
 | ai-theme | Optional generated theme input | optional-services | absent | Keep image generation user-triggered and route output through the safe theme schema. |

@@ -24,6 +24,8 @@ contextBridge.exposeInMainWorld('browser', Object.freeze({
   onSettingsPreview:callback => subscribe('settings-preview',callback),
   onFindResult:callback => subscribe('find-result',callback),
   onExtensionActions:callback => subscribe('extension-actions',callback),
+  onSidebarLayout:callback => subscribe('sidebar-layout',callback),
+  onSidebarWebState:callback => subscribe('sidebar-web-state',callback),
   onNotice:callback => subscribe('notice',callback),
   onAddress:callback => subscribe('focus-address',callback),
   onFind:callback => subscribe('focus-find',callback),

@@ -38,6 +38,14 @@ test('tab search settings persist and the new default does not invalidate an exi
   assert.equal(chosen.tabSearchPosition,'right');assert.equal(chosen.tabSearchStyle,'compact');
   assert.equal(preference.previewPreset(preference.preferences({}),preference.exportPreset(chosen)).preferences.tabSearchStyle,'compact');
 });
+test('sidebar settings preserve custom apps and never export their URLs in appearance presets',()=>{
+  const value=preference.preferences({sidebarSide:'right',sidebarWidth:380,sidebarApps:[{id:'chat',name:'Chat',url:'https://example.test/',future:{keep:true}}],sidebarActive:'app:chat'});
+  const saved=preference.applyPreferences(value,{sidebarExpanded:true});assert.deepEqual(saved.sidebarApps,value.sidebarApps);assert.equal(saved.sidebarActive,'app:chat');
+  const preset=preference.exportPreset(saved);assert.equal(Object.hasOwn(preset.preferences,'sidebarApps'),false);assert.equal(Object.hasOwn(preset.preferences,'sidebarActive'),false);
+  assert.throws(()=>preference.preferences({...value,sidebarApps:[...value.sidebarApps,...value.sidebarApps]}),/invalid/);
+  assert.throws(()=>preference.preferences({...value,sidebarApps:[{id:'chat',name:'Chat',url:'file:///secret'}]}),/invalid/);
+  const old=preference.preferences({shortcuts:{history:'Ctrl+Alt+Z'}},{platform:'win32'});assert.equal(preference.shortcutList(old,'win32').find(item=>item.id==='sidebar-toggle').accelerator,'');
+});
 test('presets include supported presentation choices only and preview without altering live values',()=>{
   const current=preference.preferences({ownerPrivateMetadata:{secret:'not exported'},toolbar:{futureSecret:'not exported'},shortcuts:{futureSecret:'not exported'}});
   const exported=preference.exportPreset(current);assert.equal(exported.preferences.ownerPrivateMetadata,undefined);assert.equal(exported.preferences.toolbar.futureSecret,undefined);assert.equal(exported.preferences.shortcuts.futureSecret,undefined);

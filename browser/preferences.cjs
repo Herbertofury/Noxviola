@@ -11,6 +11,7 @@ const SHORTCUTS = Object.freeze([
   {id:'focus-address', label:'Address or search', accelerator:'CmdOrCtrl+L'},
   {id:'focus-find', label:'Find in page', accelerator:'CmdOrCtrl+F'},
   {id:'search-tabs', label:'Search tabs', accelerator:'CmdOrCtrl+Shift+A'},
+  {id:'sidebar-toggle', label:'Show or hide sidebar', accelerator:'Ctrl+Alt+Z'},
   {id:'bookmark-current', label:'Bookmark current page', accelerator:'CmdOrCtrl+D'},
   {id:'history', label:'History', accelerator:'CmdOrCtrl+H'},
   {id:'bookmarks', label:'Bookmarks', accelerator:'CmdOrCtrl+Shift+O'},
@@ -31,13 +32,15 @@ const ENUMS = Object.freeze({
   searchEngine:['duckduckgo','google','bing','custom'], tabLayout:['horizontal','vertical'],
   theme:['dark','light','system'], accent:['violet','blue','teal','rose','amber'], density:['comfortable','compact'],
   tabSearchPosition:['left','right'], tabSearchStyle:['detailed','compact'],
+  sidebarSide:['left','right'],
 });
 const DEFAULTS = Object.freeze({searchEngine:'duckduckgo',tabLayout:'horizontal',theme:'dark',accent:'violet',density:'comfortable',tabSearchPosition:'left',tabSearchStyle:'detailed',
+  sidebarVisible:true,sidebarExpanded:false,sidebarSide:'left',sidebarWidth:320,sidebarActive:'bookmarks',sidebarApps:[],sidebarTools:[{id:'tabs',visible:true},{id:'bookmarks',visible:true},{id:'history',visible:true},{id:'downloads',visible:true}],
   homePage:'about:blank',customSearchURL:'https://duckduckgo.com/?q={searchTerms}',showBookmarksBar:false,spellcheckEnabled:true,
   toolbar:{library:true,extensions:true,split:true,home:true},shortcuts:{}});
 const PREFERENCE_KEYS = Object.freeze(Object.keys(DEFAULTS));
 // Appearance imports do not alter the separate local spelling choice.
-const PRESET_KEYS = Object.freeze(PREFERENCE_KEYS.filter(name=>name!=='spellcheckEnabled'));
+const PRESET_KEYS = Object.freeze(PREFERENCE_KEYS.filter(name=>!['spellcheckEnabled','sidebarApps','sidebarActive'].includes(name)));
 const modifierNames = new Map([['cmdorctrl','CmdOrCtrl'],['commandorcontrol','CmdOrCtrl'],['ctrl','Ctrl'],['control','Ctrl'],
   ['cmd','Command'],['command','Command'],['alt','Alt'],['option','Alt'],['shift','Shift'],['super','Super']]);
 const namedKeys = new Map(['Plus','Space','Tab','Enter','Escape','Backspace','Delete','Insert','Home','End','PageUp','PageDown','Up','Down','Left','Right'].map(key=>[key.toLowerCase(),key]));
@@ -66,10 +69,10 @@ function shortcutList(preferences={}, platform=process.platform) {
   const seen=new Map();
   const equivalent=value=>value.replace('CmdOrCtrl',platform==='darwin'?'Command':'Ctrl');
   // A newly introduced default must not invalidate an older custom shortcut.
-  const tabSearchDefault=equivalent('CmdOrCtrl+Shift+A');
-  const defaultSearchConflict=SHORTCUTS.some(item=>item.id!=='search-tabs'&&equivalent(accelerator(Object.hasOwn(preferences.shortcuts||{},item.id)?preferences.shortcuts[item.id]:item.accelerator))===tabSearchDefault);
+  const optionalDefaults=new Set(['search-tabs','sidebar-toggle']);
   return SHORTCUTS.map(item=>{
-    const combination=accelerator(Object.hasOwn(preferences.shortcuts || {},item.id)?preferences.shortcuts[item.id]:item.id==='search-tabs'&&defaultSearchConflict?'':item.accelerator);
+    const conflict=optionalDefaults.has(item.id)&&SHORTCUTS.some(other=>other.id!==item.id&&equivalent(accelerator(Object.hasOwn(preferences.shortcuts||{},other.id)?preferences.shortcuts[other.id]:other.accelerator))===equivalent(item.accelerator));
+    const combination=accelerator(Object.hasOwn(preferences.shortcuts || {},item.id)?preferences.shortcuts[item.id]:conflict?'':item.accelerator);
     const key=equivalent(combination);
     if(key && seen.has(key))fail(`The shortcut ${combination} is assigned to both ${seen.get(key)} and ${item.label}.`);
     if(key)seen.set(key,item.label);
@@ -91,6 +94,23 @@ function preferences(raw={}, {strict=true,platform=process.platform}={}) {
   if(typeof result.showBookmarksBar!=='boolean')fail('The bookmarks bar setting must be true or false.');
   if(result.spellcheckEnabled===undefined)result.spellcheckEnabled=true;
   if(typeof result.spellcheckEnabled!=='boolean')fail('Spellcheck must be explicitly enabled or disabled.');
+  for(const name of ['sidebarVisible','sidebarExpanded']){if(result[name]===undefined)result[name]=DEFAULTS[name];if(typeof result[name]!=='boolean')fail(`Saved ${name} must be true or false.`);}
+  if(result.sidebarWidth===undefined)result.sidebarWidth=DEFAULTS.sidebarWidth;
+  if(!Number.isInteger(result.sidebarWidth)||result.sidebarWidth<180||result.sidebarWidth>1600)fail('Sidebar width must be an integer from 180 to 1600 pixels.');
+  if(result.sidebarApps===undefined)result.sidebarApps=[];
+  if(!Array.isArray(result.sidebarApps))fail('Saved sidebar applications must be an array.');
+  const appIds=new Set();result.sidebarApps=result.sidebarApps.map(item=>{
+    if(!object(item)||typeof item.id!=='string'||!/^[-a-zA-Z0-9_]{1,128}$/.test(item.id)||appIds.has(item.id)||typeof item.name!=='string'||!item.name.trim()||!networkAddress(item.url))fail('A saved sidebar application is invalid; its original data was preserved.');
+    appIds.add(item.id);return {...item};
+  });
+  if(result.sidebarTools===undefined)result.sidebarTools=DEFAULTS.sidebarTools.map(item=>({...item}));
+  if(!Array.isArray(result.sidebarTools))fail('Saved sidebar tools must be an array.');
+  const toolIds=new Set();result.sidebarTools=result.sidebarTools.map(item=>{
+    if(!object(item)||!['tabs','bookmarks','history','downloads'].includes(item.id)||toolIds.has(item.id)||typeof item.visible!=='boolean')fail('A saved sidebar tool is invalid; its original data was preserved.');
+    toolIds.add(item.id);return {...item};
+  });
+  if(result.sidebarActive===undefined)result.sidebarActive=DEFAULTS.sidebarActive;
+  if(typeof result.sidebarActive!=='string'||(!['bookmarks','history','downloads','tabs'].includes(result.sidebarActive)&&!(result.sidebarActive.startsWith('app:')&&appIds.has(result.sidebarActive.slice(4)))))fail('The saved sidebar panel is not available; its original data was preserved.');
   for(const name of ['toolbar','shortcuts'])if(result[name]!==undefined&&!object(result[name]))fail(`Saved ${name} preferences must be an object.`);
   result.toolbar={...DEFAULTS.toolbar,...result.toolbar};
   for(const name of Object.keys(DEFAULTS.toolbar))if(typeof result.toolbar[name]!=='boolean')fail('Toolbar visibility settings must be true or false.');

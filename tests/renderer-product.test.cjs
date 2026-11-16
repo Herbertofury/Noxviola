@@ -327,6 +327,7 @@ test('DOM product: preference controls preserve a dirty draft and apply committe
   assert.equal(h.document.body.dataset.theme,'dark','typing a draft does not claim a saved theme');
   h.submit(form); await tick();
   const expected = {searchEngine:'custom',tabLayout:'vertical',tabSearchPosition:'right',tabSearchStyle:'compact',theme:'light',accent:'teal',density:'compact',
+    sidebarVisible:true,sidebarSide:'left',sidebarWidth:320,sidebarApps:[],sidebarTools:[{id:'tabs',visible:true},{id:'bookmarks',visible:true},{id:'history',visible:true},{id:'downloads',visible:true}],
     homePage:'https://home.example/',customSearchURL:'https://search.example/?q={searchTerms}',showBookmarksBar:true,spellcheckEnabled:false,
     toolbar:{home:false,library:true,extensions:false,split:true},shortcuts:{new:'Ctrl+Shift+N','focus-address':''}};
   assert.deepEqual(h.calls.find(call => call.name === 'settings-save').value,expected);

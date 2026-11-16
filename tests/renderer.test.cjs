@@ -94,6 +94,31 @@ test('DOM: find opens from its toolbar button or shortcut and Escape closes it',
   assert.equal(h.$('find-controls').hidden,true);assert.equal(h.$('find').value,'');assert.equal(h.document.activeElement,h.$('find-toggle'));
   h.emit('onFind');assert.equal(h.$('find-controls').hidden,false);assert.equal(h.document.activeElement,h.$('find'));
 });
+test('DOM: changing identities clears the prior sidebar history before the new result arrives', async t => {
+  let resolveWork;
+  const initial=state({preferences:{searchEngine:'duckduckgo',tabLayout:'horizontal',sidebarVisible:true,sidebarExpanded:true,sidebarActive:'history',sidebarApps:[]}});
+  const h=await harness(t,{initial,command:async name=>name==='sidebar-data'?(resolveWork?new Promise(resolve=>{resolveWork=resolve;}):{identity:'personal',items:[{title:'Private personal page',url:'https://personal.test/'}]}):undefined});
+  assert.match(h.$('sidebar-items').textContent,/Private personal page/);
+  resolveWork=()=>{};
+  h.update({currentIdentity:'work'});
+  assert.doesNotMatch(h.$('sidebar-items').textContent,/Private personal page/);
+  resolveWork({identity:'work',items:[{title:'Work page',url:'https://work.test/'}]});await tick();
+  assert.match(h.$('sidebar-items').textContent,/Work page/);assert.doesNotMatch(h.$('sidebar-items').textContent,/Private personal page/);
+});
+test('DOM: background state updates keep the focused sidebar app button',async t=>{
+  const initial=state({sidebarGeometry:{rail:48,panel:320,panelTarget:320,railX:0,panelX:48,tabX:368,pageX:368,pageRight:0},preferences:{searchEngine:'duckduckgo',tabLayout:'horizontal',sidebarVisible:true,sidebarExpanded:true,sidebarActive:'app:chat',sidebarApps:[{id:'chat',name:'Chat',url:'https://example.test/'}]}});
+  const h=await harness(t,{initial}),control=h.document.querySelector('.sidebar-app-button');control.focus();h.update({canBack:true});
+  assert.equal(h.document.querySelector('.sidebar-app-button'),control);assert.equal(h.document.activeElement,control);
+});
+test('DOM: sidebar tool visibility and ordering are saved through the real settings form',async t=>{
+  const h=await harness(t,{initial:state({panel:'settings'})});
+  const rows=()=>[...h.document.querySelectorAll('.sidebar-tool-row')];
+  assert.equal(rows().length,4);const history=rows().find(row=>row.textContent.includes('History'));
+  const checkbox=history.querySelector('input');checkbox.checked=false;checkbox.dispatchEvent(new h.window.Event('change',{bubbles:true}));
+  history.querySelector('[aria-label="Move History up"]').click();await tick();
+  h.submit(h.$('settings-form'));await tick();const saved=h.calls.find(call=>call.name==='settings-save').value.sidebarTools;
+  assert.deepEqual(saved.map(item=>item.id),['tabs','history','bookmarks','downloads']);assert.equal(saved.find(item=>item.id==='history').visible,false);
+});
 function findButton(root, label) {
   const found = [...root.querySelectorAll('button')].find(button => button.textContent === label);
   assert.ok(found, `button ${label} exists`);

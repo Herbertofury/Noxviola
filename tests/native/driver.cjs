@@ -13,6 +13,7 @@ const { DOWNLOAD } = require('./fixture-server.cjs');
 const { assertOnlySpellingChanged } = require('./preferences-evidence.cjs');
 const { createPageTools } = require('./page-tools.cjs');
 const { createExtensionStorage } = require('./extension-storage.cjs');
+const { exerciseSidebar } = require('./sidebar.cjs');
 const bridgeManifest = require('./fixtures/extension-bridge/manifest.json');
 const BRIDGE_CHECKS = ['chrome-callback-query', 'browser-promise-query', 'first-tab-event', 'canonical-tabs', 'native-message-ids', 'bookmark-service', 'cookie-host-and-identity', 'foreign-tab-denied', 'callback-last-error', 'promise-rejection', 'action-state', 'action-icons', 'cleanup'];
 const BRIDGE_ICON_STAGES = [
@@ -979,6 +980,7 @@ async function firstLaunch() {
     await until(async()=>(await state()).tabs.some(tab=>tab.id===id),'the original tab restored through the dropdown');
     await command('activate',previous);await command('close',id);
   });
+  await exerciseSidebar({window,context,command,state,activate,partitionFor,check,expected});
   await check('actual DownloadItem completion, pause/resume and cancellation are reflected by browser commands', async () => {
     const view = await activate(expected.personalTab);
     const completed = await selectDownload(view, '/download?identity=personal', 'complete-personal.txt');

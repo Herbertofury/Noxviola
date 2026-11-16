@@ -1,19 +1,19 @@
 {
   "schemaVersion": 1,
-  "inventoryVersion": "2026-11-16.6",
-  "auditedAt": "2026-11-15",
+  "inventoryVersion": "2026-11-16.7",
+  "auditedAt": "2026-11-16",
   "title": "Noxviola browser capability union — initial documented inventory",
   "coverage": {
     "status": "initial-documentation-audit",
     "complete": false,
-    "installedWindowsAudit": "unresolved-no-local-access",
+    "installedWindowsAudit": "partial-opera-gx-and-firefox-sidebar",
     "statement": "This is a versioned starting inventory, not an exhaustive four-browser audit, full option catalogue, compatibility certification or performance ranking. No arbitrary inventory limit is imposed.",
-    "referencePlatform": "Windows 11 desktop target; the research session did not access the installed Windows browsers.",
+    "referencePlatform": "Windows 11: installed Opera GX and Firefox sidebar resources and synthetic-profile behavior inspected; the remainder of the four-browser audit is incomplete.",
     "baseline": "PR5 / browser/enderloom-baseline-20261115; historical source baseline 362fb016; current continuation retains Electron",
     "sourceRevision": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
     "exclusions": [],
     "unresolved": [
-      "Direct inspection of all four installed Windows versions and settings",
+      "Complete inspection of all four installed Windows browsers and their settings beyond the scoped Opera GX and Firefox sidebar investigation",
       "Full settings/flags/policies and regional/account/enterprise feature variants",
       "Per-member API compatibility on the exact embedded Electron/Chromium/adapter build",
       "Real third-party extension package versions and functional test receipts",
@@ -2920,7 +2920,18 @@
           "Official Electron 44.11.3 original-factory seed followed by 45.3.2 production processes on the same generated profile; prior same-engine seed does not prove this upgrade."
         ]
       }
-    ]
+    ],
+    "sidebarCheckpoint": {
+      "date": "2026-11-16",
+      "scope": "Partial sidebar foundation: launcher and panel state, position, width, built-in tabs/bookmarks/history/downloads, optional user-supplied websites, and selected identity sessions. Full Opera GX and Firefox sidebar parity remains open.",
+      "referenceEvidence": "docs/browser/SIDEBAR-REFERENCE-2026-11-16.md",
+      "nativeEvidence": "https://drive.google.com/file/d/1wRPy5HzD2U_UGnAroIL99lr_pRFt-3-z/view",
+      "limitations": [
+        "Provider-specific integrations, popup authentication and notifications remain incomplete.",
+        "Firefox sidebarAction and extension panels are not implemented.",
+        "Frame-time samples are not proof of comparable compositor performance."
+      ]
+    }
   },
   "statusDefinitions": {
     "absent": "No implementation of the complete contract found in the reviewed baseline.",
@@ -14540,10 +14551,12 @@
           "browser/main.cjs",
           "browser/renderer.js",
           "browser/index.html",
-          "browser/style.css"
+          "browser/style.css",
+          "browser/sidebar-layout.cjs",
+          "browser/sidebar-web-panel.cjs"
         ],
         "integrationStrategy": "Use canonical services and existing durable storage; keep independent preferences and identity ownership explicit, preserve unknown metadata and require explicit recovery.",
-        "note": "Independent saved visibility controls exist for Home, Library, Extensions and Split, plus the bookmarks bar and compact/comfortable density. Actual renderer state drives visibility; the tools menu retains access. Reordering, sidebar-side selection and richer layouts remain open."
+        "note": "A configurable sidebar launcher and resizable left/right panel now coexist with vertical tabs and split views. Full toolbar/sidebar arrangements, drag reordering across categories, hover modes and accessibility acceptance remain open."
       },
       "performance": "Disabled modules must create no ongoing work; pause decorative media when hidden.",
       "privacy": "Keep customization local; downloaded assets require provenance and permission.",
@@ -14570,8 +14583,8 @@
           "noxviola-native-ff5432c"
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
-        "installedBrowserAudit": "not-run",
-        "nativeRuntime": "0c25987e core receipts passed only the recorded scope on hosted Windows/Linux; the full declared capability and separate real-extension workflows remain unqualified.",
+        "installedBrowserAudit": "partial: installed Firefox 160.0 and Opera GX 139.0.6053.42 sidebar resources and synthetic-profile behaviors; not a complete browser audit",
+        "nativeRuntime": "partial: synthetic website panel and identity storage checks; provider-specific full workflows remain unverified",
         "workingTreeReview": "2026-11-16 exact ff5432c source/native/archive readback; scoped workflow only, with 50431f7 continuation still unqualified.",
         "currentImplementation": {
           "inventoryVersion": "2026-11-16.3",
@@ -14717,12 +14730,13 @@
         ],
         "reviewHistory": [
           "2026-11-15 implementation continuation from d2c347a5bfc8a07725abf9562f0869a51f6d3b74; source-reviewed, new native and packaged-executable acceptance pending"
-        ]
+        ],
+        "sidebarResearch": "docs/browser/SIDEBAR-REFERENCE-2026-11-16.md"
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Extend the recorded bookmarks-bar/density geometry and restart evidence with control reordering, placement/reset and native keyboard/accessibility acceptance.",
+      "nextAction": "Implement and verify remaining launcher behavior, broader customization, focus/accessibility and equivalent-work transition tests.",
       "priority": "P2",
       "updatedAt": "2026-11-16"
     },
@@ -17571,14 +17585,17 @@
         "provider capability and terms review"
       ],
       "noxviola": {
-        "status": "absent",
+        "status": "partial",
         "codeOwner": "optional integration adapters",
         "paths": [
           "browser/main.cjs",
-          "browser/renderer.js"
+          "browser/renderer.js",
+          "browser/sidebar-layout.cjs",
+          "browser/sidebar-web-panel.cjs",
+          "browser/preferences.cjs"
         ],
         "integrationStrategy": "Use a shared opt-in panel/adaptor service; preserve provider-specific behavior as variants.",
-        "note": "No accepted end-to-end Noxviola evidence for this complete capability."
+        "note": "A user can explicitly add a provider website to an identity-scoped sidebar WebContentsView. This is a generic website panel, not a verified provider-specific integration; login popups, notifications, service controls and extension integration remain open."
       },
       "performance": "No startup, polling or hidden page processes for disabled integrations.",
       "privacy": "Disclose data recipients and account scope; never transmit browsing or extension inventories to Noxviola.",
@@ -17596,16 +17613,17 @@
           "gx-index"
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
-        "installedBrowserAudit": "not-run",
-        "nativeRuntime": "not-run",
-        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
+        "installedBrowserAudit": "partial: installed Firefox 160.0 and Opera GX 139.0.6053.42 sidebar resources and synthetic-profile behaviors; not a complete browser audit",
+        "nativeRuntime": "partial: synthetic website panel and identity storage checks; provider-specific full workflows remain unverified",
+        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established",
+        "sidebarResearch": "docs/browser/SIDEBAR-REFERENCE-2026-11-16.md"
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Reuse an identity-scoped panel host and media-session controls.",
+      "nextAction": "Verify each provider workflow, authentication, notifications and identity-specific integration; preserve unsupported behavior as open.",
       "priority": "P2",
-      "updatedAt": "2026-11-15"
+      "updatedAt": "2026-11-16"
     },
     {
       "id": "messenger-sidebar",
@@ -17646,14 +17664,17 @@
         "provider capability and terms review"
       ],
       "noxviola": {
-        "status": "absent",
+        "status": "partial",
         "codeOwner": "optional integration adapters",
         "paths": [
           "browser/main.cjs",
-          "browser/renderer.js"
+          "browser/renderer.js",
+          "browser/sidebar-layout.cjs",
+          "browser/sidebar-web-panel.cjs",
+          "browser/preferences.cjs"
         ],
         "integrationStrategy": "Use a shared opt-in panel/adaptor service; preserve provider-specific behavior as variants.",
-        "note": "No accepted end-to-end Noxviola evidence for this complete capability."
+        "note": "A user can explicitly add a provider website to an identity-scoped sidebar WebContentsView. This is a generic website panel, not a verified provider-specific integration; login popups, notifications, service controls and extension integration remain open."
       },
       "performance": "No startup, polling or hidden page processes for disabled integrations.",
       "privacy": "Disclose data recipients and account scope; never transmit browsing or extension inventories to Noxviola.",
@@ -17671,16 +17692,17 @@
           "gx-index"
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
-        "installedBrowserAudit": "not-run",
-        "nativeRuntime": "not-run",
-        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
+        "installedBrowserAudit": "partial: installed Firefox 160.0 and Opera GX 139.0.6053.42 sidebar resources and synthetic-profile behaviors; not a complete browser audit",
+        "nativeRuntime": "partial: synthetic website panel and identity storage checks; provider-specific full workflows remain unverified",
+        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established",
+        "sidebarResearch": "docs/browser/SIDEBAR-REFERENCE-2026-11-16.md"
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Implement one optional panel service, then validate each provider separately.",
+      "nextAction": "Verify each provider workflow, authentication, notifications and identity-specific integration; preserve unsupported behavior as open.",
       "priority": "P2",
-      "updatedAt": "2026-11-15"
+      "updatedAt": "2026-11-16"
     },
     {
       "id": "flow-transfer",
@@ -19013,14 +19035,17 @@
         "provider capability and terms review"
       ],
       "noxviola": {
-        "status": "absent",
+        "status": "partial",
         "codeOwner": "optional integration adapters",
         "paths": [
           "browser/main.cjs",
-          "browser/renderer.js"
+          "browser/renderer.js",
+          "browser/sidebar-layout.cjs",
+          "browser/sidebar-web-panel.cjs",
+          "browser/preferences.cjs"
         ],
         "integrationStrategy": "Use a shared opt-in panel/adaptor service; preserve provider-specific behavior as variants.",
-        "note": "No accepted end-to-end Noxviola evidence for this complete capability."
+        "note": "A user can explicitly add a provider website to an identity-scoped sidebar WebContentsView. This is a generic website panel, not a verified provider-specific integration; login popups, notifications, service controls and extension integration remain open."
       },
       "performance": "No startup, polling or hidden page processes for disabled integrations.",
       "privacy": "Disclose data recipients and account scope; never transmit browsing or extension inventories to Noxviola.",
@@ -19040,16 +19065,17 @@
           "edge-index"
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
-        "installedBrowserAudit": "not-run",
-        "nativeRuntime": "not-run",
-        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
+        "installedBrowserAudit": "partial: installed Firefox 160.0 and Opera GX 139.0.6053.42 sidebar resources and synthetic-profile behaviors; not a complete browser audit",
+        "nativeRuntime": "partial: synthetic website panel and identity storage checks; provider-specific full workflows remain unverified",
+        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established",
+        "sidebarResearch": "docs/browser/SIDEBAR-REFERENCE-2026-11-16.md"
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Use a provider-independent opt-in adapter and a preview of transmitted context.",
+      "nextAction": "Verify each provider workflow, authentication, notifications and identity-specific integration; preserve unsupported behavior as open.",
       "priority": "P2",
-      "updatedAt": "2026-11-15"
+      "updatedAt": "2026-11-16"
     },
     {
       "id": "ai-tab-actions",

@@ -71,7 +71,7 @@ A maintained `electron-chrome-extensions` candidate was inspected rather than re
 
 ## Complete feature target, honest progress
 
-The [canonical capability JSON](browser/capabilities.json) currently expands **183 behavior records and 139 sources**, plus discovery queues. It includes unique browser variants, dependencies, ownership, privacy/performance implications and acceptance procedures. This is an initial documented inventory, not an exhaustive audit or a feature cap. The user's installed Windows browser versions and settings remain uninspected. All master-goal gates G001–G012 remain open.
+The [canonical capability JSON](browser/capabilities.json) currently expands **183 behavior records and 139 sources**, plus discovery queues. It includes unique browser variants, dependencies, ownership, privacy/performance implications and acceptance procedures. This is an initial documented inventory, not an exhaustive audit or a feature cap. The installed Opera GX and Firefox sidebar resources and limited synthetic-profile behavior have now been inspected; the wider four-browser audit remains incomplete. All master-goal gates G001–G012 remain open.
 
 There is no claim that this preview is faster, smaller, more secure or more capable than the reference browsers. Whole-process performance and zero-first-party-telemetry claims need real workload and network evidence. Optional services, themes and future AI features must remain independently controlled; features may not be removed merely to improve a benchmark.
 

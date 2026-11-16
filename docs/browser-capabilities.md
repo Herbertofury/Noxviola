@@ -24,7 +24,7 @@ Full artifact digests, raw logs and repair history are retained in the ledger an
 
 The research used vendor feature indexes, support documentation, release notes, WebExtension API references and maintained implementations. The current independent core evidence is bound to 33d0 under **Electron 45.3.2, Chromium 156.0.8078.100 and Node 24.22.2**, including a separately observed official Electron44.11.3 writer. Historical 44.11.3 receipts remain unchanged. Each receipt identifies its exact source and scoped workflows; later code is not automatically qualified.
 
-**The user's installed Windows 11 browsers were not accessed.** Their executable paths, installed versions, profiles, settings and actual feature availability remain unresolved. Documentation versions must never be presented as installed versions. The current Linux workspace does not establish access to the user's Windows desktop. No private browser profile was copied or inspected for this audit.
+**Historical scope:** the initial inventory did not access the user's installed Windows browsers. A later [scoped sidebar investigation](browser/SIDEBAR-REFERENCE-2026-11-16.md) inspected installed Firefox and Opera GX resources and synthetic profiles; it did not inspect private profiles or complete the wider four-browser audit. Documentation versions must never be presented as installed versions without direct evidence.
 
 | Reference | Documented release basis | Qualification |
 | --- | --- | --- |

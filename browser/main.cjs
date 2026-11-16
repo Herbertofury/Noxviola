@@ -1,6 +1,6 @@
 'use strict';
 // Browser lifecycle adapted from Herbertofury/Enderloom main.js (GPL-3.0-only).
-const {app, BrowserWindow, WebContentsView, ipcMain, session, dialog, Menu, shell, webContents, nativeImage, screen} = require('electron');
+const {app, BrowserWindow, WebContentsView, ipcMain, session, dialog, Menu, shell, webContents, nativeImage, screen, systemPreferences} = require('electron');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
@@ -20,6 +20,8 @@ const {createExtensionLoader} = require('./extension-runtime.cjs');
 const {createIdentitySessionResolver} = require('./session-path.cjs');
 const {PermissionManager} = require('./permissions.cjs');
 const {createFaviconLoader} = require('./favicons.cjs');
+const {sidebarLayout} = require('./sidebar-layout.cjs');
+const {createSidebarWebPanel} = require('./sidebar-web-panel.cjs');
 const accountStore = require('./accounts.cjs');
 const vaultStore = require('./vault.cjs');
 app.enableSandbox();
@@ -33,6 +35,7 @@ let accountFile, accounts = [], accountError = '', accountRecovery = null;
 let permissionOpening = null, extensionBusy = false;
 let resolveIdentitySession, history, bookmarks, workspaces, resourceMonitor, extensionBridge, spellcheck;
 let activeWorkspaceId = 'default', nextRuntimeTabId = 1, preferencePreview = null;
+let sidebarProgress=0,sidebarTimer=null;
 const runtimeTabs = new Map(), nativeTabs = new Map(), sessionTargets = new Map(), browserEvents = new EventEmitter();
 const configuredSessions = new Set(), identityInitializations = new Map(), extensionWindows = new Map(), pendingOperations = new Set();
 const SIDEBAR = 210;
@@ -41,6 +44,7 @@ const active = () => tabs.find(tab => tab.id === activeId);
 const tabWorkspace = tab => tab.saved.workspaceId || 'default';
 const visibleTabs = () => tabs.filter(tab => tabWorkspace(tab) === activeWorkspaceId);
 const favicons = createFaviconLoader({nativeImage});
+const sidebarWeb=createSidebarWebPanel({WebContentsView,getWindow:()=>win,getSession:identitySession,identityReady,onChange:value=>send('sidebar-web-state',value)});
 const tabPreview = require('./tab-preview-host.cjs').createTabPreview({
   WebContentsView, ipcMain, root:__dirname, getWindow:()=>win, blocked:()=>Boolean(panel)||closing,
   getTabInfo:id=>{const tab=tabs.find(row=>row.id===id && tabWorkspace(row)===activeWorkspaceId);return tab?{title:tab.title,url:tab.url,identity:tab.identity,contents:tab.view?.webContents}:null;},
@@ -74,7 +78,7 @@ function tabDescriptor(tab) {
 }
 function stateView() {
   return {version:1, profiles, preferences, activeId, currentIdentity, splitId, panel, closing, saveError,
-    activeWorkspaceId,chromeHeight:chromeHeight(),shortcuts:preferenceStore.shortcutList(preferences),downloadHistory:downloads?.getStatus(),
+    activeWorkspaceId,chromeHeight:chromeHeight(),sidebarGeometry:currentSidebarGeometry(),sidebarWeb:sidebarWeb.state(),shortcuts:preferenceStore.shortcutList(preferences),downloadHistory:downloads?.getStatus(),
     canRestore:closed.length > 0, tabs:tabs.map(tab => ({id:tab.id,url:tab.url,title:tab.title,identity:tab.identity,loading:tab.loading,live:!!tab.view,favicon:tab.favicon,
       workspaceId:tabWorkspace(tab),groupId:tab.saved.groupId||null,pinned:!!tab.saved.pinned,muted:tab.view?.webContents.isAudioMuted()??!!tab.saved.muted,audible:tab.view?.webContents.isCurrentlyAudible()||false})),
     canBack:active()?.view?.webContents.navigationHistory.canGoBack() || false,
@@ -107,24 +111,50 @@ function serviceView(service, read) {
   try{return {status:service?.status||'blocked',error:service?.error||'',recoveryAvailable:service?.status==='recovery',...read()};}
   catch(error){return {status:service?.status||'blocked',error:error.message,recoveryAvailable:service?.status==='recovery'};}
 }
-function publishHistory() { if(panel==='history')send('history',serviceView(history,()=>({identity:currentIdentity,...history.query(currentIdentity,{}),settings:history.settings(currentIdentity)}))); }
-function publishBookmarks() { if(panel==='bookmarks'||preferences.showBookmarksBar)send('bookmarks',serviceView(bookmarks,()=>({identity:currentIdentity,tree:bookmarks.getTree(currentIdentity)}))); }
+function publishHistory() { if(panel==='history'||preferences.sidebarVisible&&preferences.sidebarExpanded&&preferences.sidebarActive==='history')send('history',serviceView(history,()=>({identity:currentIdentity,...history.query(currentIdentity,{}),settings:history.settings(currentIdentity)}))); }
+function publishBookmarks() { if(panel==='bookmarks'||preferences.showBookmarksBar||preferences.sidebarVisible&&preferences.sidebarExpanded&&preferences.sidebarActive==='bookmarks')send('bookmarks',serviceView(bookmarks,()=>({identity:currentIdentity,tree:bookmarks.getTree(currentIdentity)}))); }
 function publishWorkspaces() { send('workspaces',serviceView(workspaces,()=>({items:workspaces.list(),groups:workspaces.list().flatMap(item=>workspaces.listGroups(item.id)),activeWorkspaceId}))); }
 function recordHistory(tab,url) {
   if(!httpUrl(url)||!history)return;
-  try{history.record(tab.identity,{url,title:tab.title,transition:tab.pendingTransition||'link'});tab.committedURL=url;tab.pendingTransition=null;}
+  try{history.record(tab.identity,{url,title:tab.title,transition:tab.pendingTransition||'link'});tab.committedURL=url;tab.pendingTransition=null;publishHistory();}
   catch(error){notice(`History was not saved: ${error.message}`);}
+}
+function currentSidebarGeometry(){
+  const [width,height]=win&&!win.isDestroyed()?win.getContentSize():[1320,860];
+  return sidebarLayout({width,height,chromeHeight:chromeHeight(),verticalTabs:preferences.tabLayout==='vertical',visible:preferences.sidebarVisible||sidebarProgress>0,expanded:sidebarProgress>0,side:preferences.sidebarSide,panelWidth:preferences.sidebarWidth,progress:sidebarProgress});
+}
+function syncSidebarWeb(){
+  const appEntry=preferences.sidebarActive.startsWith('app:')?preferences.sidebarApps.find(item=>item.id===preferences.sidebarActive.slice(4)):null;
+  const visible=preferences.sidebarVisible&&preferences.sidebarExpanded&&appEntry;
+  const state=sidebarWeb.state();
+  if(!visible){if(state.visible)sidebarWeb.hide();return;}
+  if(!state.visible||state.identity!==currentIdentity||state.site!==httpUrl(appEntry.url)){
+    try{sidebarWeb.open({identity:currentIdentity,url:appEntry.url});}catch(error){notice(`Sidebar page could not open: ${error.message}`);}
+  }
+}
+function changeSidebar(patch){
+  preferences=preferenceStore.applyPreferences(preferences,patch);syncSidebarWeb();animateSidebar();publish(false);publishHistory();publishBookmarks();queueSave();
+}
+function animateSidebar(){
+  clearTimeout(sidebarTimer);const target=preferences.sidebarVisible&&preferences.sidebarExpanded?1:0,from=sidebarProgress;
+  let reduced=false;try{reduced=systemPreferences.getAnimationSettings().prefersReducedMotion;}catch{}
+  const duration=reduced?0:180*Math.abs(target-from),start=performance.now();
+  const tick=()=>{const t=duration?Math.min(1,(performance.now()-start)/duration):1;sidebarProgress=from+(target-from)*(1-Math.pow(1-t,3));layout();if(t<1)sidebarTimer=setTimeout(tick,8);else{sidebarTimer=null;sidebarProgress=target;layout();}};
+  tick();
 }
 function layout() {
   if (!win || win.isDestroyed()) return;
-  const [width,height] = win.getContentSize(), left = preferences.tabLayout === 'vertical' ? SIDEBAR : 0;
+  const [width,height] = win.getContentSize(), geometry=currentSidebarGeometry(),left=geometry.pageX;
   const visible = [activeId,splitId].filter((id,index,array) => id && array.indexOf(id) === index);
-  const available = Math.max(0,width-left), firstWidth = visible.length === 2 ? Math.floor(available/2) : available;
+  const available = geometry.pageWidth, firstWidth = visible.length === 2 ? Math.floor(available/2) : available;
   for (const tab of tabs) {
     if (!tab.view) continue;
     const index = visible.indexOf(tab.id); tab.view.setVisible(index >= 0 && !panel);
     if (index >= 0) tab.view.setBounds({x:left + firstWidth*index,y:chromeHeight(),width:index === 1 ? available-firstWidth : firstWidth,height:Math.max(0,height-chromeHeight())});
   }
+  const grip=Math.min(6,geometry.panel);
+  sidebarWeb.layout({x:geometry.panelX+(preferences.sidebarSide==='right'?grip:0),y:chromeHeight()+40,width:Math.max(0,geometry.panel-grip),height:Math.max(0,height-chromeHeight()-40)});
+  send('sidebar-layout',geometry);
   tabPreview.layout();
 }
 function setPanel(value) {
@@ -228,7 +258,7 @@ function activate(id) {
   const tab = tabs.find(row => row.id === id); if (!tab || closing) return;
   const changed = activeId !== id; activeId = id; currentIdentity = tab.identity;activeWorkspaceId=tabWorkspace(tab);
   if (splitId === id) splitId = null;
-  showPage(); ensureView(tab); layout(); publish(changed);publishBookmarks();publishWorkspaces();publishExtensionActions();
+  showPage(); ensureView(tab);syncSidebarWeb();layout();publish(changed);publishHistory();publishBookmarks();publishWorkspaces();publishExtensionActions();
   if(changed)hostEvent(tab.identity,'tabs.onActivated',{tabId:tab.runtimeId,windowId:win.id});
 }
 function newTab(url = 'about:blank', identity = currentIdentity, saved = null, position = tabs.length, options = {}) {
@@ -445,8 +475,11 @@ async function recoverService(service,label) {
 }
 async function savePreferences(value) {
   const proposed=preferenceStore.applyPreferences(preferences,value);
+  const oldApps=preferences.sidebarApps;
   spellcheck.setEnabled(proposed.spellcheckEnabled);
-  preferences=proposed;preferencePreview=null;buildMenu();layout();publish(false);publishBookmarks();
+  preferences=proposed;
+  for(const old of oldApps)if(!proposed.sidebarApps.some(item=>item.id===old.id&&item.url===old.url))for(const profile of profiles)sidebarWeb.release({identity:profile.id,url:old.url});
+  preferencePreview=null;buildMenu();syncSidebarWeb();animateSidebar();publish(false);publishHistory();publishBookmarks();
   writer.request(snapshot());await writer.flush();notice('Preferences saved.');
 }
 function changeZoom(command) {
@@ -488,6 +521,31 @@ async function perform(name, value) {
     case 'state': return stateView();
     case 'tab-preview': if (value?.open) {void tabPreview.show(String(value.id||''),value.position).catch(()=>notice('Tab preview is unavailable.'));} else tabPreview.hide(); break;
     case 'search-tabs': {const width=win.getContentSize()[0],right=preferences.tabSearchPosition==='right',anchor=value?.anchor||{x:right?width-180:38,y:0,width:28,height:34,align:right?'right':'left'};tabPreview.hide();tabSearch.show(anchor);break;}
+    case 'sidebar-toggle':changeSidebar({sidebarVisible:!preferences.sidebarVisible});break;
+    case 'sidebar-select':{
+      if(typeof value!=='string')throw new Error('Choose a sidebar panel.');
+      const closingCurrent=preferences.sidebarVisible&&preferences.sidebarExpanded&&preferences.sidebarActive===value;
+      changeSidebar({sidebarVisible:true,sidebarActive:value,sidebarExpanded:!closingCurrent});break;
+    }
+    case 'sidebar-close':changeSidebar({sidebarExpanded:false});if(!panel&&active()?.view)active().view.webContents.focus();else win.webContents.focus();break;
+    case 'sidebar-width':if(!Number.isInteger(value))throw new Error('Choose a sidebar width.');changeSidebar({sidebarWidth:Math.max(180,Math.min(1600,value))});break;
+    case 'sidebar-web-reload':sidebarWeb.reload();break;
+    case 'sidebar-web-back':sidebarWeb.back();break;
+    case 'sidebar-web-forward':sidebarWeb.forward();break;
+    case 'sidebar-web-mute':sidebarWeb.mute(value===true);break;
+    case 'sidebar-web-unload':{
+      const item=preferences.sidebarApps.find(app=>`app:${app.id}`===preferences.sidebarActive);
+      if(!item)throw new Error('Choose an open sidebar application.');
+      changeSidebar({sidebarExpanded:false});sidebarWeb.release({identity:currentIdentity,url:item.url});break;
+    }
+    case 'sidebar-data':{
+      const type=preferences.sidebarActive;
+      if(type==='bookmarks')return serviceView(bookmarks,()=>({identity:currentIdentity,tree:bookmarks.getTree(currentIdentity)}));
+      if(type==='history')return serviceView(history,()=>({identity:currentIdentity,...history.query(currentIdentity,{})}));
+      if(type==='downloads')return {identity:currentIdentity,items:downloads.list().filter(item=>item.identity===currentIdentity)};
+      if(type==='tabs')return {identity:currentIdentity,tabs:stateView().tabs,activeId};
+      return {identity:currentIdentity};
+    }
     case 'new': return newTab(typeof value === 'string' ? value : 'about:blank');
     case 'activate': activate(value); break;
     case 'close':closeTab(value);break;
@@ -683,12 +741,12 @@ function refreshLiveTabs() {
   }
 }
 function resumeAfterCloseError(message) {
-  closing = false; refreshLiveTabs();
+  closing = false;refreshLiveTabs();animateSidebar();
   notice(message); publish();
 }
 async function requestClose() {
   if (closing || allowClose || !win || win.isDestroyed()) return;
-  tabPreview.hide();tabSearch.dismiss();
+  tabPreview.hide();tabSearch.dismiss();clearTimeout(sidebarTimer);
   closing = true; clearTimeout(saveTimer); publish(false);
   const pending = await Promise.allSettled([...pendingOperations]);
   const failed = pending.find(result => result.status === 'rejected');
@@ -710,7 +768,7 @@ async function requestClose() {
     const choice = await dialog.showMessageBox(win,{type:'warning',message:'Recent tabs could not be saved.',detail:`${error.message}\nKeep the browser open to preserve important addresses, or explicitly exit without saving recent tabs.`,buttons:['Keep browser open','Exit without saving recent tabs'],defaultId:0,cancelId:0,noLink:true});
     if (choice.response !== 1) {resumeAfterCloseError('Close canceled. Fix the save error and choose Retry save.');return;}
   }
-  closeExtensionWindows();
+  closeExtensionWindows();sidebarWeb.destroy();
   try { if (!extensionError) await extensions.dispose(); } catch (error) { notice(error.message); }
   try{await extensionBridge?.dispose();}catch(error){notice(`Extension host cleanup: ${error.message}`);}history?.dispose();bookmarks?.dispose();workspaces?.dispose();
   permissions.dispose(); downloads.dispose(); await writer.close().catch(() => {});
@@ -724,7 +782,7 @@ async function start() {
     if (choice.response !== 1) {app.quit();return;}
     restored = {value:recoverState(sessionFile,restored.preview).value};
   }
-  originalSession = restored.value; profiles = originalSession.profiles; preferences = originalSession.preferences;
+  originalSession = restored.value; profiles = originalSession.profiles; preferences = originalSession.preferences;sidebarProgress=preferences.sidebarVisible&&preferences.sidebarExpanded?1:0;
   spellcheck=new SpellcheckService({enabled:preferences.spellcheckEnabled,canAct:()=>!closing,onError:notice});
   spellcheck.attach(session.defaultSession);
   resolveIdentitySession = createIdentitySessionResolver({session,root:app.getPath('sessionData')});
@@ -747,7 +805,7 @@ async function start() {
   }});
   try {permissionOpening = permissions.open();} catch (error) {permissionOpening = {status:'blocked',error:error.message};}
   downloads = new DownloadManager({directory:app.getPath('downloads'),reveal:file => shell.showItemInFolder(file),file:path.join(dataDirectory,'browser-downloads.json'),getIdentities:()=>profiles.map(profile=>profile.id)});
-  downloads.on('change', () => { if (panel === 'downloads') send('downloads',downloads.list()); });
+  downloads.on('change', () => { if (panel === 'downloads'||preferences.sidebarVisible&&preferences.sidebarExpanded&&preferences.sidebarActive==='downloads') send('downloads',downloads.list()); });
   downloads.on('status', () => publish(false));
   try { downloads.open(); } catch { /* Downloads exposes its history error and recovery controls without hiding live transfers. */ }
   extensions = new ExtensionManager({directory:path.join(dataDirectory,'extensions'),getSession:identitySession,getIdentities:() => profiles.map(profile => profile.id),loadExtension:createExtensionLoader({app,webContents})});
@@ -773,7 +831,7 @@ async function start() {
   ipcMain.handle('command',command); win.on('resize',()=>{layout();tabSearch.dismiss();});win.on('move',tabSearch.dismiss);win.on('blur',tabPreview.hide);win.on('minimize',()=>{tabPreview.hide();tabSearch.dismiss();});
   win.on('close',event => {if (!allowClose) {event.preventDefault();requestClose().catch(error => resumeAfterCloseError(error.message));}});
   win.webContents.on('did-finish-load',() => {
-    eventAction(() => {if (tabs.length) {ensureView(active() || tabs[0]);layout();publish(false);} else newTab();});
+    eventAction(() => {if (tabs.length) {ensureView(active() || tabs[0]);syncSidebarWeb();layout();publish(false);} else newTab();});
     publishVault();publishAccounts();publishExtensions();publishPermissions();publishBookmarks();publishWorkspaces();publishExtensionActions();
   });
   buildMenu();
@@ -784,4 +842,4 @@ if (!app.requestSingleInstanceLock()) app.quit();
 else app.whenReady().then(start).catch(error => {dialog.showErrorBox('Noxviola could not open safely',`${error.message}\nExisting data was preserved.`);app.quit();});
 app.on('second-instance',() => {win?.show();win?.focus();});
 app.on('before-quit',event => {if (win && !win.isDestroyed() && !allowClose) {event.preventDefault();requestClose().catch(error => resumeAfterCloseError(error.message));}});
-app.on('window-all-closed',() => {tabSearch.destroy();tabPreview.destroy();app.quit();});
+app.on('window-all-closed',() => {sidebarWeb.destroy();tabSearch.destroy();tabPreview.destroy();app.quit();});

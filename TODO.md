@@ -2,7 +2,7 @@
 
 ## Standalone creator/project following · 2026-11-16
 
-- [ ] CurseForge follow-up: staged paginated metadata collector and explicit manual-source guidance. Requires authorized API-key integration and live/native checks before automatic tracking is enabled. Preserve file names separately from provider release labels, fail incomplete snapshots, never infer maturity or cross-file compatibility. [Evidence and next step](docs/browser/FOLLOWING-CURSEFORGE.md).
+- [ ] CurseForge follow-up: staged paginated metadata collector and explicit manual-source guidance. Requires applicable-agreement/retention/key-distribution review, authorized API-key integration and live/native checks before automatic tracking is enabled. Missing API coverage must not be presented as absent releases. Preserve file names separately from provider release labels, fail incomplete snapshots, never infer maturity or cross-file compatibility. [Evidence and next step](docs/browser/FOLLOWING-CURSEFORGE.md).
 
 - [ ] Diagnose the Windows real-extension ZIP-preview timeout from run 43915656131 without replaying clicks or extending deadlines. Original failure evidence retained; bounded test-only shell/picker diagnostics are added for one causal reproduction. [Evidence and constraints](docs/browser/EXTENSION-PREVIEW-DIAGNOSTIC-20261116.md). Modrinth/native feature passes do not erase this separate failed gate.
 

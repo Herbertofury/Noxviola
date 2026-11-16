@@ -2,6 +2,8 @@
 
 ## Standalone creator/project following · 2026-11-16
 
+- [ ] Verified relocation/ban warnings and independent destination tracking: ModHold public project/file and author-catalog adapter in progress. Preserve source evidence and uncertainty; never infer a ban/cause from missing data or cross-site names alone. Shared Modding-Knowledge evidence integration remains open.
+
 - [ ] Verify observed-update revision history: retain previous supported metadata on actual fingerprint changes, show field differences on demand, preserve restart/identity/last-good behavior. This is not complete source history or release-note archival.
 
 - [ ] CurseForge follow-up: staged paginated metadata collector and explicit manual-source guidance. Requires applicable-agreement/retention/key-distribution review, authorized API-key integration and live/native checks before automatic tracking is enabled. Missing API coverage must not be presented as absent releases. Preserve file names separately from provider release labels, fail incomplete snapshots, never infer maturity or cross-file compatibility. [Evidence and next step](docs/browser/FOLLOWING-CURSEFORGE.md).

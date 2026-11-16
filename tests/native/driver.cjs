@@ -892,6 +892,15 @@ async function firstLaunch() {
     await until(()=>window.webContents.executeJavaScript("document.getElementById('follow-items').textContent.includes('declare') || document.getElementById('follow-items').textContent.includes('declared metadata')"),'explicit metadata-only compatibility scope');
     await command('panel-close');
   });
+  await check('native ModHold author follow saves independently without claiming ban or starting automatic fetches', async () => {
+    await command('following');
+    await until(()=>window.webContents.executeJavaScript("Boolean(document.getElementById('follow-form').getClientRects().length)"),'ModHold follow form');
+    await window.webContents.executeJavaScript(`(() => {const form=document.getElementById('follow-form');form.elements.namedItem('name').value='Synthetic ModHold author';form.elements.namedItem('url').value='https://modholdmods.com/u/NativeFixture';form.requestSubmit();})()`);
+    const saved=await until(()=>JSON.parse(fs.readFileSync(path.join(context.profile,'browser-follows.json'),'utf8')).sources.find(row=>row.name==='Synthetic ModHold author'),'durable native ModHold follow');
+    assert.equal(saved.provider,'modhold-author');assert.equal(saved.automatic,false);assert.equal(saved.lastSuccess,0);expected.modholdFollowId=saved.id;
+    await until(()=>window.webContents.executeJavaScript("document.getElementById('follow-items').textContent.includes('Missing data does not verify a ban')"),'ModHold uncertainty scope');
+    await captureShell('synthetic-modhold-following',1320,860);await command('panel-close');
+  });
   await assertSpellcheck('fresh-default-before-any-settings-change', true, []);
   await check('capture actual synthetic blank and settings shell at narrow and desktop widths', async () => {
     for (const [width, height] of [[700, 600], [1320, 860]]) await captureShell('synthetic-blank', width, height);
@@ -1230,6 +1239,7 @@ async function secondLaunch() {
   await check('follow source and pause choice survive a real process restart', async () => {
     const data=JSON.parse(fs.readFileSync(path.join(context.profile,'browser-follows.json'),'utf8'));
     const saved=data.sources.find(row=>row.id===expected.followId);assert.ok(saved);assert.equal(saved.paused,true);assert.equal(saved.automatic,false);assert.equal(saved.provider,'manual');
+    const modhold=data.sources.find(row=>row.id===expected.modholdFollowId);assert.ok(modhold);assert.equal(modhold.provider,'modhold-author');assert.equal(modhold.automatic,false);
     const modrinth=data.sources.find(row=>row.id===expected.modrinthFollowId);assert.ok(modrinth);assert.equal(modrinth.provider,'modrinth-versions');assert.deepEqual(modrinth.compatibility,{loader:'forge',gameVersion:'1.20.1'});assert.equal(modrinth.automatic,false);
   });
   await check('real process restart restores complete duplicate-preserving tab and identity metadata', async () => {

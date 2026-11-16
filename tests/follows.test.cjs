@@ -196,3 +196,21 @@ test('revision history preserves provider declarations and tags without altering
  item={...item,commit:'b'.repeat(40),fingerprint:'moved'};setTime(2000);await service.refresh('personal',s.id);const saved=service.get('personal',s.id).items[0];assert.equal(saved.commit,'b'.repeat(40));assert.equal(saved.revisions[0].metadata.commit,'a'.repeat(40));
  const old=saved.revisions[0].metadata;assert.equal(old.revisions,undefined);assert.equal(old.read,undefined);assert.equal(old.observedAt,undefined);
 });
+
+test('ModHold project follows persist snapshots/history and respect separate provider pause',async t=>{
+ let fingerprint='one';const {service,reopen,setTime}=fixture(t,{collect:async()=>({items:[{...normalized('modhold-project:12',fingerprint),url:'https://modholdmods.com/g/skyrim-se/mods/12',kind:'modhold-project',versionNumber:'1.0',authorHandle:'Example'}],cache:{},providerNotBefore:2000})});
+ const source=service.add('personal',{name:'ModHold project',url:'https://modholdmods.com/g/skyrim-se/mods/12/example',automatic:true});assert.equal(source.provider,'modhold-project');await service.refresh('personal',source.id);assert.equal(reopen().list('personal')[0].items.length,1);assert.equal(service.list('work').length,0);assert.match(service.list('personal')[0].coverage,/does not verify a ban/);
+ const github=add(service);assert.equal(service.list('personal').find(s=>s.id===github.id).providerNotBefore,0);setTime(3000);fingerprint='two';await service.refresh('personal',source.id);assert.equal(service.get('personal',source.id).items[0].revisions.length,1);
+});
+test('saved manual ModHold source upgrades only on explicit action without enabling background checks',t=>{
+ const {service,file,reopen}=fixture(t);const s=add(service,'personal',{url:'https://example.com/reference'});const data=JSON.parse(fs.readFileSync(file,'utf8'));data.sources[0].url='https://modholdmods.com/u/ExampleAuthor';fs.writeFileSync(file,JSON.stringify(data));const next=reopen();assert.equal(next.list('personal')[0].provider,'manual');assert.equal(next.list('personal')[0].adapterAvailable,true);next.change('personal',s.id,{enableAdapter:true});assert.equal(next.get('personal',s.id).provider,'modhold-author');assert.equal(next.get('personal',s.id).automatic,false);
+});
+
+test('ModHold file hash and size history retain old values rather than inventing additions',async t=>{
+ let item={...normalized('modhold-file:31'),kind:'modhold-file',url:'https://modholdmods.com/g/skyrim-se/mods/12',fileKind:'main',sizeBytes:42,sha256:'a'.repeat(64)};const {service,reopen,setTime}=fixture(t,{collect:async()=>({items:[item],cache:{}})});const s=service.add('personal',{name:'Fixture',url:item.url});await service.refresh('personal',s.id);
+ item={...item,sizeBytes:84,sha256:'b'.repeat(64),fingerprint:'two'};setTime(2000);await service.refresh('personal',s.id);const old=reopen().get('personal',s.id).items[0].revisions[0].metadata;assert.equal(old.sizeBytes,42);assert.equal(old.sha256,'a'.repeat(64));assert.equal(old.fileKind,'main');
+});
+
+test('ModHold real collector contract survives durable cache validation and reopen',async t=>{
+ const modhold=require('../browser/modhold-follow.cjs');const {service,reopen}=fixture(t,{collect:(s,o)=>modhold.collect(s,{...o,fetcher:async()=>new Response(JSON.stringify({id:12,name:'Fixture',version:'1.0',updated:'2026-11-16 12:00:00',author:{handle:'Example'},page:'https://modholdmods.com/g/skyrim-se/mods/12/example',files:[]}))})});const s=service.add('personal',{name:'Fixture',url:'https://modholdmods.com/g/skyrim-se/mods/12'});await service.refresh('personal',s.id);const saved=reopen().get('personal',s.id);assert.equal(saved.error,'');assert.equal(saved.lastSuccess,1000);assert.equal(saved.items[0].title,'Fixture');assert.equal(Object.keys(saved.cache).length,1);
+});

@@ -391,3 +391,7 @@ test('following revision differences render safely on demand, without duplicate 
  assert.equal(history.querySelectorAll('.follow-revision').length,1);assert.match(history.textContent,/title:.*Current/);assert.equal(history.querySelector('img'),null);assert.match(history.textContent,/Changes between checks/);
  history.open=false;history.dispatchEvent(new h.window.Event('toggle'));history.open=true;history.dispatchEvent(new h.window.Event('toggle'));assert.equal(history.querySelectorAll('.follow-revision').length,1);
 });
+
+test('ModHold Following shows independent public metadata and file hashes without download or ban claims',async t=>{
+ const h=await harness(t,{initial:state({panel:'following'})});h.emit('onFollows',{identity:'personal',items:[{id:'modhold',identity:'personal',name:'Example',kind:'project',provider:'modhold-project',url:'https://modholdmods.com/g/skyrim-se/mods/12',automatic:false,paused:false,lastSuccess:1000,error:'',coverage:'Missing data does not verify a ban, relocation or its cause.',items:[{id:'file:1',kind:'modhold-file',title:'Example.zip',versionNumber:'1.0',fileKind:'main',sha256:'a'.repeat(64),sizeBytes:42,publishedAt:'',observedAt:1000,read:false}]}]});await painted(h,'follow-items');const content=h.$('follow-items').textContent;assert.match(content,/MODHOLD PUBLIC METADATA/);assert.match(content,/metadata only, not downloaded or verified/);assert.match(content,/does not verify a ban/);assert.equal([...h.$('follow-items').querySelectorAll('button')].some(b=>/download/i.test(b.textContent)),false);
+});

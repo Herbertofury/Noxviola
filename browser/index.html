@@ -7,7 +7,10 @@
 </head>
 <body>
 <header>
- <div id="tabs" role="tablist" aria-label="Browser tabs"></div>
+ <div id="tab-strip">
+  <div id="tabs" role="tablist" aria-label="Browser tabs"></div>
+  <button id="new-tab" data-command="new" type="button" title="New tab" aria-label="New tab">＋</button>
+ </div>
  <nav aria-label="Browser navigation">
   <select id="identity" aria-label="Browser identity"></select>
   <button id="add-identity" title="Add named identity" aria-label="Add named identity">♙</button>
@@ -16,7 +19,6 @@
   <button data-command="reload" title="Reload" aria-label="Reload">↻</button>
   <button data-command="home" data-toolbar="home" title="Home page" aria-label="Home page">⌂</button>
   <form id="navigate"><input id="address" aria-label="Address or search" placeholder="Search or enter an address" autocomplete="off" spellcheck="false"></form>
-  <button data-command="new" title="New tab" aria-label="New tab">＋</button>
   <button data-command="split" data-toolbar="split" title="Toggle split view" aria-label="Toggle split view">◫</button>
   <button data-command="vault" data-toolbar="library" title="Your library" aria-label="Your library">♡</button>
   <button data-command="extensions" data-toolbar="extensions" title="Extensions" aria-label="Extensions">⌘</button>

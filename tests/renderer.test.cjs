@@ -424,3 +424,18 @@ test('DOM: the real capability inventory renders all records and exposes source 
   assert.equal(h.calls.at(-1).name, 'new');
   assert.ok(inventory.sources.some(item => item.url === h.calls.at(-1).value));
 });
+
+test('DOM: new tab remains next to the tab list in both layouts and invokes the real command', async t => {
+  const h = await harness(t);
+  const tabs = h.$('tabs'), create = h.$('new-tab');
+  assert.equal(tabs.nextElementSibling, create);
+  assert.equal(create.getAttribute('aria-label'), 'New tab');
+  assert.equal(create.closest('nav'), null);
+  create.click(); await tick();
+  assert.equal(h.calls.at(-1).name, 'new');
+  h.update({preferences:{searchEngine:'duckduckgo',tabLayout:'vertical'}});
+  assert.equal(h.document.body.dataset.tabLayout, 'vertical');
+  assert.equal(tabs.nextElementSibling, create);
+  create.click(); await tick();
+  assert.equal(h.calls.at(-1).name, 'new');
+});

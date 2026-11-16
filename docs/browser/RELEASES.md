@@ -4,7 +4,20 @@
 
 The browser is experimental source. **No production release is qualified.** GitHub Actions may publish temporary, unsigned **UNVERIFIED preview packages**; those are not GitHub Releases or proof of native functionality/security. The previous sandbox-enabled native launch failed with a process-socket permission denial, and that denied route is not retried by packaging jobs.
 
-### Latest fully verified preview: 99942809
+### Latest verified core preview: 33d0a9fc
+
+[Core run 43785657651](https://github.com/Herbertofury/Noxviola/actions/runs/43785657651) passed at `33d0a9fce77ef31b5064ea278cad1a4ed1c26706`, tree `1baa0320eb90a347c5856b54dae394090c5ece87`: **329 contracts / 80 syntax**, official 44 seed/current 45 source stages **3/19/11** and ordinary packaged **11/6** on both hosts. Independent readback verifies all **69 raw Git inputs**, all **73 Linux / 74 Windows** distribution entries and all **48 ASAR members**. These previews use **Electron 45.3.2 / Chromium 156.0.8078.100**. Generated 44→45 web-store migration and separate native extension local/sync isolation/events/quota/restart are verified. Managed storage and full unchanged-package functionality remain open.
+
+| Exact tested inner preview archive | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `Noxviola-PREVIEW-win32-x64-33d0a9fce77e.zip` | 158,654,728 | `000f81783621249102c20538514d74b1701945bc0820f259ea372f14743877dd` |
+| `Noxviola-PREVIEW-linux-x64-33d0a9fce77e.tar.gz` | 124,328,621 | `a7be5e80dbcd6b83c53d0507fddae26330c060e238267c9223480b52a36376d3` |
+
+These are the tested inner archives; the distinct outer Actions ZIPs and all original artifact digests are in the [exact checkpoint](CHECKPOINT-2026-11-15.md#33d0a9fc-complete-core-generated-engine-upgrade-and-native-storage-restart-verified). The independent report is **242,962 bytes**, SHA-256 `1601fe0cd2b265eb0cd659a3b6015b3aa1103ea1c174410d109eba8a3374d5d0`. Both complete application archives match SHA-256 `955e08517313e42a90ee15ac35fb886eb0d5ad6ae68486851deda3b00b93027f`. The latest actual source PDFs have separate fresh text/link/visual readback; the former source-only feature, supplied-picker and hosted-platform limits remain.
+
+The unchanged Dark Reader workflow passed installation, background startup and actual page darkening, then failed its popup file-access query. The next query repair is not in these exact previews. These unsigned **PREVIEW** builds are useful intermediate deliverables, with all full product gates still open. Earlier preview bytes and failure records remain preserved below.
+
+### Historical fully verified preview: 99942809
 
 [Core run 43782744635](https://github.com/Herbertofury/Noxviola/actions/runs/43782744635) passed at `999428099f5d59d91f7c437ae6eace2cdbe0264a`, tree `f4e8f803698ba2125e8d8a964a675446aa102843`: **302 contracts / 76 syntax**, source **3/18/10** and ordinary packaged **11/6** per platform. Independent readback verified all **66 exact raw Git inputs**, all **73 Linux / 74 Windows** distribution entries and every one of **48 ASAR members**. These exact previews use Electron **44.11.3**; the development **45.3.2 candidate remains pending**.
 

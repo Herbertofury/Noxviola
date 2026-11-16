@@ -9,10 +9,19 @@ const AREAS = ['local', 'sync'];
 const SOURCES = [
   'https://github.com/electron/electron/blob/v45.3.2/docs/api/extensions.md#chromestorage',
   'https://github.com/electron/electron/blob/v45.3.2/shell/browser/extensions/api/storage/electron_sync_value_store_cache.cc',
+  'https://github.com/electron/electron/blob/v45.3.2/shell/browser/extensions/api/storage/electron_managed_value_store_cache.cc',
   'https://github.com/chromium/chromium/blob/156.0.8078.100/extensions/common/api/storage.json',
+  'https://github.com/chromium/chromium/blob/156.0.8078.100/extensions/browser/api/storage/storage_api.cc',
+  'https://github.com/chromium/chromium/blob/156.0.8078.100/extensions/browser/api/storage/storage_frontend.cc',
   'https://github.com/chromium/chromium/blob/156.0.8078.100/extensions/browser/api/storage/settings_storage_quota_enforcer.cc',
 ];
 const DEFAULTS = { shared: 'unused default', nullValue: 'unused default', falseValue: true, zero: 9, empty: 'unused default', missing: { fallback: true } };
+const MANAGED_DEFAULTS = { shared: 'managed query default', nullValue: null, falseValue: false, zero: 0, empty: '', missing: { fallback: true } };
+const MANAGED_READ_ONLY_ERROR = 'This is a read-only store.';
+
+function managedAttempt(identity, token) {
+  return { shared: { identity, token, area: 'managed', forbiddenWrite: true }, managedOnly: token };
+}
 
 function storageValues(identity, token, area, revision = 1) {
   assert.ok(typeof identity === 'string' && identity);
@@ -50,7 +59,7 @@ function expectedEvents(identity, token) {
 // Native callbacks and real onChanged notifications are each observed once;
 // deadlines turn a missing callback/event into failure, never another attempt.
 async function nativeStorageExercise(input) {
-  const record = { version: 1, mode: input.mode, identity: input.identity, runtimeId: input.runtimeId, completed: false, areas: {}, events: [] };
+  const record = { version: 2, mode: input.mode, identity: input.identity, runtimeId: input.runtimeId, completed: false, areas: {}, events: [] };
   let listener;
   let pendingEvent;
   let activeStep = 'native context';
@@ -83,6 +92,43 @@ async function nativeStorageExercise(input) {
     try { await Promise.all([call(area, method, args), changed]); }
     finally { clearTimeout(deadline); pendingEvent = null; }
   };
+  const managedSnapshot = async () => ({
+    all: await call('managed', 'get', [null]),
+    keys: await call('managed', 'getKeys', []),
+    bytes: await call('managed', 'getBytesInUse', [null]),
+  });
+  const exerciseManaged = async () => {
+    // local and sync already hold different real values when this runs. An
+    // alias to either writable namespace therefore cannot look like an empty
+    // managed area. No policy is installed or simulated by the fixture.
+    const data = record.managed = { queries: {}, bytes: {}, rejections: [] };
+    for (const [name, args] of [
+      ['all', [null]], ['omitted', []], ['single', ['shared']],
+      ['array', [['shared', 'nullValue', 'missing']]], ['defaults', [input.managedDefaults]],
+      ['emptyArray', [[]]], ['emptyObject', [{}]], ['missing', ['missing']],
+    ]) {
+      activeStep = `managed ${name} query`;
+      data.queries[name] = await call('managed', 'get', args);
+    }
+    activeStep = 'managed native key enumeration';
+    data.keys = await call('managed', 'getKeys', []);
+    for (const [name, args] of [['all', [null]], ['omitted', []], ['single', ['shared']], ['array', [['shared', 'missing']]], ['emptyArray', [[]]]]) {
+      activeStep = `managed ${name} byte count`;
+      data.bytes[name] = await call('managed', 'getBytesInUse', args);
+    }
+    activeStep = 'managed defaults do not persist';
+    data.afterDefaults = await managedSnapshot();
+    for (const [method, args] of [['set', [input.managedAttempt]], ['remove', [['shared', 'quotaPrior', 'missing']]], ['clear', []]]) {
+      activeStep = `managed ${method} read-only rejection`;
+      const rejected = { method, args: copy(args), ...await native('managed', method, args) };
+      data.rejections.push(rejected);
+      rejected.after = await managedSnapshot();
+    }
+    activeStep = 'managed rejection preserves the real writable namespaces';
+    data.otherAreas = {};
+    for (const area of ['local', 'sync']) data.otherAreas[area] = await call(area, 'get', [null]);
+    data.final = await managedSnapshot();
+  };
   try {
     if (document.readyState !== 'complete' || location.protocol !== 'chrome-extension:' || location.hostname !== input.runtimeId || chrome.runtime.id !== input.runtimeId) {
       throw new Error('Storage proof requires the exact committed native extension document');
@@ -93,23 +139,27 @@ async function nativeStorageExercise(input) {
         if (typeof chrome.storage?.[area]?.[method] !== 'function') throw new Error(`Native storage.${area}.${method} is absent`);
       }
     }
+    for (const method of ['get', 'getKeys', 'getBytesInUse', 'set', 'remove', 'clear']) {
+      if (typeof chrome.storage?.managed?.[method] !== 'function') throw new Error(`Native storage.managed.${method} is absent`);
+    }
     if (typeof chrome.storage.onChanged?.addListener !== 'function') throw new Error('Native storage.onChanged is absent');
     record.document = { url: location.href, origin: location.origin, readyState: document.readyState, runtimeId: chrome.runtime.id };
     record.constants = Object.fromEntries(['QUOTA_BYTES', 'QUOTA_BYTES_PER_ITEM', 'MAX_ITEMS', 'MAX_WRITE_OPERATIONS_PER_MINUTE', 'MAX_WRITE_OPERATIONS_PER_HOUR'].map(key => [key, chrome.storage.sync[key] ?? null]));
-    if (input.mode === 'read') {
-      for (const area of ['local', 'sync']) {
-        activeStep = `read persisted ${area}`;
-        record.areas[area] = { all: await call(area, 'get', [null]), bytes: await call(area, 'getBytesInUse', [null]) };
-      }
-      record.completed = true;
-      return record;
-    }
-    if (input.mode !== 'exercise') throw new Error('Unknown native storage proof operation');
     listener = (changes, areaName) => {
       record.events.push(copy({ areaName, changes }));
       if (pendingEvent) pendingEvent();
     };
     chrome.storage.onChanged.addListener(listener);
+    if (input.mode === 'read') {
+      for (const area of ['local', 'sync']) {
+        activeStep = `read persisted ${area}`;
+        record.areas[area] = { all: await call(area, 'get', [null]), bytes: await call(area, 'getBytesInUse', [null]) };
+      }
+      await exerciseManaged();
+      record.completed = true;
+      return record;
+    }
+    if (input.mode !== 'exercise') throw new Error('Unknown native storage proof operation');
     for (const area of ['local', 'sync']) {
       const data = record.areas[area] = {};
       const values = input.values[area];
@@ -137,6 +187,7 @@ async function nativeStorageExercise(input) {
       data.final = await call(area, 'get', [null]);
       data.bytes = await call(area, 'getBytesInUse', [null]);
     }
+    await exerciseManaged();
     activeStep = 'sync per-item quota rejection';
     const limit = record.constants.QUOTA_BYTES_PER_ITEM;
     // The candidate's pinned Chromium schema documents this exact boundary.
@@ -159,6 +210,7 @@ async function nativeStorageExercise(input) {
     activeStep = 'final separate namespace reads';
     record.final = {};
     for (const area of ['local', 'sync']) record.final[area] = await call(area, 'get', [null]);
+    record.managed.final = await managedSnapshot();
     record.completed = true;
   } catch (error) { record.failure = { step: activeStep, ...failure(error) }; }
   finally {
@@ -171,7 +223,7 @@ async function nativeStorageExercise(input) {
 }
 
 function assertNativeStorage(record, { identity, runtimeId, token, mode }) {
-  assert.equal(record.version, 1);
+  assert.equal(record.version, 2);
   assert.equal(record.identity, identity); assert.equal(record.runtimeId, runtimeId); assert.equal(record.mode, mode);
   assert.equal(record.completed, true, `Actual native extension storage failed: ${JSON.stringify(record.failure || record)}`);
   assert.equal(record.document.runtimeId, runtimeId);
@@ -180,6 +232,26 @@ function assertNativeStorage(record, { identity, runtimeId, token, mode }) {
   assert.equal(record.document.readyState, 'complete');
   assert.equal(record.constants.QUOTA_BYTES_PER_ITEM, 8192);
   const final = Object.fromEntries(AREAS.map(area => [area, storageValues(identity, token, area, 2)]));
+  const managed = record.managed;
+  assert.ok(managed, 'Actual managed storage evidence is required');
+  assert.deepEqual(Object.keys(managed.queries).sort(), ['all', 'omitted', 'single', 'array', 'defaults', 'emptyArray', 'emptyObject', 'missing'].sort());
+  for (const [name, value] of Object.entries(managed.queries)) assert.deepEqual(value, name === 'defaults' ? MANAGED_DEFAULTS : {}, `Native managed ${name} query must reflect an empty store`);
+  assert.deepEqual(managed.keys, [], 'Native managed key enumeration must be empty');
+  assert.deepEqual(managed.bytes, { all: 0, omitted: 0, single: 0, array: 0, emptyArray: 0 });
+  const emptyManaged = { all: {}, keys: [], bytes: 0 };
+  assert.deepEqual(managed.afterDefaults, emptyManaged, 'Managed query defaults must not become stored policy');
+  assert.deepEqual(managed.rejections.map(({ method, args }) => ({ method, args })), [
+    { method: 'set', args: [managedAttempt(identity, token)] },
+    { method: 'remove', args: [['shared', 'quotaPrior', 'missing']] },
+    { method: 'clear', args: [] },
+  ], 'Every native managed mutation must actually be attempted once with the generated inputs');
+  for (const rejected of managed.rejections) {
+    assert.equal(rejected.error, MANAGED_READ_ONLY_ERROR, `Native managed ${rejected.method} must report its real read-only error, not an unavailable backend or quota error`);
+    assert.equal(rejected.value, null, 'A rejected managed mutation must not report a value');
+    assert.deepEqual(rejected.after, emptyManaged, `Managed storage must stay empty after ${rejected.method}`);
+  }
+  assert.deepEqual(managed.final, emptyManaged);
+  assert.deepEqual(managed.otherAreas, final, 'Failed managed mutations must preserve both complete writable namespaces');
   for (const area of AREAS) {
     const observed = record.areas[area];
     if (mode === 'read') {
@@ -199,8 +271,11 @@ function assertNativeStorage(record, { identity, runtimeId, token, mode }) {
     for (const query of ['emptyArray', 'emptyObject', 'missing']) assert.deepEqual(observed.queries[query], {});
     assert.deepEqual(observed.final, final[area]); assert.equal(observed.bytes, storageBytes(final[area]));
   }
-  if (mode === 'read') return final;
   assert.equal(record.listenerRemoved, true, 'The test must remove its native event observer');
+  if (mode === 'read') {
+    assert.deepEqual(record.events, [], 'Managed reads and rejected writes must not emit successful change events');
+    return final;
+  }
   assert.deepEqual(record.events, expectedEvents(identity, token), 'Actual onChanged area, old/new payload and event sequence must match the native mutations exactly');
   assert.deepEqual(record.final, final, 'Local and sync must remain separate after all native operations');
   assert.match(record.quota.error || '', /quota.*exceed|exceed.*quota/i, 'An oversized native write must reject through runtime.lastError');
@@ -219,8 +294,8 @@ function createExtensionStorage({ context, result, backgroundPages, partitionFor
   assert.equal(marker.token, context.token); assert.equal(marker.profile, context.profile);
   const evidence = result.extensionStorage = {
     source: 'Actual chrome.storage in the installed synthetic MV2 extension background documents',
-    semantics: 'Separate local and sync disk namespaces; no cross-device transport is provided or claimed',
-    scope: 'Same-candidate normal restart, two identity Sessions, native callbacks and onChanged, query defaults, and atomic per-item quota rejection. Rate quotas, service workers, content-script sync behavior and data deletion on uninstall are not qualified by this helper.',
+    semantics: 'Separate local and sync disk namespaces; managed is empty and read-only with no enterprise policy provider. No cross-device transport is provided or claimed',
+    scope: 'Same-candidate normal restart, two identity Sessions, native callbacks and onChanged, query defaults, atomic per-item quota rejection, and actual managed reads/keys/byte counts plus rejected set/remove/clear without changing local or sync. Enterprise policy loading/updates, rate quotas, service workers, content-script storage behavior and data deletion on uninstall are not qualified by this helper.',
     documentation: SOURCES, contexts: [], runs: [],
   };
   function contexts(expected) {
@@ -247,6 +322,7 @@ function createExtensionStorage({ context, result, backgroundPages, partitionFor
   }
   async function run(target, mode, stage) {
     const input = { identity: target.identity, runtimeId: target.runtimeId, token: context.token, mode, defaults: DEFAULTS,
+      managedDefaults: MANAGED_DEFAULTS, managedAttempt: managedAttempt(target.identity, context.token),
       values: Object.fromEntries(AREAS.map(area => [area, storageValues(target.identity, context.token, area)])) };
     const entry = { stage, identity: target.identity, runtimeId: target.runtimeId };
     evidence.runs.push(entry);
@@ -277,4 +353,4 @@ function createExtensionStorage({ context, result, backgroundPages, partitionFor
   };
 }
 
-module.exports = { createExtensionStorage, assertNativeStorage, storageValues, storageBytes, expectedEvents, DEFAULTS };
+module.exports = { createExtensionStorage, assertNativeStorage, storageValues, storageBytes, expectedEvents, DEFAULTS, MANAGED_DEFAULTS, MANAGED_READ_ONLY_ERROR, managedAttempt };

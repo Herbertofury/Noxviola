@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "inventoryVersion": "2026-11-16.5",
+  "inventoryVersion": "2026-11-16.6",
   "auditedAt": "2026-11-15",
   "title": "Noxviola browser capability union — initial documented inventory",
   "coverage": {
@@ -22,131 +22,131 @@
     ],
     "currentCheckpoint": {
       "date": "2026-11-16",
-      "electron": "44.11.3",
-      "chromium": "152.0.7977.169",
+      "electron": "45.3.2",
+      "chromium": "156.0.8078.100",
       "node": "24.22.2",
-      "scope": "Independently verified exact core source and ordinary packaged-executable regression checkpoint. Existing detailed feature receipts remain at their original source; no additional feature status or real-package compatibility is promoted by repeating the core workflow.",
-      "evidenceSourceRevision": "999428099f5d59d91f7c437ae6eace2cdbe0264a",
-      "evidenceSourceTree": "f4e8f803698ba2125e8d8a964a675446aa102843",
+      "scope": "Independently verified exact core source and ordinary packaged executable, generated official 44-to45 web-store transition and native local/sync storage subset. The separately failed unchanged package, managed storage and all full product gates remain open.",
+      "evidenceSourceRevision": "33d0a9fce77ef31b5064ea278cad1a4ed1c26706",
+      "evidenceSourceTree": "1baa0320eb90a347c5856b54dae394090c5ece87",
       "sourceIds": [
-        "noxviola-source-99942809",
-        "noxviola-native-99942809"
+        "noxviola-source-33d0a9fc",
+        "noxviola-native-33d0a9fc"
       ],
-      "nativeRun": "https://github.com/Herbertofury/Noxviola/actions/runs/43782744635",
+      "nativeRun": "https://github.com/Herbertofury/Noxviola/actions/runs/43785657651",
       "nativeStatus": "passed",
       "packagedRuntimeStatus": "passed",
-      "nativeAcceptance": "Both platforms passed source seed/first process/restart 3/18/10 and ordinary packaged first process/restart 11/6.",
+      "nativeAcceptance": "Both platforms passed official 44 seed/current 45 first process/restart 3/19/11 and ordinary packaged first process/restart 11/6.",
       "portableContracts": {
-        "passed": 302,
+        "passed": 329,
         "failed": 0,
         "skipped": 0,
-        "syntaxFiles": 76,
-        "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43782744635",
+        "syntaxFiles": 80,
+        "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43785657651",
         "scope": "Both exact hosted core job logs independently read back."
       },
       "installedWindowsAudit": "unresolved-no-local-access",
       "nativeEvidence": [
         {
           "platform": "linux",
-          "artifact": 14189660084,
-          "bytes": 4976634,
-          "sha256": "3dfe768c40e8f10a82e6bb7074ba6690a0a25ac3df7cfb49c245861499b7a090",
+          "artifact": 14189954555,
+          "bytes": 4999689,
+          "sha256": "e90d37204fa3e106b459e2411c6938f3331aa7c96d4832df1e44d31c3c9d85cd",
           "result": "passed",
           "sourceChecks": [
             3,
-            18,
-            10
+            19,
+            11
           ],
           "packagedChecks": [
             11,
             6
           ],
-          "sourceInputFiles": 66,
+          "sourceInputFiles": 69,
           "sourceDirty": false,
           "sourceUnchangedDuringRun": true,
-          "sourceManifestSha256": "43f3a149d6f30cb1b141d10b32b1de307e1233a49a1b70d005c3de1a3887546b",
+          "sourceManifestSha256": "7d7ed0dd1a8d6a2adc883b7ec060cae975a51542c56e45a82ff8ff1e4ba49ef3",
           "portableArtifact": {
-            "artifact": 14189201144,
-            "bytes": 123515852,
-            "sha256": "635fd0019544a3d7b1d70b6fa95231c5b40f12f86f37f9d68d51992b37fbb78b"
+            "artifact": 14190625719,
+            "bytes": 124341199,
+            "sha256": "318b6ac762a38c2faa80a37a21a90c2c5195bc827ed265162c8283e193e5e642"
           },
           "distribution": {
-            "name": "Noxviola-PREVIEW-linux-x64-999428099f5d.tar.gz",
-            "bytes": 123503268,
-            "sha256": "1ac73f611be74ec29539fb96f61f5100fae553cac0a509d654630a6e737932cc",
+            "name": "Noxviola-PREVIEW-linux-x64-33d0a9fce77e.tar.gz",
+            "bytes": 124328621,
+            "sha256": "a7be5e80dbcd6b83c53d0507fddae26330c060e238267c9223480b52a36376d3",
             "everyFileEntryVerified": 73,
-            "packageManifestSha256": "6919d565e08c44a370233dfc989395c9b042e0a7506a916217ae81b18bec4922",
-            "applicationManifestSha256": "cd0dc48b474130d4dc6b1fc6cb52976b55d047a5b7db5a6c0a1aa7753357777d",
+            "packageManifestSha256": "61181fb8f42f66b8a04c8af9b8cfea3a13450f00b9c1bd599cca25ef139a733c",
+            "applicationManifestSha256": "4ccfc28e0582f9e2d32b509d91dd2edd0ee928b151994757f66c5b5a4e5a523b",
             "asarMembersVerified": 48,
-            "asarSha256": "c3b80cc90cbd036c661d5269cbb307c28859921c3312b6e6b8922ceacd3448d8"
+            "asarSha256": "955e08517313e42a90ee15ac35fb886eb0d5ad6ae68486851deda3b00b93027f"
           },
-          "scope": "Core workflows and exact artifact readback only; source-only feature and hosted-platform limits are retained in the independent report."
+          "scope": "Core workflows and exact artifact readback only; source-only feature and hosted-platform limits remain in the independent report."
         },
         {
           "platform": "win32",
-          "artifact": 14189135786,
-          "bytes": 4038723,
-          "sha256": "a453111d7c23f04cd1b88dcaf359414c0cbadc8b87eab68d7749a878f9638048",
+          "artifact": 14190386372,
+          "bytes": 4052516,
+          "sha256": "0ccff2874506ad90fbb5fb20f7905c90dfd12e018ba828bbdc7d023138c10359",
           "result": "passed",
           "sourceChecks": [
             3,
-            18,
-            10
+            19,
+            11
           ],
           "packagedChecks": [
             11,
             6
           ],
-          "sourceInputFiles": 66,
+          "sourceInputFiles": 69,
           "sourceDirty": false,
           "sourceUnchangedDuringRun": true,
-          "sourceManifestSha256": "43f3a149d6f30cb1b141d10b32b1de307e1233a49a1b70d005c3de1a3887546b",
+          "sourceManifestSha256": "7d7ed0dd1a8d6a2adc883b7ec060cae975a51542c56e45a82ff8ff1e4ba49ef3",
           "portableArtifact": {
-            "artifact": 14188269280,
-            "bytes": 158626795,
-            "sha256": "9b8bdb6b8c1b16820a931331fcb083e4994857b4968405a553bfe527ad433bea"
+            "artifact": 14190167622,
+            "bytes": 158667779,
+            "sha256": "7d7cab32080a945e31fad9989a80d9106e417ef97dd57708eeb1dde23dd484c5"
           },
           "distribution": {
-            "name": "Noxviola-PREVIEW-win32-x64-999428099f5d.zip",
-            "bytes": 158613749,
-            "sha256": "a22fea1ca0f85f1879be33c20a675968de7abeb94cf8b3ad4b1fe43c359494ad",
+            "name": "Noxviola-PREVIEW-win32-x64-33d0a9fce77e.zip",
+            "bytes": 158654728,
+            "sha256": "000f81783621249102c20538514d74b1701945bc0820f259ea372f14743877dd",
             "everyFileEntryVerified": 74,
-            "packageManifestSha256": "bae0ba14393a544a1cf23235a5ecf3ae582a41b43a53fda3933162862c0b7079",
-            "applicationManifestSha256": "cd0dc48b474130d4dc6b1fc6cb52976b55d047a5b7db5a6c0a1aa7753357777d",
+            "packageManifestSha256": "2bc381207c0ea48a0987d8883a98463cb12c3e1810cdcd4a4e7575bd249f61d2",
+            "applicationManifestSha256": "4ccfc28e0582f9e2d32b509d91dd2edd0ee928b151994757f66c5b5a4e5a523b",
             "asarMembersVerified": 48,
-            "asarSha256": "c3b80cc90cbd036c661d5269cbb307c28859921c3312b6e6b8922ceacd3448d8"
+            "asarSha256": "955e08517313e42a90ee15ac35fb886eb0d5ad6ae68486851deda3b00b93027f"
           },
-          "scope": "Core workflows and exact artifact readback only; source-only feature and hosted-platform limits are retained in the independent report."
+          "scope": "Core workflows and exact artifact readback only; source-only feature and hosted-platform limits remain in the independent report."
         }
       ],
-      "sourceSnapshotQualification": "All 66 source and packaged native inputs match raw Git bytes with clean unchanged before/after manifest 43f3a149d6f30cb1b141d10b32b1de307e1233a49a1b70d005c3de1a3887546b. Every inner distribution entry and all 48 ASAR members were independently verified.",
+      "sourceSnapshotQualification": "All 69 source and packaged native inputs match raw Git bytes with clean unchanged before/after manifest 7d7ed0dd1a8d6a2adc883b7ec060cae975a51542c56e45a82ff8ff1e4ba49ef3. Every inner distribution entry and all 48 ASAR members were independently verified.",
       "independentVerification": {
-        "file": "99942809-independent-validation.json",
-        "bytes": 137134,
-        "sha256": "f6ec978cce64ad5c7f7c418d357ce4720efaee5f2f6a5083973598d90c938b20",
+        "file": "33d0a9fc-independent-validation.json",
+        "bytes": 242962,
+        "sha256": "1601fe0cd2b265eb0cd659a3b6015b3aa1103ea1c174410d109eba8a3374d5d0",
         "scope": "Independent artifact bytes, raw Git native inputs, inner distribution entries, receipt assertions and application archive readback. No executable launched.",
-        "performedBy": "Independent capability/evidence agent; original artifacts, Git bytes, complete inner distributions and report assertions read back without launching an executable."
+        "performedBy": "Independent capability/evidence agent; original artifacts, raw Git, complete distributions, actual runtime transition/storage receipts and application archive readback. No executable launched locally."
       },
       "crossPlatformApplication": {
         "applicationManifestsIdentical": true,
         "applicationFiles": 48,
-        "applicationManifestSha256": "cd0dc48b474130d4dc6b1fc6cb52976b55d047a5b7db5a6c0a1aa7753357777d",
+        "applicationManifestSha256": "4ccfc28e0582f9e2d32b509d91dd2edd0ee928b151994757f66c5b5a4e5a523b",
         "asarBytesIdentical": true,
-        "asarSha256": "c3b80cc90cbd036c661d5269cbb307c28859921c3312b6e6b8922ceacd3448d8",
+        "asarSha256": "955e08517313e42a90ee15ac35fb886eb0d5ad6ae68486851deda3b00b93027f",
         "remainingAsarDifferences": [],
         "noticeFilesMatchRawGit": true,
         "distributionBinariesIdentical": false,
         "qualification": "Only the application ASAR and its member manifest are byte-identical. Platform executables, runtime files, package manifests and full distribution archives differ by OS."
       },
       "independentPdfReadback": {
-        "file": "pdf-qa-99942809/pdf-content-validation.json",
-        "bytes": 5274,
-        "sha256": "8b0bd829246da14bbbc22bc6ad40a7837afcab93c2813a078e65d4f33fdbae9a",
+        "bytes": 5290,
+        "sha256": "96303bf03d14f5ece4085c726e8ccda618d5118ca6b8c2026aeef08776f1094f",
         "attribution": "Separate parent-agent Poppler text/link extraction and 110 dpi visual readback; report and exact PDF/render bytes independently matched here. No image is shared.",
-        "scope": "Actual source-runtime Tools > Save page as PDF export; generated picker destination, not physical picker automation or arbitrary-site fidelity."
+        "scope": "Actual source-runtime Tools > Save page as PDF export; generated picker destination, not physical picker automation or arbitrary-site fidelity.",
+        "file": "pdf-qa-33d0a9fc/pdf-content-validation.json"
       },
-      "realExtensionRun": "https://github.com/Herbertofury/Noxviola/actions/runs/43782744653",
-      "realExtensionRunStatus": "failed-during-package-initialization",
+      "realExtensionRun": "https://github.com/Herbertofury/Noxviola/actions/runs/43785657759",
+      "realExtensionRunStatus": "failed-missing-file-scheme-access-query",
       "limitations": [
         "Hosted Windows Server and Ubuntu/Xvfb runners, not the owner Windows 11 desktop or installed reference-browser audit.",
         "The generated PDF/PNG and native menu/renderer controls do not qualify physical OS menu/picker gestures, hardware printing, arbitrary pages or complete accessibility.",
@@ -154,9 +154,91 @@
         "Optional private bytes are native Windows process metrics, not PSS, deduplicated physical memory, an external OS measurement or a comparative performance result.",
         "Generated extension fixtures only in this core run. The separate real-extension workflow is not covered. Download-history/page-tool receipts are source-app subsets; packaged installation/exports are not established.",
         "Unsigned PREVIEW packages and finite public HTTPS/network/resource observations do not close the full G001-G012 privacy/security/compatibility/performance/product gates.",
-        "The separate unchanged-package run failed during actual extension initialization on both platforms; background document startup is not successful Dark Reader initialization.",
-        "The pending Electron 45.3.2 candidate, its native extension storage behavior and genuine 44-to-45 profile transition are not qualified here. Every complete capability procedure and G001-G012 remains open."
-      ]
+        "The separate unchanged-package popup fails at missing extension.isAllowedFileSchemeAccess; its later Off/On, Settings and successful normal close are unqualified.",
+        "Managed native storage semantics, broader quota boundaries, arbitrary owner-profile migration, complete compatibility and every G001-G012 gate remain open."
+      ],
+      "generatedRuntimeTransition": {
+        "linux": {
+          "writer": {
+            "electron": "44.11.3",
+            "chrome": "152.0.7977.169",
+            "node": "24.22.2"
+          },
+          "reader": {
+            "electron": "45.3.2",
+            "chrome": "156.0.8078.100",
+            "node": "24.22.2"
+          },
+          "restart": {
+            "electron": "45.3.2",
+            "chrome": "156.0.8078.100",
+            "node": "24.22.2"
+          },
+          "originalPhysicalDirectoryAndFiveStoresVerified": true,
+          "persistentAndSessionCookieLifetimesVerified": true,
+          "scope": "Original hosted provisioning and admission receipts match the exact source descriptor and observed writer. The exact helper verifies the official archive and every extracted runtime entry before launch; those temporary runtime bytes are not present in this artifact and were not independently re-downloaded here. The observed transition covers generated web stores, not arbitrary owner profiles or legacy extension data."
+        },
+        "windows": {
+          "writer": {
+            "electron": "44.11.3",
+            "chrome": "152.0.7977.169",
+            "node": "24.22.2"
+          },
+          "reader": {
+            "electron": "45.3.2",
+            "chrome": "156.0.8078.100",
+            "node": "24.22.2"
+          },
+          "restart": {
+            "electron": "45.3.2",
+            "chrome": "156.0.8078.100",
+            "node": "24.22.2"
+          },
+          "originalPhysicalDirectoryAndFiveStoresVerified": true,
+          "persistentAndSessionCookieLifetimesVerified": true,
+          "scope": "Original hosted provisioning and admission receipts match the exact source descriptor and observed writer. The exact helper verifies the official archive and every extracted runtime entry before launch; those temporary runtime bytes are not present in this artifact and were not independently re-downloaded here. The observed transition covers generated web stores, not arbitrary owner profiles or legacy extension data."
+        }
+      },
+      "nativeExtensionStorage": {
+        "linux": {
+          "source": "Actual chrome.storage in the installed synthetic MV2 extension background documents",
+          "semantics": "Separate local and sync disk namespaces; no cross-device transport is provided or claimed",
+          "scope": "Same-candidate normal restart, two identity Sessions, native callbacks and onChanged, query defaults, and atomic per-item quota rejection. Rate quotas, service workers, content-script sync behavior and data deletion on uninstall are not qualified by this helper.",
+          "sameNativeExtensionAcrossIdentities": true,
+          "nativeEventsPerIdentity": 10,
+          "nativeByteCountsAndQueryFormsVerified": true,
+          "nullFalseZeroAndEmptyStringDistinguished": true,
+          "separateLocalAndSyncNamespacesVerified": true,
+          "bidirectionalIdentityIsolationVerified": true,
+          "atomicPerItemQuotaRejectionVerified": true,
+          "validWritesAndEventsAfterRejectionVerified": true,
+          "exactCompleteNamespacesSurviveNormalRestart": true,
+          "limitations": [
+            "Generated MV2 background documents, not an unchanged upstream package.",
+            "No cross-device transport or cloud synchronization.",
+            "Managed storage, rate/total/item-count quota boundaries, MV3 workers, content-script sync and uninstall erasure are not exercised here."
+          ]
+        },
+        "windows": {
+          "source": "Actual chrome.storage in the installed synthetic MV2 extension background documents",
+          "semantics": "Separate local and sync disk namespaces; no cross-device transport is provided or claimed",
+          "scope": "Same-candidate normal restart, two identity Sessions, native callbacks and onChanged, query defaults, and atomic per-item quota rejection. Rate quotas, service workers, content-script sync behavior and data deletion on uninstall are not qualified by this helper.",
+          "sameNativeExtensionAcrossIdentities": true,
+          "nativeEventsPerIdentity": 10,
+          "nativeByteCountsAndQueryFormsVerified": true,
+          "nullFalseZeroAndEmptyStringDistinguished": true,
+          "separateLocalAndSyncNamespacesVerified": true,
+          "bidirectionalIdentityIsolationVerified": true,
+          "atomicPerItemQuotaRejectionVerified": true,
+          "validWritesAndEventsAfterRejectionVerified": true,
+          "exactCompleteNamespacesSurviveNormalRestart": true,
+          "limitations": [
+            "Generated MV2 background documents, not an unchanged upstream package.",
+            "No cross-device transport or cloud synchronization.",
+            "Managed storage, rate/total/item-count quota boundaries, MV3 workers, content-script sync and uninstall erasure are not exercised here."
+          ]
+        }
+      }
     },
     "checkpointHistory": [
       {
@@ -2178,6 +2260,161 @@
           "Both real-package jobs failed during post-install harness inspection; no unexecuted darkening, popup, Settings or optional-grant workflow is qualified.",
           "The forthcoming test-only inspection repair requires its own exact-source result. All complete capability procedures and G001-G012 remain open."
         ]
+      },
+      {
+        "date": "2026-11-16",
+        "electron": "44.11.3",
+        "chromium": "152.0.7977.169",
+        "node": "24.22.2",
+        "scope": "Independently verified exact core source and ordinary packaged-executable regression checkpoint. Existing detailed feature receipts remain at their original source; no additional feature status or real-package compatibility is promoted by repeating the core workflow.",
+        "evidenceSourceRevision": "999428099f5d59d91f7c437ae6eace2cdbe0264a",
+        "evidenceSourceTree": "f4e8f803698ba2125e8d8a964a675446aa102843",
+        "sourceIds": [
+          "noxviola-source-99942809",
+          "noxviola-native-99942809"
+        ],
+        "nativeRun": "https://github.com/Herbertofury/Noxviola/actions/runs/43782744635",
+        "nativeStatus": "passed",
+        "packagedRuntimeStatus": "passed",
+        "nativeAcceptance": "Both platforms passed source seed/first process/restart 3/18/10 and ordinary packaged first process/restart 11/6.",
+        "portableContracts": {
+          "passed": 302,
+          "failed": 0,
+          "skipped": 0,
+          "syntaxFiles": 76,
+          "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43782744635",
+          "scope": "Both exact hosted core job logs independently read back."
+        },
+        "installedWindowsAudit": "unresolved-no-local-access",
+        "nativeEvidence": [
+          {
+            "platform": "linux",
+            "artifact": 14189660084,
+            "bytes": 4976634,
+            "sha256": "3dfe768c40e8f10a82e6bb7074ba6690a0a25ac3df7cfb49c245861499b7a090",
+            "result": "passed",
+            "sourceChecks": [
+              3,
+              18,
+              10
+            ],
+            "packagedChecks": [
+              11,
+              6
+            ],
+            "sourceInputFiles": 66,
+            "sourceDirty": false,
+            "sourceUnchangedDuringRun": true,
+            "sourceManifestSha256": "43f3a149d6f30cb1b141d10b32b1de307e1233a49a1b70d005c3de1a3887546b",
+            "portableArtifact": {
+              "artifact": 14189201144,
+              "bytes": 123515852,
+              "sha256": "635fd0019544a3d7b1d70b6fa95231c5b40f12f86f37f9d68d51992b37fbb78b"
+            },
+            "distribution": {
+              "name": "Noxviola-PREVIEW-linux-x64-999428099f5d.tar.gz",
+              "bytes": 123503268,
+              "sha256": "1ac73f611be74ec29539fb96f61f5100fae553cac0a509d654630a6e737932cc",
+              "everyFileEntryVerified": 73,
+              "packageManifestSha256": "6919d565e08c44a370233dfc989395c9b042e0a7506a916217ae81b18bec4922",
+              "applicationManifestSha256": "cd0dc48b474130d4dc6b1fc6cb52976b55d047a5b7db5a6c0a1aa7753357777d",
+              "asarMembersVerified": 48,
+              "asarSha256": "c3b80cc90cbd036c661d5269cbb307c28859921c3312b6e6b8922ceacd3448d8"
+            },
+            "scope": "Core workflows and exact artifact readback only; source-only feature and hosted-platform limits are retained in the independent report."
+          },
+          {
+            "platform": "win32",
+            "artifact": 14189135786,
+            "bytes": 4038723,
+            "sha256": "a453111d7c23f04cd1b88dcaf359414c0cbadc8b87eab68d7749a878f9638048",
+            "result": "passed",
+            "sourceChecks": [
+              3,
+              18,
+              10
+            ],
+            "packagedChecks": [
+              11,
+              6
+            ],
+            "sourceInputFiles": 66,
+            "sourceDirty": false,
+            "sourceUnchangedDuringRun": true,
+            "sourceManifestSha256": "43f3a149d6f30cb1b141d10b32b1de307e1233a49a1b70d005c3de1a3887546b",
+            "portableArtifact": {
+              "artifact": 14188269280,
+              "bytes": 158626795,
+              "sha256": "9b8bdb6b8c1b16820a931331fcb083e4994857b4968405a553bfe527ad433bea"
+            },
+            "distribution": {
+              "name": "Noxviola-PREVIEW-win32-x64-999428099f5d.zip",
+              "bytes": 158613749,
+              "sha256": "a22fea1ca0f85f1879be33c20a675968de7abeb94cf8b3ad4b1fe43c359494ad",
+              "everyFileEntryVerified": 74,
+              "packageManifestSha256": "bae0ba14393a544a1cf23235a5ecf3ae582a41b43a53fda3933162862c0b7079",
+              "applicationManifestSha256": "cd0dc48b474130d4dc6b1fc6cb52976b55d047a5b7db5a6c0a1aa7753357777d",
+              "asarMembersVerified": 48,
+              "asarSha256": "c3b80cc90cbd036c661d5269cbb307c28859921c3312b6e6b8922ceacd3448d8"
+            },
+            "scope": "Core workflows and exact artifact readback only; source-only feature and hosted-platform limits are retained in the independent report."
+          }
+        ],
+        "sourceSnapshotQualification": "All 66 source and packaged native inputs match raw Git bytes with clean unchanged before/after manifest 43f3a149d6f30cb1b141d10b32b1de307e1233a49a1b70d005c3de1a3887546b. Every inner distribution entry and all 48 ASAR members were independently verified.",
+        "independentVerification": {
+          "file": "99942809-independent-validation.json",
+          "bytes": 137134,
+          "sha256": "f6ec978cce64ad5c7f7c418d357ce4720efaee5f2f6a5083973598d90c938b20",
+          "scope": "Independent artifact bytes, raw Git native inputs, inner distribution entries, receipt assertions and application archive readback. No executable launched.",
+          "performedBy": "Independent capability/evidence agent; original artifacts, Git bytes, complete inner distributions and report assertions read back without launching an executable."
+        },
+        "crossPlatformApplication": {
+          "applicationManifestsIdentical": true,
+          "applicationFiles": 48,
+          "applicationManifestSha256": "cd0dc48b474130d4dc6b1fc6cb52976b55d047a5b7db5a6c0a1aa7753357777d",
+          "asarBytesIdentical": true,
+          "asarSha256": "c3b80cc90cbd036c661d5269cbb307c28859921c3312b6e6b8922ceacd3448d8",
+          "remainingAsarDifferences": [],
+          "noticeFilesMatchRawGit": true,
+          "distributionBinariesIdentical": false,
+          "qualification": "Only the application ASAR and its member manifest are byte-identical. Platform executables, runtime files, package manifests and full distribution archives differ by OS."
+        },
+        "independentPdfReadback": {
+          "file": "pdf-qa-99942809/pdf-content-validation.json",
+          "bytes": 5274,
+          "sha256": "8b0bd829246da14bbbc22bc6ad40a7837afcab93c2813a078e65d4f33fdbae9a",
+          "attribution": "Separate parent-agent Poppler text/link extraction and 110 dpi visual readback; report and exact PDF/render bytes independently matched here. No image is shared.",
+          "scope": "Actual source-runtime Tools > Save page as PDF export; generated picker destination, not physical picker automation or arbitrary-site fidelity."
+        },
+        "realExtensionRun": "https://github.com/Herbertofury/Noxviola/actions/runs/43782744653",
+        "realExtensionRunStatus": "failed-during-package-initialization",
+        "limitations": [
+          "Hosted Windows Server and Ubuntu/Xvfb runners, not the owner Windows 11 desktop or installed reference-browser audit.",
+          "The generated PDF/PNG and native menu/renderer controls do not qualify physical OS menu/picker gestures, hardware printing, arbitrary pages or complete accessibility.",
+          "Spelling proves the local checking state and saved preference only, not dictionary-download consent, no-download behavior or the correction menu.",
+          "Optional private bytes are native Windows process metrics, not PSS, deduplicated physical memory, an external OS measurement or a comparative performance result.",
+          "Generated extension fixtures only in this core run. The separate real-extension workflow is not covered. Download-history/page-tool receipts are source-app subsets; packaged installation/exports are not established.",
+          "Unsigned PREVIEW packages and finite public HTTPS/network/resource observations do not close the full G001-G012 privacy/security/compatibility/performance/product gates.",
+          "The separate unchanged-package run failed during actual extension initialization on both platforms; background document startup is not successful Dark Reader initialization.",
+          "The pending Electron 45.3.2 candidate, its native extension storage behavior and genuine 44-to-45 profile transition are not qualified here. Every complete capability procedure and G001-G012 remains open."
+        ]
+      },
+      {
+        "date": "2026-11-16",
+        "evidenceSourceRevision": "1346e3105057d870bb1214db376b8e81cdb7367b",
+        "sourceIds": [
+          "noxviola-source-1346e310",
+          "noxviola-native-1346e310"
+        ],
+        "nativeRun": "https://github.com/Herbertofury/Noxviola/actions/runs/43784727805",
+        "nativeStatus": "failed",
+        "packagedRuntimeStatus": "not-reached",
+        "scope": "Windows portable test canonicalizer mismatch; Linux seed3/first-process19 passed before restart Settings visibility failed. No aggregate full transition, extension-storage restart or packaged acceptance.",
+        "independentVerification": {
+          "file": "1346e310-independent-partial-validation.json",
+          "bytes": 99866,
+          "sha256": "1245975cad236cae7879eaae266a09feb228740ce3d9f48ee9b74b83dfdb3c3b"
+        }
       }
     ],
     "implementationCheckpoint": {
@@ -2542,31 +2779,148 @@
         ],
         "repairStatus": "Electron 44.11.3 lacks the native storage.sync support used by the unchanged package. The selected 45.3.2 engine supplies a documented separate local sync area; the candidate must still pass actual native storage, unchanged-package functional and genuine 44-to-45 profile-preservation checks. No repair pass is inferred from documentation or a committed background document.",
         "evidence": "docs/browser/CHECKPOINT-2026-11-15.md"
+      },
+      {
+        "sourceRevision": "1346e3105057d870bb1214db376b8e81cdb7367b",
+        "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43784727817",
+        "result": "failed",
+        "sourceIds": [
+          "noxviola-real-extension-1346e310"
+        ],
+        "scope": "Four passed original checks, including actual native page darkening; popup failed. Off/On, Settings and normal-close acceptance remain unexecuted. Original wrappers lack sourceAfter; before/after equality is not inferred.",
+        "artifacts": [
+          {
+            "platform": "linux",
+            "artifact": 14189123370,
+            "bytes": 125124,
+            "sha256": "953475f88123de35aebe7317db9d78f753672e489e4f70019fdc71335da98b6e",
+            "passedChecks": [
+              "sandboxed light baseline",
+              "real reviewed ZIP installation",
+              "persistent background startup",
+              "actual page darkening"
+            ],
+            "failedCheck": "actual toolbar popup",
+            "observedCause": "Native non-tab popup sender misclassified as canonical browser tab",
+            "completedWorkflows": false,
+            "observerErrors": 0
+          },
+          {
+            "platform": "win32",
+            "artifact": 14189324354,
+            "bytes": 111976,
+            "sha256": "c17d3367527b4f5850a7b998785ac625755367412601ce34f3c218a4b86c7ac9",
+            "passedChecks": [
+              "sandboxed light baseline",
+              "real reviewed ZIP installation",
+              "persistent background startup",
+              "actual page darkening"
+            ],
+            "failedCheck": "actual toolbar popup",
+            "observedCause": "Native non-tab popup sender misclassified as canonical browser tab",
+            "completedWorkflows": false,
+            "observerErrors": 0
+          }
+        ],
+        "repairStatus": "Original failure retained. Subsequent code or a core pass does not retroactively qualify this package.",
+        "evidence": "docs/browser/CHECKPOINT-2026-11-15.md"
+      },
+      {
+        "sourceRevision": "33d0a9fce77ef31b5064ea278cad1a4ed1c26706",
+        "run": "https://github.com/Herbertofury/Noxviola/actions/runs/43785657759",
+        "result": "failed",
+        "sourceIds": [
+          "noxviola-real-extension-33d0a9fc"
+        ],
+        "scope": "Four passed original checks, including actual native page darkening; popup failed. Off/On, Settings and normal-close acceptance remain unexecuted. Original wrappers lack sourceAfter; before/after equality is not inferred.",
+        "artifacts": [
+          {
+            "platform": "linux",
+            "artifact": 14190635410,
+            "bytes": 125745,
+            "sha256": "0c0bfbeabf9013775a51158d886731294c608192a300be9362c49fb2fa6db40a",
+            "passedChecks": [
+              "sandboxed light baseline",
+              "real reviewed ZIP installation",
+              "persistent background startup",
+              "actual page darkening"
+            ],
+            "failedCheck": "actual toolbar popup",
+            "observedCause": "Missing chrome.extension.isAllowedFileSchemeAccess at unchanged background/index.js:6591, collectData",
+            "completedWorkflows": false,
+            "observerErrors": 0
+          },
+          {
+            "platform": "win32",
+            "artifact": 14190371145,
+            "bytes": 112674,
+            "sha256": "6a955f2685f98d9c80da87bd090c8ec24452410e9522928ef9724eb51be1cd09",
+            "passedChecks": [
+              "sandboxed light baseline",
+              "real reviewed ZIP installation",
+              "persistent background startup",
+              "actual page darkening"
+            ],
+            "failedCheck": "actual toolbar popup",
+            "observedCause": "Missing chrome.extension.isAllowedFileSchemeAccess at unchanged background/index.js:6591, collectData",
+            "completedWorkflows": false,
+            "observerErrors": 0
+          }
+        ],
+        "repairStatus": "Original failure retained. Subsequent code or a core pass does not retroactively qualify this package.",
+        "evidence": "docs/browser/CHECKPOINT-2026-11-15.md"
       }
     ],
     "pendingEngineCandidate": {
       "date": "2026-11-16",
       "fromElectron": "44.11.3",
       "electron": "45.3.2",
-      "status": "pending-native-acceptance",
-      "sourceState": "Selected development candidate; no exact candidate source/native receipt is accepted by this inventory.",
+      "status": "core-upgrade-and-sync-subset-verified-real-package-pending",
+      "sourceState": "Exact 33d0 core and package receipts independently verified; full promotion still awaits remaining runtime and unchanged-package gates.",
       "sourceIds": [
         "electron-extensions-44",
         "electron-extensions-45-3-2",
-        "noxviola-real-extension-99942809"
+        "noxviola-real-extension-99942809",
+        "noxviola-native-33d0a9fc",
+        "noxviola-real-extension-33d0a9fc"
       ],
       "motivation": "The unchanged real package uses native extension sync storage during initialization, which the tested 44.11.3 engine does not support. Pinned 45.3.2 documents genuine native support instead of an application-side success-shaped shim.",
       "documentedScope": "storage.sync is separate local disk storage with Chrome sync quotas, without cross-device synchronization. storage.managed is empty/read-only; writes are unsupported.",
-      "nativeAcceptance": "pending",
-      "realPackageAcceptance": "pending",
-      "legacyEngineTransitionAcceptance": "pending",
+      "nativeAcceptance": "Core source/package and local/sync identity/events/query/per-item-quota/normal-restart subset passed; managed storage not yet exercised.",
+      "realPackageAcceptance": "Four checks passed; missing file-scheme query fails popup.",
+      "legacyEngineTransitionAcceptance": "Official 44.11.3 writer/current 45.3.2 reader/restart passed for generated five web stores, original physical directory and cookie lifetimes on both platforms.",
       "requiredEvidence": [
         "Exact candidate source and packaged core regression on both platforms.",
         "Actual extension local/sync separation, restart, identity isolation, events and managed read-only errors.",
         "Unchanged reviewed package initialization and every original functional/restart assertion.",
         "Official Electron 44.11.3 original-factory seed followed by 45.3.2 production processes on the same generated profile; prior same-engine seed does not prove this upgrade."
       ]
-    }
+    },
+    "engineCandidateHistory": [
+      {
+        "date": "2026-11-16",
+        "fromElectron": "44.11.3",
+        "electron": "45.3.2",
+        "status": "pending-native-acceptance",
+        "sourceState": "Selected development candidate; no exact candidate source/native receipt is accepted by this inventory.",
+        "sourceIds": [
+          "electron-extensions-44",
+          "electron-extensions-45-3-2",
+          "noxviola-real-extension-99942809"
+        ],
+        "motivation": "The unchanged real package uses native extension sync storage during initialization, which the tested 44.11.3 engine does not support. Pinned 45.3.2 documents genuine native support instead of an application-side success-shaped shim.",
+        "documentedScope": "storage.sync is separate local disk storage with Chrome sync quotas, without cross-device synchronization. storage.managed is empty/read-only; writes are unsupported.",
+        "nativeAcceptance": "pending",
+        "realPackageAcceptance": "pending",
+        "legacyEngineTransitionAcceptance": "pending",
+        "requiredEvidence": [
+          "Exact candidate source and packaged core regression on both platforms.",
+          "Actual extension local/sync separation, restart, identity isolation, events and managed read-only errors.",
+          "Unchanged reviewed package initialization and every original functional/restart assertion.",
+          "Official Electron 44.11.3 original-factory seed followed by 45.3.2 production processes on the same generated profile; prior same-engine seed does not prove this upgrade."
+        ]
+      }
+    ]
   },
   "statusDefinitions": {
     "absent": "No implementation of the complete contract found in the reviewed baseline.",
@@ -3753,6 +4107,62 @@
       "accessedAt": "2026-11-16",
       "kind": "primary-implementation-documentation",
       "versionScope": "v45.3.2 documentation blob aa7439c148a27ce3331d9e9174ff8f4debd58f37: storage.sync uses separate local disk storage and Chrome sync quotas without cross-device synchronization; storage.managed is empty/read-only. Documentation does not qualify Noxviola native behavior, unchanged real packages or 44-to-45 profile preservation."
+    },
+    {
+      "id": "noxviola-source-1346e310",
+      "url": "https://github.com/Herbertofury/Noxviola/commit/1346e3105057d870bb1214db376b8e81cdb7367b",
+      "title": "1346e310 native-storage and genuine engine-upgrade candidate",
+      "accessedAt": "2026-11-16",
+      "kind": "project-source-checkpoint",
+      "versionScope": "Pinned Electron 45.3.2 candidate with official 44.11.3 seed admission; failed complete core and real-package gates remain historical failures."
+    },
+    {
+      "id": "noxviola-native-1346e310",
+      "url": "https://github.com/Herbertofury/Noxviola/actions/runs/43784727805",
+      "title": "1346e310 partial native storage and engine transition evidence",
+      "accessedAt": "2026-11-16",
+      "kind": "project-failed-acceptance-evidence",
+      "versionScope": "Windows stopped at a generated test canonical-path mismatch. Linux passed seed3 and first source19 checks, then restart Settings visibility failed after three passed checks; extension-storage restart and packaging were not reached."
+    },
+    {
+      "id": "noxviola-real-extension-1346e310",
+      "url": "https://github.com/Herbertofury/Noxviola/actions/runs/43784727817",
+      "title": "1346e310 unchanged-package popup sender failure",
+      "accessedAt": "2026-11-16",
+      "kind": "project-failed-acceptance-evidence",
+      "versionScope": "Both platforms passed four checks including actual page darkening, then popup response failed because native non-tab WebContents sender metadata was treated as a canonical tab. No full compatibility acceptance."
+    },
+    {
+      "id": "noxviola-source-33d0a9fc",
+      "url": "https://github.com/Herbertofury/Noxviola/commit/33d0a9fce77ef31b5064ea278cad1a4ed1c26706",
+      "title": "33d0a9fc authenticated message-source repair",
+      "accessedAt": "2026-11-16",
+      "kind": "project-source-checkpoint",
+      "versionScope": "Tree 1baa0320eb90a347c5856b54dae394090c5ece87; exact current enrollment and WebContents ownership classify non-tab native message senders; two test-only observation/canonicalization repairs preserve the original requirements."
+    },
+    {
+      "id": "noxviola-native-33d0a9fc",
+      "url": "https://github.com/Herbertofury/Noxviola/actions/runs/43785657651",
+      "title": "33d0a9fc independently verified core, storage and engine transition",
+      "accessedAt": "2026-11-16",
+      "kind": "project-acceptance-evidence",
+      "versionScope": "329 contracts / 80 syntax, official 44 seed/current 45 first process/restart 3/19/11, packaged 11/6, native local/sync separation/events/quota/identity/restart, all 69 raw Git inputs and complete distributions/48 ASAR members verified on both platforms."
+    },
+    {
+      "id": "noxviola-real-extension-33d0a9fc",
+      "url": "https://github.com/Herbertofury/Noxviola/actions/runs/43785657759",
+      "title": "33d0a9fc unchanged-package file-access query failure",
+      "accessedAt": "2026-11-16",
+      "kind": "project-failed-acceptance-evidence",
+      "versionScope": "Both platforms passed four checks including actual page darkening; popup request reached unchanged collectData but chrome.extension.isAllowedFileSchemeAccess was missing. Off/On, Settings and normal-close acceptance remain unreached."
+    },
+    {
+      "id": "chrome-extension-file-access-query",
+      "url": "https://developer.chrome.com/docs/extensions/reference/api/extension#method-isAllowedFileSchemeAccess",
+      "title": "Chrome file-scheme access query contract",
+      "accessedAt": "2026-11-16",
+      "kind": "primary-api-documentation",
+      "versionScope": "The query reports the user-controlled per-extension Allow access to File URLs setting. It does not grant file access, replace host-pattern admission or establish arbitrary-file access."
     }
   ],
   "capabilities": [

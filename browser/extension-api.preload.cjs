@@ -119,6 +119,17 @@
       for (const event of definition.events) api[event] = new ExtensionEvent(namespace+'.'+event);
       apis[namespace] = api;
     }
+    // Preserve native extension methods and live getters, adding only the
+    // missing query whose authority is the manager's actual native load grant.
+    const nativeExtension = chrome.extension || {};
+    const extensionDescriptors = Object.getOwnPropertyDescriptors(nativeExtension);
+    extensionDescriptors.isAllowedFileSchemeAccess = {value:call('extension.isAllowedFileSchemeAccess'),enumerable:true,configurable:true,writable:true};
+    if ('lastError' in nativeExtension) extensionDescriptors.lastError = {
+      enumerable:extensionDescriptors.lastError?.enumerable ?? true,
+      configurable:extensionDescriptors.lastError?.configurable ?? true,
+      get:() => bridgeLastError || nativeExtension.lastError,
+    };
+    apis.extension = Object.defineProperties({},extensionDescriptors);
     function iconImageData(value) {
       if (!value || typeof value!=='object') throw new TypeError('An ImageData object is required.');
       if ((value.colorSpace!==undefined && value.colorSpace!=='srgb') || (value.pixelFormat!==undefined && value.pixelFormat!=='rgba-unorm8')) throw new TypeError('Action icons currently accept 8-bit sRGB ImageData.');

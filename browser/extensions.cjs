@@ -286,6 +286,7 @@ const DOCUMENTED_METHODS = new Set([
 const HOST_METHODS = new Set(Object.entries({
   tabs:['get','getCurrent','query','create','update','remove','move','reload','onCreated','onUpdated','onRemoved','onActivated','onMoved'],
   windows:['get','getCurrent','getLastFocused','getAll','update','onCreated','onRemoved','onFocusChanged','onBoundsChanged'],
+  extension:['isAllowedFileSchemeAccess'],
   permissions:['contains','getAll'],
   cookies:['get','getAll','set','remove','getAllCookieStores','onChanged'],
   bookmarks:['get','getTree','getChildren','getSubTree','getRecent','search','create','update','move','remove','removeTree','onCreated','onChanged','onMoved','onRemoved','onChildrenReordered'],

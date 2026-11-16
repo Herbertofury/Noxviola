@@ -231,6 +231,12 @@ class ExtensionBridge {
     if (namespace === 'events') return this.eventSubscription(context,event,name,args[0]);
     if (namespace === 'tabs') return this.tabs(context,name,args,event);
     if (namespace === 'windows') return this.windows(context,name,args);
+    if (namespace === 'extension' && name === 'isAllowedFileSchemeAccess') {
+      if (args.length) reject('INVALID_ARGUMENT','extension.isAllowedFileSchemeAccess does not accept arguments.');
+      // The manager passes this exact accepted per-identity flag to native
+      // loadExtension. This reads the setting; it grants no new file access.
+      return context.allowFileAccess === true;
+    }
     if (namespace === 'permissions') return this.permissions(context,name,args);
     if (namespace === 'cookies') { this.permission(context,'cookies'); return this.cookies(context,name,args); }
     if (namespace === 'bookmarks') { this.permission(context,'bookmarks'); return this.bookmarks(context,name,args); }

@@ -127,6 +127,47 @@ test('permission query replies from a prior enrollment cannot survive re-enable'
   f.contexts.set(f.sessions[0],{...f.contexts.get(f.sessions[0]),epoch:'new-enrollment'});
   await assert.rejects(pending,{code:'EXTENSION_REVOKED'});
 });
+test('file-scheme query reads the current per-identity accepted flag without host permissions or mutations',async t=>{
+  const f=fixture(t,{permissions:[],hosts:[]});
+  f.contexts.get(f.sessions[1]).allowFileAccess=true;
+  assert.equal(await f.call('extension.isAllowedFileSchemeAccess'),false);
+  assert.equal(await f.call('extension.isAllowedFileSchemeAccess',[],f.event(1)),true);
+  // It is the user-controlled setting, not effective manifest host coverage.
+  f.contexts.get(f.sessions[0]).allowFileAccess=true;
+  assert.equal(await f.call('extension.isAllowedFileSchemeAccess'),true);
+  delete f.contexts.get(f.sessions[0]).allowFileAccess;
+  assert.equal(await f.call('extension.isAllowedFileSchemeAccess'),false);
+  f.contexts.get(f.sessions[0]).allowFileAccess='true';
+  assert.equal(await f.call('extension.isAllowedFileSchemeAccess'),false);
+  assert.equal(f.mutations.length,0);assert.equal(f.sessions[0].cookies.calls.length,0);
+  assert.equal(f.bridge.listeners.size,0);assert.equal(f.opened.length,0);
+});
+test('file-scheme query refuses caller-selected identities, foreign contexts and unsupported sibling APIs',async t=>{
+  const f=fixture(t);f.contexts.get(f.sessions[1]).allowFileAccess=true;
+  for(const args of [[{identity:'work'}],[true],['work'],[null]])await assert.rejects(f.call('extension.isAllowedFileSchemeAccess',args),{code:'INVALID_ARGUMENT'});
+  const website=f.event();website.senderFrame.url='https://allowed.test/';
+  await assert.rejects(f.call('extension.isAllowedFileSchemeAccess',[],website),{code:'UNAUTHENTICATED_EXTENSION'});
+  const foreign=f.event();foreign.sender.session={};
+  await assert.rejects(f.call('extension.isAllowedFileSchemeAccess',[],foreign),{code:'UNAUTHENTICATED_EXTENSION'});
+  await assert.rejects(f.call('extension.isAllowedFileSchemeAccess',[],f.event(0,OTHER)),{code:'EXTENSION_REVOKED'});
+  const dead=f.event();dead.senderFrame.detached=true;
+  await assert.rejects(f.call('extension.isAllowedFileSchemeAccess',[],dead),{code:'UNAUTHENTICATED_EXTENSION'});
+  await assert.rejects(f.call('extension.isAllowedIncognitoAccess'),{code:'UNSUPPORTED_API'});
+});
+test('file-scheme replies revalidate revocation, native origin and enrollment before returning a grant',async t=>{
+  for(const change of ['revoke','epoch','origin']){
+    const f=fixture(t);f.contexts.get(f.sessions[0]).allowFileAccess=true;
+    const pending=f.call('extension.isAllowedFileSchemeAccess');
+    if(change==='revoke')f.revoke();
+    else if(change==='epoch')f.contexts.set(f.sessions[0],{...f.contexts.get(f.sessions[0]),epoch:'new-enrollment',allowFileAccess:false});
+    else f.personal.senderFrame.url='https://outside.test/';
+    await assert.rejects(pending,{code:change==='origin'?'UNAUTHENTICATED_EXTENSION':'EXTENSION_REVOKED'});
+    if(change==='epoch'){
+      await assert.rejects(f.call('extension.isAllowedFileSchemeAccess'),{code:'STALE_EXTENSION_CONTEXT'});
+      assert.equal(await f.call('extension.isAllowedFileSchemeAccess',[],f.event()),false);
+    }
+  }
+});
 test('action icons load manifest defaults once and apply real global/per-tab ImageData and reset inheritance',async t=>{
   const png=Buffer.from((await rgbaPNG(imageData([100,80,60,255]))).dataUrl.split(',')[1],'base64');let reads=0;
   const f=fixture(t,{apiProfile:'firefox',defaultIcon:{16:'icons/default.png',32:'icons/default.png'},nativeImage:iconCodec(),readResource:async()=>{reads++;return png;}});

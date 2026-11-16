@@ -8,7 +8,7 @@ const {webcrypto,createHash} = require('node:crypto');
 const source = fs.readFileSync(require.resolve('../browser/extension-api.preload.cjs'),'utf8');
 const EXT = 'a'.repeat(32);
 function nativeEvent() { const listeners = new Set();return {addListener:fn=>listeners.add(fn),removeListener:fn=>listeners.delete(fn),hasListener:fn=>listeners.has(fn),emit(...args){return [...listeners].map(fn=>fn(...args));}}; }
-function fixture({address='chrome-extension://'+EXT+'/popup.html',contextIsolated=true,hasDocument=true,invoke=async()=>({ok:true,value:undefined}),subscribe=()=>({ok:true}),map}={}) {
+function fixture({address='chrome-extension://'+EXT+'/popup.html',contextIsolated=true,hasDocument=true,nativeExtension,invoke=async()=>({ok:true,value:undefined}),subscribe=()=>({ok:true}),map}={}) {
   const calls=[], mappings=[], subscriptions=[], nativeCalls=[], errors=[], contextBridgeCalls=[];
   const ipcRenderer=Object.assign(new EventEmitter(),{invoke:async(method,...args)=>{calls.push([method,...args]);return invoke(...args);},sendSync:(channel,direction,id)=>{
     if(channel==='noxviola-extension:subscription'){subscriptions.push([direction,id]);return subscribe(direction,id);}
@@ -21,6 +21,7 @@ function fixture({address='chrome-extension://'+EXT+'/popup.html',contextIsolate
   const nativeRuntime={id:EXT,getManifest:()=>({permissions:['tabs','contextMenus']}),onMessage:nativeEvent(),onConnect:nativeEvent(),getURL:value=>'chrome-extension://'+EXT+'/'+value};
   const nativePort={name:'real-port',sender:{tab:{id:110,url:'https://allowed.test/'}},postMessage:value=>nativeCalls.push(['port.postMessage',value]),disconnect:()=>nativeCalls.push(['port.disconnect']),onMessage:nativeEvent(),onDisconnect:nativeEvent()};
   const main=vm.createContext({crypto:webcrypto,chrome:{runtime:nativeRuntime,tabs:{sendMessage:(...args)=>{nativeCalls.push(['sendMessage',...args]);if(typeof args.at(-1)==='function'){args.at(-1)('native reply');return;}return Promise.resolve('native reply');},executeScript:(id,details,callback)=>{nativeCalls.push(['tabs.executeScript',id,details]);callback(['actual native result']);},connect:(...args)=>{nativeCalls.push(['connect',...args]);return nativePort;}},scripting:{executeScript:details=>{nativeCalls.push(['executeScript',details]);return Promise.resolve([{result:true}]);}}},console:{error:error=>errors.push(error.message),log(){},warn(){}}});
+  if(nativeExtension)main.chrome.extension=nativeExtension;
   main.location={href:address};main.URL=URL;if(hasDocument)main.document={baseURI:address};
   let required=0;
   const contextBridge={exposeInMainWorld:(key,value)=>{assert.equal(contextIsolated,true,'Native contextBridge rejects non-isolated contexts.');contextBridgeCalls.push('expose');Object.defineProperty(main,key,{value,configurable:true});},executeInMainWorld:({func})=>{assert.equal(contextIsolated,true);contextBridgeCalls.push('execute');return vm.runInContext('('+func.toString()+')()',main);}};
@@ -52,6 +53,44 @@ test('permission queries expose real callback and Mozilla Promise results withou
     await assert.rejects(f.browser.permissions.request({permissions:['contextMenus']}),/no grants changed/);
     let error;await new Promise(resolve=>f.chrome.permissions.remove({permissions:['tabs']},()=>{error=f.chrome.runtime.lastError?.message;resolve();}));
     assert.match(error,/no grants changed/);assert.equal(f.chrome.runtime.lastError,undefined);assert.deepEqual(f.subscriptions,[]);
+  }
+});
+test('file-scheme access query returns actual false and true through callbacks and Promises while preserving native extension siblings',async()=>{
+  for(const contextIsolated of [true,false]){
+    let allowed=false,nativeReads=0,nativeValue='first';const background={native:true};
+    const nativeExtension={getBackgroundPage:()=>background,getViews:()=>[background]};
+    Object.defineProperty(nativeExtension,'nativeLiveValue',{get:()=>{nativeReads++;return nativeValue;},enumerable:true,configurable:false});
+    const f=fixture({contextIsolated,nativeExtension,invoke:async(method,args)=>{assert.equal(method,'extension.isAllowedFileSchemeAccess');assert.equal(args.length,0);return {ok:true,value:allowed};}});
+    assert.equal(nativeReads,0,'Installing the query must not evaluate or freeze native getters.');
+    assert.equal(f.chrome.extension.getBackgroundPage,nativeExtension.getBackgroundPage);assert.equal(f.chrome.extension.getBackgroundPage(),background);
+    assert.equal(f.chrome.extension.getViews,nativeExtension.getViews);
+    assert.equal(f.chrome.extension.nativeLiveValue,'first');nativeValue='second';assert.equal(f.chrome.extension.nativeLiveValue,'second');
+    assert.equal(f.chrome.extension.isAllowedIncognitoAccess,undefined);
+    assert.equal(await f.chrome.extension.isAllowedFileSchemeAccess(),false);
+    assert.equal(await f.browser.extension.isAllowedFileSchemeAccess(),false);
+    let callbackCalls=0,returned;
+    const done=new Promise(resolve=>{returned=f.chrome.extension.isAllowedFileSchemeAccess(value=>{callbackCalls++;assert.equal(value,false);resolve();});});
+    assert.equal(returned,undefined);assert.equal(callbackCalls,0);await done;assert.equal(callbackCalls,1);
+    allowed=true;assert.equal(await f.browser.extension.isAllowedFileSchemeAccess(),true);
+    await new Promise(resolve=>f.chrome.extension.isAllowedFileSchemeAccess(value=>{assert.equal(value,true);resolve();}));
+    assert.equal(f.subscriptions.length,0);assert.equal(f.nativeCalls.length,0);
+  }
+});
+test('file-scheme callback errors expose live lastError and Promise rejection without returning a false grant or losing native getters',async()=>{
+  for(const contextIsolated of [true,false]){
+    let nativeError;const nativeExtension={};
+    Object.defineProperty(nativeExtension,'lastError',{get:()=>nativeError,enumerable:true,configurable:false});
+    const f=fixture({contextIsolated,nativeExtension,invoke:async()=>({ok:false,error:{code:'EXTENSION_REVOKED',message:'The native enrollment was revoked.'}})});
+    await assert.rejects(f.chrome.extension.isAllowedFileSchemeAccess(),error=>error.code==='EXTENSION_REVOKED');
+    await assert.rejects(f.browser.extension.isAllowedFileSchemeAccess(),/enrollment was revoked/);
+    let count=0;
+    await new Promise(resolve=>f.chrome.extension.isAllowedFileSchemeAccess(value=>{
+      count++;assert.equal(value,undefined);assert.match(f.chrome.runtime.lastError.message,/enrollment was revoked/);
+      assert.equal(f.chrome.extension.lastError,f.chrome.runtime.lastError);resolve();
+    }));
+    assert.equal(count,1);assert.equal(f.chrome.runtime.lastError,undefined);assert.equal(f.chrome.extension.lastError,undefined);
+    nativeError={message:'An actual native API error'};assert.equal(f.chrome.extension.lastError,nativeError);nativeError=undefined;
+    assert.equal(f.chrome.extension.lastError,undefined);
   }
 });
 test('native non-isolated background context installs real host create/event and Promise denial without contextBridge',async()=>{

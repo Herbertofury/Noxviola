@@ -388,7 +388,7 @@ test('popup and options URLs require a loaded authorized identity and remain in 
 test('unsupported and unknown APIs are concrete diagnostics, not a package allowlist or browser namespace ban', async t => {
   const {manager, root} = await setup(t);
   const preview = await manager.preview(await fixture(root, {permissions: ['nativeMessaging', 'storage'], sidebar_action: {default_panel: 'popup.html'}}, {
-    'content.js': 'browser.tabs.create({url: "https://example.test/"}); chrome.runtime.connectNative("test"); browser.storage.local.get("x"); chrome.permissions.contains({}); chrome.permissions.getAll(); chrome.permissions.request({}); chrome.permissions.onRemoved.addListener(()=>{});',
+    'content.js': 'browser.tabs.create({url: "https://example.test/"}); chrome.runtime.connectNative("test"); browser.storage.local.get("x"); chrome.permissions.contains({}); chrome.permissions.getAll(); chrome.permissions.request({}); chrome.permissions.onRemoved.addListener(()=>{}); chrome.extension.isAllowedFileSchemeAccess(); browser.extension.isAllowedFileSchemeAccess(); chrome.extension.isAllowedIncognitoAccess();',
   }));
   assert.equal(preview.compatibility.status, 'limited');
   assert.ok(preview.compatibility.detectedApis.includes('browser.tabs.create'));
@@ -398,6 +398,10 @@ test('unsupported and unknown APIs are concrete diagnostics, not a package allow
   for (const api of ['chrome.permissions.contains','chrome.permissions.getAll']) assert.ok(preview.compatibility.issues.some(issue => issue.api === api && issue.status === 'limited'));
   assert.ok(preview.compatibility.issues.some(issue => issue.api === 'chrome.permissions.request' && issue.code === 'PERMISSION_MUTATION_UNSUPPORTED' && issue.status === 'unsupported'));
   assert.ok(preview.compatibility.issues.some(issue => issue.api === 'chrome.permissions.onRemoved.addListener' && issue.status === 'unknown'));
+  for (const api of ['chrome.extension.isAllowedFileSchemeAccess','browser.extension.isAllowedFileSchemeAccess']) {
+    assert.ok(preview.compatibility.issues.some(issue => issue.api === api && issue.code === 'BROWSER_HOST_SUBSET' && issue.status === 'limited'));
+  }
+  assert.ok(preview.compatibility.issues.some(issue => issue.api === 'chrome.extension.isAllowedIncognitoAccess' && issue.code === 'API_NOT_VERIFIED' && issue.status === 'unknown'));
   const item = await manager.install(preview.token, {identities: ['personal'], permissionsAccepted: true});
   assert.equal(item.compatibility.functionalVerification, 'not-tested');
   assert.equal(item.identities[0].status, 'loaded');

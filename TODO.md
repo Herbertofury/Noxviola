@@ -1,3 +1,7 @@
+## Group-wide split action · 2026-11-16
+
+- [ ] Show every group tab simultaneously via accessible group actions, with no two-pane/count cap, preserved identities/order/metadata, balanced layout, restart and native acceptance. Rust-first retained; this menu integration composes existing Electron pane APIs without a new sidecar.
+
 # Active project work
 
 ## Prime feature: independent multi-pane browser

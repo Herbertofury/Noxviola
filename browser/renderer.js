@@ -131,12 +131,12 @@ function renderTabs(state) {
     if(group)wrap.dataset.groupColor=group.color;else delete wrap.dataset.groupColor;
     if(group&&inWorkspace&&!seenGroups.has(group.id)){
       seenGroups.add(group.id);let control=groupNodes.get(group.id);
-      if(!control){control=button('',()=>api.command('group-update',{id:group.id,collapsed:!workspaceData.groups.find(row=>row.id===group.id)?.collapsed}),'tab-group');groupNodes.set(group.id,control);}
-      control.textContent=`${group.collapsed?'▸':'▾'} ${group.name}`;control.dataset.groupColor=group.color;control.setAttribute('aria-expanded',String(!group.collapsed));ordered.push(control);
+      if(!control){control=button('',()=>api.command('group-update',{id:group.id,collapsed:!workspaceData.groups.find(row=>row.id===group.id)?.collapsed}),'tab-group');control.oncontextmenu=event=>{event.preventDefault();api.command('group-menu',group.id);};control.onkeydown=event=>{if(event.key==='ContextMenu'||event.shiftKey&&event.key==='F10'){event.preventDefault();api.command('group-menu',group.id);}};control.groupActions=button('⋯',()=>api.command('group-menu',group.id),'tab-group-actions');control.groupActions.setAttribute('aria-haspopup','menu');groupNodes.set(group.id,control);}
+      control.textContent=`${group.collapsed?'▸':'▾'} ${group.name}`;control.dataset.groupColor=group.color;control.setAttribute('aria-expanded',String(!group.collapsed));control.groupActions.setAttribute('aria-label',`Actions for group ${group.name}`);ordered.push(control,control.groupActions);
     }
     ordered.push(wrap);
   });
-  for(const [id,control] of groupNodes)if(!seenGroups.has(id)){control.remove();groupNodes.delete(id);}
+  for(const [id,control] of groupNodes)if(!seenGroups.has(id)){control.remove();control.groupActions?.remove();groupNodes.delete(id);}
   ordered.forEach((control,index)=>{if($('tabs').children[index]!==control)$('tabs').insertBefore(control,$('tabs').children[index]||null);});
   const revealKey=`${activeWorkspace}:${state.activeId}:${state.preferences.tabLayout}`;
   if(revealedTabKey!==revealKey){const selected=tabNodes.get(state.activeId);if(selected&&!selected.hidden){selected.scrollIntoView?.({block:'nearest',inline:'nearest'});revealedTabKey=revealKey;}}
@@ -722,7 +722,7 @@ function refreshWorkspaceState(){
     card.querySelector('[data-remove-workspace]').disabled=Boolean(item.protected)||count>0||workspacesWithGroups.has(item.id);
   }
   for(const card of $('group-items').querySelectorAll('[data-group-id]')){const item=groups.get(card.dataset.groupId);if(!item)continue;const count=groupCounts.get(item.id)||0;
-    card.querySelector('.workspace-count').textContent=`${count} tab${count===1?'':'s'} · ${item.collapsed?'Collapsed':'Expanded'}`;card.querySelector('[data-remove-group]').disabled=count>0;
+    card.querySelector('.workspace-count').textContent=`${count} tab${count===1?'':'s'} · ${item.collapsed?'Collapsed':'Expanded'}`;card.querySelector('[data-remove-group]').disabled=count>0;const split=card.querySelector('[data-split-group]');split.disabled=count===0;split.textContent=`Show all ${count} tabs in split view`;
   }
   for(const card of $('workspace-tabs').querySelectorAll('[data-assignment-tab-id]')){const tab=byId.get(card.dataset.assignmentTabId);if(!tab)continue;
     card.querySelector('h2').textContent=tab.title;card.querySelector('.source').textContent=`${identityName(tab.identity)} · ${tab.url}`;
@@ -756,6 +756,7 @@ function renderWorkspaces() {
     const card=node('article'),count=currentState.tabs.filter(tab=>tab.groupId===group.id).length,actions=node('div',undefined,'card-actions');card.dataset.groupId=group.id;
     card.append(node('h2',group.name),node('p',`${count} tab${count===1?'':'s'} · ${group.collapsed?'Collapsed':'Expanded'}`,'subtle workspace-count'));
     actions.append(action(group.collapsed?'Expand':'Collapse','group-update',{id:group.id,collapsed:!group.collapsed}),button('Edit',()=>editForm($('group-form'),group,['id','name','color'])));
+    const split=action(`Show all ${count} tabs in split view`,'group-split',group.id);split.dataset.splitGroup='';split.disabled=count===0;actions.append(split);
     const remove=action('Remove empty group','group-remove',group.id);remove.dataset.removeGroup='';remove.disabled=count>0;actions.append(remove);card.append(actions);return card;
   },'Create a group, then assign tabs below.');
   const tabIds=new Set(currentState.tabs.map(tab=>tab.id));for(const id of workspaceAssignments.keys())if(!tabIds.has(id))workspaceAssignments.delete(id);

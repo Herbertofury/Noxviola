@@ -149,7 +149,7 @@ function animateSidebar(){
 }
 function syncPanes(){
   const allowed=new Set(visibleTabs().map(tab=>tab.id));for(const id of paneLayout.ids(paneTree))if(!allowed.has(id))paneTree=paneLayout.remove(paneTree,id);
-  if(!paneTree&&activeId)paneTree={tabId:activeId};const members=new Set(paneLayout.ids(paneTree));if(members.size>1){const start=tabs.findIndex(t=>members.has(t.id)),block=tabs.filter(t=>members.has(t.id)),remaining=tabs.filter(t=>!members.has(t.id));remaining.splice(start,0,...block);tabs=remaining;}splitId=paneLayout.ids(paneTree).find(id=>id!==activeId)||null;
+  if(!paneTree&&activeId)paneTree={tabId:activeId};splitId=paneLayout.ids(paneTree).find(id=>id!==activeId)||null;
 }
 function currentPaneGeometry(){if(!win||win.isDestroyed())return {panes:[],dividers:[]};const [,height]=win.getContentSize(),g=currentSidebarGeometry();return paneLayout.layout(paneTree,{x:g.pageX,y:chromeHeight(),width:g.pageWidth,height:Math.max(0,height-chromeHeight())});}
 function layout() {
@@ -663,6 +663,16 @@ async function perform(name, value) {
       workspaces.get(value);if(value===activeWorkspaceId){showPage();break;}activeWorkspaceId=value;splitId=null;const candidates=visibleTabs(),tab=candidates.find(item=>item.id===workspaceLastTabs.get(value))||candidates[0];if(tab)activate(tab.id);else newTab();publishWorkspaces();break;
     }
     case 'workspace-recover':await recoverService(workspaces,'workspaces');publishWorkspaces();break;
+    case 'group-split':{
+      const group=workspaces.getGroup(value),members=tabs.filter(tab=>tab.saved.groupId===group.id&&tabWorkspace(tab)===group.workspaceId),ids=members.map(tab=>tab.id);if(!ids.length)throw new Error('This group has no tabs to show.');
+      const membership=new Set(ids),existing=[paneTree,...paneLayouts].find(tree=>{const leaves=paneLayout.ids(tree);return leaves.length===ids.length&&leaves.every(id=>membership.has(id));});if(existing){activate(ids.includes(activeId)?activeId:ids[0]);break;}
+      const next=paneLayout.fromTabs(ids),selected=new Set(ids),remaining=[paneTree,...paneLayouts].map(tree=>{for(const id of selected)tree=paneLayout.remove(tree,id);return tree;}).filter(tree=>paneLayout.ids(tree).length>1);
+      paneLayouts=remaining;paneTree=next;activate(ids.includes(activeId)?activeId:ids[0]);publish();break;
+    }
+    case 'group-menu':{
+      const group=workspaces.getGroup(value),count=tabs.filter(tab=>tab.saved.groupId===group.id&&tabWorkspace(tab)===group.workspaceId).length;
+      Menu.buildFromTemplate([{label:group.name,enabled:false},{label:`Show all ${count} tabs in split view`,enabled:count>0,click:()=>invoke('group-split',group.id)},{label:group.collapsed?'Expand group':'Collapse group',click:()=>invoke('group-update',{id:group.id,collapsed:!group.collapsed})},{type:'separator'},{label:'Manage group name and color…',click:()=>invoke('workspaces')}]).popup({window:win});break;
+    }
     case 'group-create':{const item=workspaces.createGroup(value);publishWorkspaces();return item;}
     case 'group-update':{const {id,...changes}=value||{};const item=workspaces.updateGroup(id,changes);publishWorkspaces();return item;}
     case 'group-remove':workspaces.removeGroup(value);publishWorkspaces();break;

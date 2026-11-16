@@ -1244,12 +1244,19 @@ async function firstLaunch() {
     const clickedView=await site();await clickedView.webContents.executeJavaScript("window.nativePaneClicks=0;document.addEventListener('click',()=>window.nativePaneClicks++,{once:true});true");clickedView.webContents.sendInputEvent({type:'mouseDown',x:20,y:20,button:'left',clickCount:1});clickedView.webContents.sendInputEvent({type:'mouseUp',x:20,y:20,button:'left',clickCount:1});await until(()=>clickedView.webContents.executeJavaScript('window.nativePaneClicks===1'),'native page receives its viewport pointer click');
     await captureShell('synthetic-three-independent-panes',1320,860);await command('split');
   });
+  await check('group action shows every native tab without metadata changes and preserves close restore',async()=>{
+    const workspaceId=(await state()).activeWorkspaceId,group=await command('group-create',{workspaceId,name:'All five native tabs',color:'cyan'}),ids=[];
+    for(let i=0;i<5;i++){await activate(i%2?expected.secondTab:expected.personalTab);const id=await command('new',`${context.origin}/page?whole-group=${i}`);await site();await command('tab-assign',{id,workspaceId,groupId:group.id});ids.push(id);}
+    const before=(await state()).tabs.map(({id,url,identity,groupId,pinned,workspaceId})=>({id,url,identity,groupId,pinned,workspaceId}));await command('workspaces');await until(()=>window.webContents.executeJavaScript(`Boolean(document.querySelector('[data-group-id="${group.id}"] [data-split-group]'))`),'whole group action button');await window.webContents.executeJavaScript(`document.querySelector('[data-group-id="${group.id}"] [data-split-group]').click()`);await until(async()=>(await state()).paneGeometry.panes.length===5,'all five group panes');const shown=await state();assert.deepEqual(shown.tabs.map(({id,url,identity,groupId,pinned,workspaceId})=>({id,url,identity,groupId,pinned,workspaceId})),before,'Group split cannot reorder, regroup, repin, close or replace tabs');assert.deepEqual(shown.paneGeometry.panes.map(p=>p.tabId),ids);await until(()=>views().filter(v=>v.getVisible()).length===5,'five actual native surfaces');
+    await command('pane-resize',{path:[],ratio:.4});await command('pane-swap',{first:ids[0],second:ids[1]});const tree=(await state()).paneTree;await command('group-split',group.id);assert.deepEqual((await state()).paneTree,tree,'Repeated show all preserves customized ratios and swapped visual order');await activate(expected.personalTab);await command('group-split',group.id);assert.deepEqual((await state()).paneTree,tree,'Show all restores a customized suspended group layout');await command('close',ids[4]);assert.equal((await state()).paneGeometry.panes.length,4);await command('restore');await command('group-split',group.id);assert.equal((await state()).paneGeometry.panes.length,5);for(const id of ids){await command('pane-focus',id);assertIdentity(await identityData(await site()),ids.indexOf(id)%2?'second':'personal');}
+    expected.wholeGroup={groupId:group.id,ids};await captureShell('synthetic-all-five-group-panes',1320,860);await command('split');
+  });
   await check('prepare independent workspace focus for real restart',async()=>{
     const previous=(await state()).activeId,previousWorkspace=(await state()).activeWorkspaceId,workspace=await command('workspace-create',{name:'Synthetic restart workspace',color:'cyan'}),first=await command('new'),last=await command('new');
     await command('tab-assign',{id:first,workspaceId:workspace.id});await command('tab-assign',{id:last,workspaceId:workspace.id});await command('activate',first);await command('activate',last);await command('activate',previous);
     expected.workspaceFocus={workspaceId:workspace.id,first,last,previous,previousWorkspace};
   });
-  await command('pane-split',{axis:'x'});await navigate(`${context.origin}/page?persisted-pane=1`);await command('pane-split',{axis:'y'});await navigate(`${context.origin}/page?persisted-pane=2`);await command('pane-resize',{path:[],ratio:0.4});expected.paneTree=(await state()).paneTree;
+  await command('group-split',expected.wholeGroup.groupId);await command('pane-resize',{path:[],ratio:0.4});expected.paneTree=(await state()).paneTree;
   const final = await state();
   expected.tabs = final.tabs.map(({ id, url, identity }) => ({ id, url, identity }));
   expected.profiles = final.profiles;
@@ -1271,7 +1278,7 @@ async function secondLaunch() {
     const restored = await state();
     assert.deepEqual(restored.tabs.map(({ id, url, identity }) => ({ id, url, identity })), expected.tabs);
     assert.deepEqual(restored.profiles, expected.profiles);
-    assert.equal(restored.activeId, expected.activeId);assert.deepEqual(restored.paneTree,expected.paneTree);assert.equal(restored.paneGeometry.panes.length,3);await until(()=>views().filter(v=>v.getVisible()).length===3,'restored real pane surfaces');await command('split');
+    assert.equal(restored.activeId, expected.activeId);assert.deepEqual(restored.paneTree,expected.paneTree);assert.deepEqual(restored.paneGeometry.panes.map(p=>p.tabId),expected.wholeGroup.ids);assert.equal(restored.paneGeometry.panes.length,5);await until(()=>views().filter(v=>v.getVisible()).length===5,'restored whole-group native surfaces');await command('split');
     const personal = await activate(expected.personalTab);
     await assertCookieLifetimes(expected.personalIdentity, 'personal', 'after-restart', {sessionCookieExpected: false});
     assertIdentity(await identityData(personal), 'personal', {sessionCookieExpected: false});

@@ -19,6 +19,7 @@ let revealedTabKey = '';
 const SIDEBAR_TOOLS=[['tabs','Open tabs'],['bookmarks','Bookmarks'],['history','History'],['downloads','Downloads']];
 const SIDEBAR_WEBSITES=[['ChatGPT','https://chatgpt.com/'],['Gemini','https://gemini.google.com/'],['Discord','https://discord.com/app'],['WhatsApp','https://web.whatsapp.com/'],['Telegram','https://web.telegram.org/'],['Instagram','https://www.instagram.com/'],['X','https://x.com/'],['Bluesky','https://bsky.app/'],['TikTok','https://www.tiktok.com/'],['Spotify','https://open.spotify.com/'],['Twitch','https://www.twitch.tv/'],['YouTube','https://www.youtube.com/'],['Gmail','https://mail.google.com/'],['Google Calendar','https://calendar.google.com/']];
 let sidebarData={},sidebarWebState={},sidebarRequest=0,sidebarDraftApps=[],sidebarDraftTools=[],sidebarAppsKey='';
+const sidebarWorkspaceNodes=new Map();
 function updateWindowOverlay(){
   const overlay=navigator.windowControlsOverlay,rect=overlay?.getTitlebarAreaRect();
   document.body.dataset.windowOverlay=String(Boolean(overlay?.visible));
@@ -186,6 +187,13 @@ function renderSidebarChrome(){
   document.body.dataset.sidebarRailExpanded=String(Boolean(pref.sidebarRailExpanded));
   const expand=$('sidebar-rail-expand'),expandLabel=pref.sidebarRailExpanded?'Collapse sidebar':'Expand sidebar';expand.title=expandLabel;expand.setAttribute('aria-label',expandLabel);expand.setAttribute('aria-pressed',String(Boolean(pref.sidebarRailExpanded)));
   $('sidebar-toggle').setAttribute('aria-pressed',String(pref.sidebarVisible!==false));
+  const workspaceRail=$('sidebar-workspaces'),workspaceList=$('sidebar-workspace-list'),items=Array.isArray(workspaceData.items)?workspaceData.items:[],workspaceIds=new Set(items.map(item=>item.id));workspaceRail.hidden=pref.sidebarShowWorkspaces===false;
+  for(const [id,control] of sidebarWorkspaceNodes)if(!workspaceIds.has(id)){control.remove();sidebarWorkspaceNodes.delete(id);}
+  items.forEach((item,index)=>{
+    let control=sidebarWorkspaceNodes.get(item.id);if(!control){control=button('',()=>api.command('workspace-switch',item.id),'sidebar-workspace-button');control.dataset.workspaceId=item.id;control.append(node('span','','sidebar-workspace-mark'));sidebarWorkspaceNodes.set(item.id,control);}
+    control.title=item.name;control.setAttribute('aria-label',`Switch to workspace ${item.name}`);control.setAttribute('aria-pressed',String(item.id===(currentState.activeWorkspaceId||'default')));control.dataset.workspaceColor=item.color||'purple';const mark=item.name.trim().slice(0,2).toLocaleUpperCase();if(control.firstElementChild.textContent!==mark)control.firstElementChild.textContent=mark;
+    if(workspaceList.children[index]!==control)workspaceList.insertBefore(control,workspaceList.children[index]||null);
+  });
   for(const button of $('sidebar-rail').querySelectorAll('[data-sidebar]')){const index=tools.findIndex(item=>item.id===button.dataset.sidebar);button.hidden=index<0||!tools[index].visible;button.style.order=String(index<0?tools.length:index);button.setAttribute('aria-pressed',String(Boolean(pref.sidebarVisible!==false&&pref.sidebarExpanded&&button.dataset.sidebar===active)));}
   $('sidebar-apps').style.order=String(tools.length+1);
   const container=$('sidebar-apps'),appsKey=JSON.stringify(apps.map(item=>[item.id,item.name]));
@@ -252,7 +260,7 @@ function renderSidebarToolEditor(){
   }));
 }
 api.onSidebarLayout?.(updateSidebarGeometry);api.onSidebarWebState?.(value=>{sidebarWebState=value||{};renderSidebarChrome();});
-$('sidebar-toggle').onclick=()=>run('sidebar-toggle');$('sidebar-rail-expand').onclick=()=>run('sidebar-rail-expand');$('sidebar-close').onclick=()=>run('sidebar-close');$('sidebar-manage').onclick=()=>run('settings');
+$('sidebar-toggle').onclick=()=>run('sidebar-toggle');$('sidebar-rail-expand').onclick=()=>run('sidebar-rail-expand');$('sidebar-workspace-manage').onclick=()=>run('workspaces');$('sidebar-close').onclick=()=>run('sidebar-close');$('sidebar-manage').onclick=()=>run('settings');
 for(const control of $('sidebar-rail').querySelectorAll('[data-sidebar]'))control.onclick=()=>run('sidebar-select',control.dataset.sidebar);
 $('sidebar-search').oninput=renderSidebarItems;
 $('sidebar-back').onclick=()=>run('sidebar-web-back');$('sidebar-forward').onclick=()=>run('sidebar-web-forward');$('sidebar-reload').onclick=()=>run('sidebar-web-reload');$('sidebar-mute').onclick=()=>run('sidebar-web-mute',!sidebarWebState.muted);$('sidebar-unload').onclick=()=>run('sidebar-web-unload');
@@ -275,6 +283,7 @@ function renderPreferenceForm(state) {
   editForm(form,values,['searchEngine','tabLayout','tabSearchPosition','tabSearchStyle','theme','accent','density','sidebarSide','sidebarWidth','homePage','customSearchURL']);
   form.elements.namedItem('sidebarVisible').checked=values.sidebarVisible!==false;
   form.elements.namedItem('sidebarRailExpanded').checked=Boolean(values.sidebarRailExpanded);
+  form.elements.namedItem('sidebarShowWorkspaces').checked=values.sidebarShowWorkspaces!==false;
   sidebarDraftApps=values.sidebarApps.map(item=>({...item}));renderSidebarAppEditor();sidebarDraftTools=values.sidebarTools.map(item=>({...item}));for(const [id] of SIDEBAR_TOOLS)if(!sidebarDraftTools.some(item=>item.id===id))sidebarDraftTools.push({id,visible:false});renderSidebarToolEditor();
   form.elements.namedItem('showBookmarksBar').checked=Boolean(values.showBookmarksBar);
   form.elements.namedItem('spellcheckEnabled').checked=values.spellcheckEnabled!==false;
@@ -576,7 +585,7 @@ $('settings-form').onsubmit=event=>{
   for(const name of ['searchEngine','tabLayout','tabSearchPosition','tabSearchStyle','theme','accent','density','homePage','customSearchURL'])value[name]=data.get(name);
   value.showBookmarksBar=form.elements.namedItem('showBookmarksBar').checked;
   value.spellcheckEnabled=form.elements.namedItem('spellcheckEnabled').checked;
-  value.sidebarVisible=form.elements.namedItem('sidebarVisible').checked;value.sidebarRailExpanded=form.elements.namedItem('sidebarRailExpanded').checked;value.sidebarSide=data.get('sidebarSide');value.sidebarWidth=Number(data.get('sidebarWidth'));value.sidebarApps=sidebarDraftApps.map(item=>({...item}));value.sidebarTools=sidebarDraftTools.map(item=>({...item}));
+  value.sidebarVisible=form.elements.namedItem('sidebarVisible').checked;value.sidebarRailExpanded=form.elements.namedItem('sidebarRailExpanded').checked;value.sidebarShowWorkspaces=form.elements.namedItem('sidebarShowWorkspaces').checked;value.sidebarSide=data.get('sidebarSide');value.sidebarWidth=Number(data.get('sidebarWidth'));value.sidebarApps=sidebarDraftApps.map(item=>({...item}));value.sidebarTools=sidebarDraftTools.map(item=>({...item}));
   if(currentState.preferences.sidebarActive?.startsWith('app:')&&!value.sidebarApps.some(item=>`app:${item.id}`===currentState.preferences.sidebarActive)){value.sidebarActive='bookmarks';value.sidebarExpanded=false;}
   for(const name of ['home','library','extensions','split'])value.toolbar[name]=form.elements.namedItem(`toolbar.${name}`).checked;
   for(const [key,entry] of data)if(key.startsWith('shortcut.'))value.shortcuts[key.slice(9)]=entry;
@@ -743,7 +752,7 @@ function renderWorkspaces() {
     card.append(details,controls);return card;
   },'There are no tabs in this workspace.');
 }
-api.onWorkspaces(data=>{hideTabPreview();workspaceData=data;renderWorkspaceSelector();renderTabs(currentState);if(currentState.panel==='workspaces')renderWorkspaces();});
+api.onWorkspaces(data=>{hideTabPreview();workspaceData=data;renderWorkspaceSelector();renderSidebarChrome();renderTabs(currentState);if(currentState.panel==='workspaces')renderWorkspaces();});
 $('workspace-reset').onclick=resetWorkspaceForm;$('group-reset').onclick=resetGroupForm;
 $('workspace-form').onsubmit=event=>{event.preventDefault();const form=event.currentTarget,value=Object.fromEntries(new FormData(form)),editing=Boolean(value.id);if(!editing)delete value.id;saveForm(form,editing?'workspace-update':'workspace-create',value,resetWorkspaceForm);};
 $('group-form').onsubmit=event=>{event.preventDefault();const form=event.currentTarget,value=Object.fromEntries(new FormData(form)),editing=Boolean(value.id);if(!editing){delete value.id;value.workspaceId=currentState.activeWorkspaceId||'default';}saveForm(form,editing?'group-update':'group-create',value,resetGroupForm);};

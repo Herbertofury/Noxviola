@@ -41,7 +41,8 @@ test('every application require resolves to an allowlisted module, declared prod
 test('preview cross-packaging selects an explicit target and rejects malformed targets', () => {
  const { packageTarget } = require('../scripts/package-preview.cjs');
  assert.deepEqual(packageTarget(['--platform', 'win32', '--arch', 'x64']), { platform: 'win32', arch: 'x64' });
- for (const args of [['--platform'], ['--platform', '../private'], ['--arch', 'all'], ['--overwrite'], ['--platform', '--arch', 'x64']]) {
+ assert.equal(packageTarget(['--out','previews']).out,'previews');
+ for (const args of [['--platform'], ['--out'], ['--platform', '../private'], ['--arch', 'all'], ['--overwrite'], ['--platform', '--arch', 'x64']]) {
   assert.throws(() => packageTarget(args), /Unknown|incomplete|Unsupported/);
  }
 });

@@ -179,7 +179,7 @@ function packageTarget(argv = process.argv.slice(2)) {
   for (let index = 0; index < argv.length; index++) {
     const option = argv[index];
     if (option === '--help') return null;
-    if (!['--platform', '--arch', '--receipt'].includes(option) || !argv[index + 1] || argv[index + 1].startsWith('--')) {
+    if (!['--platform', '--arch', '--receipt', '--out'].includes(option) || !argv[index + 1] || argv[index + 1].startsWith('--')) {
       throw new Error(`Unknown or incomplete packaging argument: ${option}`);
     }
     target[option.slice(2)] = argv[++index];
@@ -192,10 +192,10 @@ function packageTarget(argv = process.argv.slice(2)) {
 async function main(argv = process.argv.slice(2)) {
   const options = packageTarget(argv);
   if (!options) {
-    console.log('node scripts/package-preview.cjs [--platform linux|win32|darwin] [--arch x64|arm64] [--receipt FILE]\nPackages and verifies the actual ASAR without launching it. Defaults to the current host. A preview is not native acceptance.');
+    console.log('node scripts/package-preview.cjs [--platform linux|win32|darwin] [--arch x64|arm64] [--receipt FILE] [--out DIRECTORY]\nPackages and verifies the actual ASAR without launching it. Defaults to the current host. A preview is not native acceptance.');
     return;
   }
-  const { receipt, ...target } = options;
+  const { receipt, out, ...target } = options;
   const root = path.resolve(__dirname, '..');
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'noxviola-package-'));
   try {
@@ -210,7 +210,7 @@ async function main(argv = process.argv.slice(2)) {
     const { packager } = await import('@electron/packager');
     const output = await packager({
       dir: stage, name: 'Noxviola', platform: target.platform, arch: target.arch,
-      electronVersion: info.electron, out: path.join(root, 'dist-preview', applicationManifestSha256.slice(0, 16)),
+      electronVersion: info.electron, out: path.join(out ? path.resolve(out) : path.join(root, 'dist-preview'), applicationManifestSha256.slice(0, 16)),
       asar: true, prune: false, overwrite: false,
     });
     if (output.length !== 1) throw new Error('No unique preview was produced. An existing output is preserved; move it aside before packaging again.');

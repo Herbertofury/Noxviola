@@ -38,7 +38,7 @@ let permissionOpening = null, extensionBusy = false;
 let resolveIdentitySession, history, bookmarks, workspaces, follows, followTimer, resourceMonitor, extensionBridge, spellcheck;
 let activeWorkspaceId = 'default', nextRuntimeTabId = 1, preferencePreview = null;
 let sidebarProgress=0,sidebarRailProgress=0,sidebarTimer=null;
-const runtimeTabs = new Map(), nativeTabs = new Map(), sessionTargets = new Map(), browserEvents = new EventEmitter();
+const runtimeTabs = new Map(), nativeTabs = new Map(), sessionTargets = new Map(), workspaceLastTabs = new Map(), browserEvents = new EventEmitter();
 const configuredSessions = new Set(), identityInitializations = new Map(), extensionWindows = new Map(), pendingOperations = new Set();
 const SIDEBAR = 210;
 const chromeHeight = () => (preferences.tabLayout === 'vertical' ? 40 : 76) + (preferences.showBookmarksBar ? 32 : 0);
@@ -66,7 +66,7 @@ function eventAction(action) {
   }
 }
 function savedTab(tab) { return {...tab.saved, id:tab.id, url:tab.url, title:tab.title, identity:tab.identity}; }
-function snapshot() { return {...originalSession, version:1, profiles, preferences, activeId, activeWorkspaceId, tabs:tabs.map(savedTab)}; }
+function snapshot() { const tabWorkspaces=new Map(tabs.map(tab=>[tab.id,tabWorkspace(tab)]));return {...originalSession, version:1, profiles, preferences, activeId, activeWorkspaceId, workspaceLastTabs:Object.fromEntries([...workspaceLastTabs].filter(([workspace,id])=>tabWorkspaces.get(id)===workspace)), tabs:tabs.map(savedTab)}; }
 function tabFromSaved(saved) {
   const tab = {saved, id:saved.id, runtimeId:nextRuntimeTabId++,url:saved.url,title:saved.title,identity:saved.identity,view:null,loading:false,initializing:false,favicon:'',faviconRevision:0};
   runtimeTabs.set(tab.runtimeId,tab);return tab;
@@ -259,7 +259,7 @@ function ensureView(tab) {
 function activate(id) {
   tabPreview.hide();
   const tab = tabs.find(row => row.id === id); if (!tab || closing) return;
-  const changed = activeId !== id; activeId = id; currentIdentity = tab.identity;activeWorkspaceId=tabWorkspace(tab);
+  const changed = activeId !== id; activeId = id; currentIdentity = tab.identity;activeWorkspaceId=tabWorkspace(tab);workspaceLastTabs.set(activeWorkspaceId,id);
   if (splitId === id) splitId = null;
   showPage(); ensureView(tab);syncSidebarWeb();layout();publish(changed);publishHistory();publishBookmarks();publishWorkspaces();publishExtensionActions();
   if(changed)hostEvent(tab.identity,'tabs.onActivated',{tabId:tab.runtimeId,windowId:win.id});
@@ -288,7 +288,7 @@ function closeTab(id) {
   if (closing) return;
   const index = tabs.findIndex(tab => tab.id === id); if (index < 0) return;
   const workspaceIndex=visibleTabs().findIndex(tab=>tab.id===id);
-  const [tab] = tabs.splice(index,1); closed.push({saved:savedTab(tab),position:index,closedId:crypto.randomUUID()}); removeView(tab);runtimeTabs.delete(tab.runtimeId);
+  const [tab] = tabs.splice(index,1);if(workspaceLastTabs.get(tabWorkspace(tab))===id)workspaceLastTabs.delete(tabWorkspace(tab));closed.push({saved:savedTab(tab),position:index,closedId:crypto.randomUUID()}); removeView(tab);runtimeTabs.delete(tab.runtimeId);
   hostEvent(tab.identity,'tabs.onRemoved',tab.runtimeId,{windowId:win.id,isWindowClosing:false});
   if (splitId === id) splitId = null;
   if (!tabs.length) newTab();
@@ -342,8 +342,9 @@ function assignTab(tab,workspaceId,groupId=null) {
   workspaces.get(workspaceId);
   if(groupId&&!workspaces.listGroups(workspaceId).some(group=>group.id===groupId))throw new Error('Choose a group in the selected workspace.');
   if(tabWorkspace(tab)===workspaceId&&(tab.saved.groupId||null)===groupId)return;
+  const previousWorkspace=tabWorkspace(tab);if(previousWorkspace!==workspaceId&&workspaceLastTabs.get(previousWorkspace)===tab.id)workspaceLastTabs.delete(previousWorkspace);
   tab.saved={...tab.saved,workspaceId,groupId};
-  if(tab.id===activeId){activeWorkspaceId=workspaceId;splitId=null;}
+  if(tab.id===activeId){activeWorkspaceId=workspaceId;workspaceLastTabs.set(workspaceId,tab.id);splitId=null;}
   if(splitId===tab.id&&workspaceId!==activeWorkspaceId)splitId=null;
   layout();publish();publishWorkspaces();
 }
@@ -640,9 +641,9 @@ async function perform(name, value) {
     case 'bookmark-recover':await recoverService(bookmarks,'bookmarks');publishBookmarks();break;
     case 'workspace-create':{const item=workspaces.create(value);publishWorkspaces();return item;}
     case 'workspace-update':{const {id,...changes}=value||{};const item=workspaces.update(id,changes);publishWorkspaces();return item;}
-    case 'workspace-remove':workspaces.remove(value);publishWorkspaces();break;
+    case 'workspace-remove':workspaces.remove(value);workspaceLastTabs.delete(value);publish();publishWorkspaces();break;
     case 'workspace-switch':{
-      workspaces.get(value);activeWorkspaceId=value;splitId=null;const tab=visibleTabs()[0];if(tab)activate(tab.id);else newTab();publishWorkspaces();break;
+      workspaces.get(value);if(value===activeWorkspaceId){showPage();break;}activeWorkspaceId=value;splitId=null;const candidates=visibleTabs(),tab=candidates.find(item=>item.id===workspaceLastTabs.get(value))||candidates[0];if(tab)activate(tab.id);else newTab();publishWorkspaces();break;
     }
     case 'workspace-recover':await recoverService(workspaces,'workspaces');publishWorkspaces();break;
     case 'group-create':{const item=workspaces.createGroup(value);publishWorkspaces();return item;}
@@ -796,8 +797,10 @@ async function start() {
   spellcheck.attach(session.defaultSession);
   resolveIdentitySession = createIdentitySessionResolver({session,root:app.getPath('sessionData')});
   tabs = originalSession.tabs.map(tabFromSaved); activeId = originalSession.activeId;
+  for(const [workspace,id] of Object.entries(originalSession.workspaceLastTabs||{}))workspaceLastTabs.set(workspace,id);
   currentIdentity = active()?.identity || 'personal';
   activeWorkspaceId=active()?tabWorkspace(active()):originalSession.activeWorkspaceId||'default';
+  if(active())workspaceLastTabs.set(activeWorkspaceId,activeId);
   vaultFile = path.join(dataDirectory,'private-vault.json'); accountFile = path.join(dataDirectory,'private-accounts.json');
   try { const opened = vaultStore.inspect(vaultFile); if (opened.status === 'recovery') {vaultRecovery = opened;vaultError = 'The library needs explicit recovery before editing.';} else vaultDocument = opened.value; } catch (error) {vaultError = error.message;}
   try { const opened = accountStore.inspect(accountFile); if (opened.status === 'recovery') {accountRecovery = opened;accountError = 'The account inventory needs explicit recovery before editing.';} else accounts = opened.value.accounts; } catch (error) {accountError = error.message;}

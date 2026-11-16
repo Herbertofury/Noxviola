@@ -80,6 +80,10 @@ function cleanState(raw = {}, {strict = false} = {}) {
   if (strict && raw.preferences !== undefined && (!raw.preferences || typeof raw.preferences !== 'object' || Array.isArray(raw.preferences))) throw storage.fail('Saved preferences have an unsupported format.', 'UNSUPPORTED_DATA');
   const preferences = preferenceStore.preferences(raw.preferences || {},{strict});
   if(raw.activeWorkspaceId!==undefined&&(typeof raw.activeWorkspaceId!=='string'||!raw.activeWorkspaceId||/[\u0000-\u001f\u007f]/.test(raw.activeWorkspaceId)))throw storage.fail('The saved active workspace has an unsupported value.','UNSUPPORTED_DATA');
+  if(raw.workspaceLastTabs!==undefined){
+    if(!raw.workspaceLastTabs||typeof raw.workspaceLastTabs!=='object'||Array.isArray(raw.workspaceLastTabs))throw storage.fail('Saved workspace focus data is invalid.','UNSUPPORTED_DATA');
+    for(const [workspaceId,tabId] of Object.entries(raw.workspaceLastTabs))if(!workspaceId||/[\u0000-\u001f\u007f]/.test(workspaceId)||typeof tabId!=='string'||!tabId)throw storage.fail('Saved workspace focus data is invalid.','UNSUPPORTED_DATA');
+  }
   if(raw.siteZooms!==undefined){
     if(!raw.siteZooms||typeof raw.siteZooms!=='object'||Array.isArray(raw.siteZooms))throw storage.fail('Saved page zoom preferences are invalid.','UNSUPPORTED_DATA');
     for(const [identity,values] of Object.entries(raw.siteZooms)){

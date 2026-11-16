@@ -986,6 +986,17 @@ async function firstLaunch() {
     for(const id of [ids[0],ids[2],ids[3],ids[4]])await command('close',id);
     await command('workspace-remove',workspace.id);
   });
+  await check('sidebar workspace buttons switch without losing the last selected tab', async () => {
+    const before=await state(),previous=before.activeId,previousWorkspace=before.activeWorkspaceId,workspace=await command('workspace-create',{name:'Synthetic launcher workspace',color:'blue'});
+    const first=await command('new'),second=await command('new');await command('tab-assign',{id:first,workspaceId:workspace.id});await command('tab-assign',{id:second,workspaceId:workspace.id});await command('activate',first);await command('activate',second);await command('activate',previous);
+    await until(()=>window.webContents.executeJavaScript(`Boolean(document.querySelector('[data-workspace-id="${workspace.id}"].sidebar-workspace-button'))`),'created workspace launcher button');
+    await window.webContents.executeJavaScript(`document.querySelector('[data-workspace-id="${workspace.id}"].sidebar-workspace-button').click()`);
+    await until(async()=>{const s=await state();return s.activeWorkspaceId===workspace.id&&s.activeId===second;},'the last selected workspace tab');
+    await window.webContents.executeJavaScript(`document.querySelector('[data-workspace-id="${workspace.id}"].sidebar-workspace-button').click()`);assert.equal((await state()).activeId,second,'Selecting the current workspace must not switch its active tab');
+    await command('close',second);assert.equal((await state()).activeId,first);await command('workspace-switch',previousWorkspace);assert.equal((await state()).activeId,previous);
+    await command('workspace-switch',workspace.id);assert.equal((await state()).activeId,first,'Closing the remembered tab selects a valid remaining tab');
+    await command('workspace-switch',previousWorkspace);await command('close',first);await command('workspace-remove',workspace.id);
+  });
   await check('the real tab-search window filters, closes and restores a tab', async () => {
     const previous=(await state()).activeId,url=`${context.origin}/page?tabSearch=unique-fixture`,id=await command('new',url);await site(url);
     await window.webContents.executeJavaScript("document.getElementById('tab-search-toggle').click()");

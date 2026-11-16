@@ -142,6 +142,9 @@ body[data-tab-layout=vertical] #tab-strip{left:var(--vertical-tab-left,0px)}
 #sidebar-rail{position:fixed;z-index:2;top:var(--chrome-height);bottom:0;left:var(--sidebar-rail-x,0px);width:var(--sidebar-rail-width,48px);display:flex;flex-direction:column;justify-content:space-between;overflow:hidden auto;background:#100b17;border-right:1px solid #3e2b4e}
 .sidebar-rail-items,.sidebar-rail-bottom,#sidebar-apps{display:flex;flex-direction:column;align-items:center;gap:4px;padding:5px 3px}
 #sidebar-apps{padding:0}
+#sidebar-workspaces,#sidebar-workspace-list{display:flex;flex-direction:column;align-items:center;gap:3px}#sidebar-workspaces{order:-1;padding-bottom:6px;margin-bottom:3px;border-bottom:1px solid #493453}
+.sidebar-workspace-mark{display:grid;place-items:center;flex:none;width:19px;height:19px;border:1px solid var(--workspace-color,#b595e6);border-radius:6px;color:var(--workspace-color,#b595e6);font-size:9px;font-weight:700;line-height:1}
+[data-workspace-color=grey]{--workspace-color:#a4a5ac}[data-workspace-color=blue]{--workspace-color:#78acfb}[data-workspace-color=red]{--workspace-color:#e88181}[data-workspace-color=yellow]{--workspace-color:#d6c35e}[data-workspace-color=green]{--workspace-color:#7ecb9c}[data-workspace-color=pink]{--workspace-color:#e9a3d5}[data-workspace-color=purple]{--workspace-color:#b595e6}[data-workspace-color=cyan]{--workspace-color:#74cad3}[data-workspace-color=orange]{--workspace-color:#eab17b}
 #sidebar-rail button{display:grid;place-items:center;flex:none;width:36px;min-width:36px;height:36px;min-height:36px;padding:8px;border:1px solid transparent;border-radius:9px;background:transparent;color:#ad8bd0}
 #sidebar-rail button:hover{background:#ffffff12;color:#eadcff}
 #sidebar-rail button[aria-pressed=true]{background:#59337b;border-color:#a379cf;color:#fff;box-shadow:inset 0 1px #ffffff20}
@@ -149,6 +152,7 @@ body[data-tab-layout=vertical] #tab-strip{left:var(--vertical-tab-left,0px)}
 #sidebar-rail .sidebar-app-button{font-size:14px;font-weight:650}
 .sidebar-app-icon{display:grid;place-items:center;flex:none;width:19px;height:19px;font-size:10px;line-height:1}.sidebar-app-icon img{display:block;width:19px;height:19px;object-fit:contain;border-radius:4px}
 body[data-sidebar-rail-expanded=true] .sidebar-rail-items,body[data-sidebar-rail-expanded=true] .sidebar-rail-bottom,body[data-sidebar-rail-expanded=true] #sidebar-apps{width:100%;align-items:stretch}
+body[data-sidebar-rail-expanded=true] #sidebar-workspaces,body[data-sidebar-rail-expanded=true] #sidebar-workspace-list{width:100%;align-items:stretch}
 body[data-sidebar-rail-expanded=true] #sidebar-rail button{display:flex;justify-content:flex-start;gap:11px;width:100%;padding:8px;overflow:hidden;text-align:left}
 body[data-sidebar-rail-expanded=true] #sidebar-rail button::after{content:attr(title);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:500}
 body[data-sidebar-rail-expanded=true] #sidebar-rail svg{flex:none}

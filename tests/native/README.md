@@ -43,6 +43,8 @@ npm run test:native -- --package-receipt native-results/package.json --public-ht
 python tests/native/portable-archive.py --receipt native-results/package.json --output native-results/distribution
 ```
 
+Pass `--out DIRECTORY` to `package:preview` to place the hashed preview directory on another drive. Existing packages are not overwritten.
+
 The package gate requires a clean Git checkpoint and the same platform and
 architecture as the runner. Before launch it verifies the complete executable
 distribution against `PACKAGE-MANIFEST.json`, the actual ASAR allowlist and file

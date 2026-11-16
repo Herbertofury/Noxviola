@@ -117,6 +117,15 @@ test('DOM: sidebar site icons keep focus, respect identity and reject remote ima
   h.update({currentIdentity:'work'});assert.equal(control.querySelector('img'),null);assert.equal(control.querySelector('.sidebar-app-icon').textContent,'CH');
   h.emit('onSidebarWebState',{identity:'work',icons:[{site:'https://example.test/',icon:'https://tracker.test/icon.png'}]});assert.equal(control.querySelector('img'),null);
 });
+test('DOM: workspace launcher follows canonical workspace updates without replacing focused buttons',async t=>{
+  const h=await harness(t,{initial:state({activeWorkspaceId:'default',sidebarGeometry:{rail:48,panel:0,railX:0,panelX:48,tabX:48,pageX:48,pageRight:0}})});
+  const items=[{id:'default',name:'Default',color:'purple'},{id:'work',name:'Creative work',color:'blue'}];h.emit('onWorkspaces',{items,groups:[]});
+  const work=h.document.querySelector('[data-workspace-id="work"].sidebar-workspace-button');assert.equal(work.title,'Creative work');assert.equal(work.dataset.workspaceColor,'blue');work.focus();
+  h.emit('onWorkspaces',{items,groups:[]});assert.equal(h.document.querySelector('[data-workspace-id="work"].sidebar-workspace-button'),work);assert.equal(h.document.activeElement,work);
+  work.click();await tick();assert.deepEqual(h.calls.find(call=>call.name==='workspace-switch').value,'work');h.update({activeWorkspaceId:'work'});assert.equal(work.getAttribute('aria-pressed'),'true');
+  h.emit('onWorkspaces',{items:[items[1],items[0]],groups:[]});assert.equal(h.$('sidebar-workspace-list').firstElementChild,work);
+  h.update({preferences:{searchEngine:'duckduckgo',tabLayout:'horizontal',sidebarShowWorkspaces:false}});assert.equal(h.$('sidebar-workspaces').hidden,true);
+});
 test('DOM: sidebar tool visibility and ordering are saved through the real settings form',async t=>{
   const h=await harness(t,{initial:state({panel:'settings'})});
   const rows=()=>[...h.document.querySelectorAll('.sidebar-tool-row')];

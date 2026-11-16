@@ -17,6 +17,11 @@ function identityFixture(t) {
   t.after(() => fs.rmSync(directory, {recursive: true, force: true}));
   return path.join(directory, 'session.json');
 }
+test('workspace focus data survives sessions and invalid saved values are rejected',t=>{
+  const file=identityFixture(t),state=cleanState({version:1,profiles:[{id:'personal',name:'Personal'}],tabs:[{id:'one',identity:'personal',url:'https://example.test/',workspaceId:'default'}],activeId:'one',workspaceLastTabs:{default:'one',future:'missing'}});
+  saveState(file,state);assert.deepEqual(readState(file).workspaceLastTabs,{default:'one',future:'missing'});const before=fs.readFileSync(file);
+  for(const value of [null,[],{default:4},{'bad\nkey':'one'}])assert.throws(()=>saveState(file,{...state,workspaceLastTabs:value}));assert.deepEqual(fs.readFileSync(file),before);
+});
 function identityDocument(profiles, identities = []) {
   return {version: 1, profiles: profiles.map(id => ({id, name: id})),
     tabs: identities.map((identity, index) => ({id: `tab-${index}`, identity, url: 'https://example.com/'}))};

@@ -499,7 +499,7 @@ async function runPackagedPhase(packaged, context, phase, { publicHttps = false 
           const page = await evaluate(target, '({width:innerWidth,height:innerHeight})');
           const current = await state();
           result.customizedGeometry = { shell: outer, page, chromeHeight: current.chromeHeight, sidebarWidth: 210 };
-          return current.chromeHeight === 144 && page.width === outer.width - 210 && page.height === outer.height - current.chromeHeight;
+          return current.chromeHeight === 72 && page.width === outer.width - 210 && page.height === outer.height - current.chromeHeight;
         }, 'actual page viewport below the bookmarks bar and beside vertical tabs');
         assertStores(await evaluate(target, 'window.fixture.readIdentity()'), 'packaged-personal');
       });

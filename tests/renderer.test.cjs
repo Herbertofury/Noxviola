@@ -73,6 +73,27 @@ async function painted(h, id) {
     observer.observe(target, {attributes: true});
   });
 }
+test('DOM: tab surface updates its icon and status without replacing its accessible controls', async t => {
+  const h=await harness(t),tab=h.document.querySelector('.tab'),select=tab.querySelector('[role="tab"]');
+  const favicon='data:image/png;base64,cG5n';
+  h.update({tabs:[{...state().tabs[0],title:'Real site',favicon,pinned:true,muted:true}]});
+  assert.equal(tab.querySelector('[role="tab"]'),select);
+  assert.equal(select.querySelector('.tab-title').textContent,'Real site');
+  assert.equal(select.querySelector('.tab-icon img').getAttribute('src'),favicon);
+  assert.match(select.getAttribute('aria-label'),/pinned, muted/);
+  assert.equal(tab.querySelector('.tab-close').getAttribute('aria-label'),'Close Real site');
+  h.update({tabs:[{...state().tabs[0],title:'Next page',favicon:'https://third-party.test/icon.png'}]});
+  assert.equal(select.querySelector('.tab-icon img'),null);
+  assert.equal(select.querySelector('.tab-title').textContent,'Next page');
+});
+test('DOM: find opens from its toolbar button or shortcut and Escape closes it', async t => {
+  const h=await harness(t);
+  assert.equal(h.$('find-controls').hidden,true);
+  h.$('find-toggle').click();assert.equal(h.$('find-controls').hidden,false);assert.equal(h.document.activeElement,h.$('find'));
+  h.input(h.$('find'),'needle');h.$('find').dispatchEvent(new h.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+  assert.equal(h.$('find-controls').hidden,true);assert.equal(h.$('find').value,'');assert.equal(h.document.activeElement,h.$('find-toggle'));
+  h.emit('onFind');assert.equal(h.$('find-controls').hidden,false);assert.equal(h.document.activeElement,h.$('find'));
+});
 function findButton(root, label) {
   const found = [...root.querySelectorAll('button')].find(button => button.textContent === label);
   assert.ok(found, `button ${label} exists`);

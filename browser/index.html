@@ -8,24 +8,28 @@
 <body>
 <header>
  <div id="tab-strip">
+  <img class="chrome-brand" src="assets/noxviola.png" alt="Noxviola">
   <div id="tabs" role="tablist" aria-label="Browser tabs"></div>
   <button id="new-tab" data-command="new" type="button" title="New tab" aria-label="New tab">＋</button>
+  <p id="notice" role="status"></p><button id="retry-save" data-command="save-session" hidden>Retry save</button>
  </div>
  <nav aria-label="Browser navigation">
   <select id="identity" aria-label="Browser identity"></select>
-  <button id="add-identity" title="Add named identity" aria-label="Add named identity">♙</button>
+  <select id="workspace-select" aria-label="Current workspace"><option value="default">Default</option></select>
+  <button id="add-identity" title="Add named identity" aria-label="Add named identity"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-4 2.4-6 6-6s6 2 6 6M18 8v6m-3-3h6"/></svg></button>
   <input id="identity-name" placeholder="Identity name · Enter" aria-label="New identity name" hidden>
-  <button id="back" title="Back" aria-label="Back">←</button><button id="forward" title="Forward" aria-label="Forward">→</button>
-  <button data-command="reload" title="Reload" aria-label="Reload">↻</button>
-  <button data-command="home" data-toolbar="home" title="Home page" aria-label="Home page">⌂</button>
+  <button id="back" title="Back" aria-label="Back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m6-6-6 6 6 6"/></svg></button><button id="forward" title="Forward" aria-label="Forward"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></button>
+  <button data-command="reload" title="Reload" aria-label="Reload"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 7v5h-5M19 12a7 7 0 1 1-2-5"/></svg></button>
+  <button data-command="home" data-toolbar="home" title="Home page" aria-label="Home page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 11 9-7 9 7M6 10v10h12V10M10 20v-6h4v6"/></svg></button>
   <form id="navigate"><input id="address" aria-label="Address or search" placeholder="Search or enter an address" autocomplete="off" spellcheck="false"></form>
-  <button data-command="split" data-toolbar="split" title="Toggle split view" aria-label="Toggle split view">◫</button>
-  <button data-command="vault" data-toolbar="library" title="Your library" aria-label="Your library">♡</button>
-  <button data-command="extensions" data-toolbar="extensions" title="Extensions" aria-label="Extensions">⌘</button>
+  <button data-command="split" data-toolbar="split" title="Toggle split view" aria-label="Toggle split view"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M12 5v14"/></svg></button>
+  <button data-command="vault" data-toolbar="library" title="Your library" aria-label="Your library"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 8.5c0 4-4.5 7.5-8.5 10-4-2.5-8.5-6-8.5-10a4.5 4.5 0 0 1 8.5-2 4.5 4.5 0 0 1 8.5 2Z"/></svg></button>
+  <button data-command="extensions" data-toolbar="extensions" title="Extensions" aria-label="Extensions"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3h3v3a2 2 0 1 0 4 0V3h3a3 3 0 0 1 3 3v3h-3a2 2 0 1 0 0 4h3v5a3 3 0 0 1-3 3h-5v-3a2 2 0 1 0-4 0v3H6a3 3 0 0 1-3-3v-5h3a2 2 0 1 0 0-4H3V6a3 3 0 0 1 3-3Z"/></svg></button>
   <div id="extension-actions" aria-label="Extension actions" hidden></div>
-  <button id="open-tools" title="Browser tools" aria-label="Browser tools">☰</button>
+  <button id="find-toggle" type="button" title="Find in page" aria-label="Find in page" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg></button>
+  <div id="find-controls" hidden><input id="find" aria-label="Find in page" placeholder="Find in page"><span id="find-count" class="subtle" aria-live="polite"></span><button id="find-previous" aria-label="Previous match" title="Previous match">↑</button><button id="find-next" aria-label="Next match" title="Next match">↓</button><button id="find-close" aria-label="Close find" title="Close find">×</button></div>
+  <button id="open-tools" title="Browser tools" aria-label="Browser tools"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
  </nav>
- <div class="status-line"><select id="workspace-select" aria-label="Current workspace"><option value="default">Default</option></select><p id="notice" role="status">Noxviola · Experimental browser</p><button id="retry-save" data-command="save-session" hidden>Retry save</button><input id="find" aria-label="Find in page" placeholder="Find in page"><span id="find-count" class="subtle" aria-live="polite"></span><button id="find-previous" aria-label="Previous match" title="Previous match">↑</button><button id="find-next" aria-label="Next match" title="Next match">↓</button></div>
  <div id="bookmarks-bar" aria-label="Bookmarks bar" hidden></div>
 </header>
 <main id="workspace">

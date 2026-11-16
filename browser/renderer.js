@@ -13,6 +13,7 @@ function retainBookmarkDrafts(){const retained=new Set([bookmarkData.identity,bo
 let lastProfiles = '', lastSettings = '', lastSaveError = '', addressDirty = false;
 const tabNodes = new Map(), groupNodes=new Map(), painting = new WeakMap();
 let hideTabPreview = () => {};
+let revealedTabKey = '';
 
 function announce(message) { $('notice').textContent = String(message || ''); $('notice').title = String(message || ''); }
 async function run(name, value) {
@@ -83,6 +84,9 @@ function renderTabs(state) {
     if (!wrap) {
       wrap = node('div',undefined,'tab'); wrap.dataset.tabId = tab.id;
       const select = action('', 'activate', tab.id), close = action('×','close',tab.id),menu=action('⋯','tab-menu',tab.id);
+      select.className='tab-select';close.className='tab-close';menu.className='tab-menu';
+      const icon=node('span',undefined,'tab-icon'), title=node('span',undefined,'tab-title'), status=node('span',undefined,'tab-status');
+      icon.setAttribute('aria-hidden','true');status.setAttribute('aria-hidden','true');select.append(icon,title,status);
       select.setAttribute('role','tab');wrap.append(select,close,menu);tabNodes.set(tab.id,wrap);
       wrap.oncontextmenu=event=>{event.preventDefault();run('tab-menu',tab.id);};
       wrap.draggable=true;wrap.ondragstart=event=>event.dataTransfer?.setData('application/x-noxviola-tab',tab.id);
@@ -90,11 +94,19 @@ function renderTabs(state) {
       wrap.ondrop=event=>{event.preventDefault();const moving=event.dataTransfer?.getData('application/x-noxviola-tab'),target=currentState.tabs.find(row=>row.id===wrap.dataset.tabId);if(moving&&target){const peers=currentState.tabs.filter(row=>(row.workspaceId||'default')===(target.workspaceId||'default'));run('tab-move',{id:moving,index:peers.findIndex(row=>row.id===target.id)});}};
     }
     const [select,close] = wrap.children;
-    const label = `${tab.pinned?'⌖ ':''}${tab.muted?'♬̸ ':tab.audible?'♬ ':''}${tab.loading ? '◌ ' : ''}${tab.title || 'New tab'}`;
-    if (select.textContent !== label) select.textContent = label;
+    const label = tab.title || 'New tab',status = `${tab.pinned?'⌖ ':''}${tab.muted?'♬̸':tab.audible?'♬':''}`.trim();
+    const icon=select.children[0],favicon=typeof tab.favicon==='string'&&/^data:image\/(?:png|x-icon);base64,/.test(tab.favicon)?tab.favicon:'';
+    if (icon.dataset.favicon !== favicon) {
+      icon.dataset.favicon=favicon; icon.replaceChildren();
+      if(favicon){const image=node('img');image.alt='';image.src=favicon;icon.append(image);}
+    }
+    if (select.children[1].textContent !== label) select.children[1].textContent = label;
+    if (select.children[2].textContent !== status) select.children[2].textContent = status;
+    wrap.dataset.loading=String(Boolean(tab.loading));
+    wrap.dataset.active=String(tab.id === state.activeId);
     select.title = `${identityName(tab.identity)} · ${tab.url}`;
     select.setAttribute('aria-selected',String(tab.id === state.activeId));
-    select.setAttribute('aria-label',`${tab.title || 'New tab'}, ${identityName(tab.identity)}`);
+    select.setAttribute('aria-label',`${label}, ${identityName(tab.identity)}${tab.pinned?', pinned':''}${tab.muted?', muted':tab.audible?', playing audio':''}${tab.loading?', loading':''}`);
     select.tabIndex = tab.id === state.activeId ? 0 : -1;
     close.setAttribute('aria-label',`Close ${tab.title || 'New tab'}`);
     wrap.children[2].setAttribute('aria-label',`Actions for ${tab.title||'New tab'}`);
@@ -111,6 +123,8 @@ function renderTabs(state) {
   });
   for(const [id,control] of groupNodes)if(!seenGroups.has(id)){control.remove();groupNodes.delete(id);}
   ordered.forEach((control,index)=>{if($('tabs').children[index]!==control)$('tabs').insertBefore(control,$('tabs').children[index]||null);});
+  const revealKey=`${activeWorkspace}:${state.activeId}:${state.preferences.tabLayout}`;
+  if(revealedTabKey!==revealKey){const selected=tabNodes.get(state.activeId);if(selected&&!selected.hidden){selected.scrollIntoView?.({block:'nearest',inline:'nearest'});revealedTabKey=revealKey;}}
 }
 function bindTabPreviews() {
   const strip = $('tabs'); let timer = null, current = '';
@@ -134,6 +148,7 @@ function bindTabPreviews() {
   strip.addEventListener('focusin',event=>schedule(event.target.closest('.tab')));
   strip.addEventListener('focusout',event=>{const tab=event.target.closest('.tab');if(!tab||!tab.contains(event.relatedTarget))hide();});
   for(const name of ['pointerdown','dragstart','scroll'])strip.addEventListener(name,hide,{passive:true});
+  strip.addEventListener('wheel',event=>{if(currentState.preferences.tabLayout!=='vertical'&&strip.scrollWidth>strip.clientWidth&&event.deltaY){strip.scrollLeft+=event.deltaY;event.preventDefault();}},{passive:false});
   window.addEventListener('blur',hide);
   document.addEventListener('keydown',event=>{if(event.key==='Escape')hide();});
 }
@@ -174,7 +189,7 @@ function renderState(state) {
   $('back').disabled = !state.canBack; $('forward').disabled = !state.canForward;
   $('tabs').setAttribute('aria-orientation',state.preferences.tabLayout === 'vertical' ? 'vertical' : 'horizontal');
   document.body.dataset.tabLayout = state.preferences.tabLayout || 'horizontal';
-  document.documentElement.style.setProperty('--chrome-height',`${state.chromeHeight||112}px`);applyAppearance(state.preferences);
+  document.documentElement.style.setProperty('--chrome-height',`${state.chromeHeight||76}px`);applyAppearance(state.preferences);
   for (const panel of document.querySelectorAll('#workspace > section')) panel.hidden = panel.id !== state.panel;
   $('start').hidden = Boolean(state.panel) || active?.url !== 'about:blank';
   $('workspace').inert = Boolean(state.closing);
@@ -226,9 +241,13 @@ $('navigate').addEventListener('submit',async event=>{
 });
 document.querySelectorAll('[data-command]').forEach(control=>control.addEventListener('click',()=>guarded(control,()=>api.command(control.dataset.command))));
 $('back').onclick=()=>run('back');$('forward').onclick=()=>run('forward');$('find').oninput=()=>run('find',$('find').value);
+function showFind(){ $('find-controls').hidden=false;$('find-toggle').setAttribute('aria-expanded','true');$('find').focus();$('find').select(); }
+function closeFind(){ $('find').value='';void run('find','');$('find-controls').hidden=true;$('find-toggle').setAttribute('aria-expanded','false');$('find-toggle').focus(); }
+$('find-toggle').onclick=()=>{if($('find-controls').hidden)showFind();else closeFind();};
+$('find-close').onclick=closeFind;
 $('find-previous').onclick=()=>run('find',{query:$('find').value,forward:false,findNext:true});
 $('find-next').onclick=()=>run('find',{query:$('find').value,forward:true,findNext:true});
-$('find').onkeydown=event=>{if(composing(event))return;if(event.key==='Enter'){event.preventDefault();run('find',{query:$('find').value,forward:!event.shiftKey,findNext:true});}else if(event.key==='Escape'){$('find').value='';run('find','');}};
+$('find').onkeydown=event=>{if(composing(event))return;if(event.key==='Enter'){event.preventDefault();run('find',{query:$('find').value,forward:!event.shiftKey,findNext:true});}else if(event.key==='Escape'){event.preventDefault();closeFind();}};
 api.onFindResult(result=>{$('find-count').textContent=result.matches?`${result.activeMatchOrdinal||0}/${result.matches}`:'';});
 $('open-tools').onclick=()=>run('tools');
 $('start-search').onclick=()=>{$('address').focus();$('address').select();};
@@ -250,7 +269,7 @@ $('tabs').onkeydown=event=>{
   const target=event.key==='Home'?0:event.key==='End'?count-1:(index+(event.key===next?1:-1)+count)%count;
   run('activate',selectable[target].id);tabNodes.get(selectable[target].id).firstElementChild.focus();
 };
-api.onAddress(()=>{$('address').focus();$('address').select();});api.onFind(()=>$('find').focus());api.onNotice(announce);api.onState(renderState);
+api.onAddress(()=>{$('address').focus();$('address').select();});api.onFind(showFind);api.onNotice(announce);api.onState(renderState);
 
 function resetVaultForm() {$('vault-add').reset();$('vault-add').elements.namedItem('id').value='';$('vault-editor').open=false;}
 function renderVault() {

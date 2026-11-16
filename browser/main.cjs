@@ -19,6 +19,7 @@ const {ExtensionManager} = require('./extensions.cjs');
 const {createExtensionLoader} = require('./extension-runtime.cjs');
 const {createIdentitySessionResolver} = require('./session-path.cjs');
 const {PermissionManager} = require('./permissions.cjs');
+const {createFaviconLoader} = require('./favicons.cjs');
 const accountStore = require('./accounts.cjs');
 const vaultStore = require('./vault.cjs');
 app.enableSandbox();
@@ -34,11 +35,12 @@ let resolveIdentitySession, history, bookmarks, workspaces, resourceMonitor, ext
 let activeWorkspaceId = 'default', nextRuntimeTabId = 1, preferencePreview = null;
 const runtimeTabs = new Map(), nativeTabs = new Map(), sessionTargets = new Map(), browserEvents = new EventEmitter();
 const configuredSessions = new Set(), identityInitializations = new Map(), extensionWindows = new Map(), pendingOperations = new Set();
-const HEIGHT = 112, SIDEBAR = 210;
-const chromeHeight = () => HEIGHT + (preferences.showBookmarksBar ? 32 : 0);
+const SIDEBAR = 210;
+const chromeHeight = () => (preferences.tabLayout === 'vertical' ? 40 : 76) + (preferences.showBookmarksBar ? 32 : 0);
 const active = () => tabs.find(tab => tab.id === activeId);
 const tabWorkspace = tab => tab.saved.workspaceId || 'default';
 const visibleTabs = () => tabs.filter(tab => tabWorkspace(tab) === activeWorkspaceId);
+const favicons = createFaviconLoader({nativeImage});
 const tabPreview = require('./tab-preview-host.cjs').createTabPreview({
   WebContentsView, ipcMain, root:__dirname, getWindow:()=>win, blocked:()=>Boolean(panel)||closing,
   getTabInfo:id=>{const tab=tabs.find(row=>row.id===id && tabWorkspace(row)===activeWorkspaceId);return tab?{title:tab.title,url:tab.url,identity:tab.identity,contents:tab.view?.webContents}:null;},
@@ -56,7 +58,7 @@ function eventAction(action) {
 function savedTab(tab) { return {...tab.saved, id:tab.id, url:tab.url, title:tab.title, identity:tab.identity}; }
 function snapshot() { return {...originalSession, version:1, profiles, preferences, activeId, activeWorkspaceId, tabs:tabs.map(savedTab)}; }
 function tabFromSaved(saved) {
-  const tab = {saved, id:saved.id, runtimeId:nextRuntimeTabId++,url:saved.url,title:saved.title,identity:saved.identity,view:null,loading:false,initializing:false};
+  const tab = {saved, id:saved.id, runtimeId:nextRuntimeTabId++,url:saved.url,title:saved.title,identity:saved.identity,view:null,loading:false,initializing:false,favicon:'',faviconRevision:0};
   runtimeTabs.set(tab.runtimeId,tab);return tab;
 }
 function tabDescriptor(tab) {
@@ -69,7 +71,7 @@ function tabDescriptor(tab) {
 function stateView() {
   return {version:1, profiles, preferences, activeId, currentIdentity, splitId, panel, closing, saveError,
     activeWorkspaceId,chromeHeight:chromeHeight(),shortcuts:preferenceStore.shortcutList(preferences),downloadHistory:downloads?.getStatus(),
-    canRestore:closed.length > 0, tabs:tabs.map(tab => ({id:tab.id,url:tab.url,title:tab.title,identity:tab.identity,loading:tab.loading,live:!!tab.view,
+    canRestore:closed.length > 0, tabs:tabs.map(tab => ({id:tab.id,url:tab.url,title:tab.title,identity:tab.identity,loading:tab.loading,live:!!tab.view,favicon:tab.favicon,
       workspaceId:tabWorkspace(tab),groupId:tab.saved.groupId||null,pinned:!!tab.saved.pinned,muted:tab.view?.webContents.isAudioMuted()??!!tab.saved.muted,audible:tab.view?.webContents.isCurrentlyAudible()||false})),
     canBack:active()?.view?.webContents.navigationHistory.canGoBack() || false,
     canForward:active()?.view?.webContents.navigationHistory.canGoForward() || false,
@@ -165,6 +167,16 @@ function ensureView(tab) {
   wc.setWindowOpenHandler(({url}) => { if (httpUrl(url) && !closing) eventAction(() => newTab(url,tab.identity)); return {action:'deny'}; });
   wc.on('will-navigate', (event,url) => { if (!tabNavigationAllowed(tab,url)) event.preventDefault(); });
   wc.on('will-redirect', (event,url) => { if (!tabNavigationAllowed(tab,url)) event.preventDefault(); });
+  wc.on('did-start-navigation', (_event,_url,isSameDocument,isMainFrame) => {
+    if (isMainFrame && !isSameDocument) {tab.faviconRevision++;if(tab.favicon){tab.favicon='';publish(false);}}
+  });
+  wc.on('page-favicon-updated', (_event, urls) => {
+    const page=wc.getURL(),revision=++tab.faviconRevision;
+    void favicons.load(wc.session,page,urls).then(icon=>{
+      if (closing || wc.isDestroyed() || tab.view !== view || tab.faviconRevision !== revision) return;
+      if (tab.favicon !== icon) {tab.favicon=icon;publish(false);}
+    });
+  });
   wc.on('page-title-updated', (_event,title) => { if (!closing && tab.title !== title) {
     tab.title = title;publish();hostEvent(tab.identity,'tabs.onUpdated',tab.runtimeId,{title},tabDescriptor(tab));
     if(tab.committedURL===httpUrl(wc.getURL()))try{history?.updateTitle(tab.identity,tab.committedURL,title);}catch(error){notice(`History title was not saved: ${error.message}`);}
@@ -223,6 +235,7 @@ function newTab(url = 'about:blank', identity = currentIdentity, saved = null, p
 }
 function removeView(tab) {
   tabPreview.invalidate(tab.id);
+  tab.faviconRevision++;tab.favicon='';
   if (!tab.view) return;
   const view = tab.view; tab.view = null;
   nativeTabs.delete(view.webContents.id);win.contentView.removeChildView(view);view.webContents.close();

@@ -218,6 +218,7 @@ function createPageTools({ window, context, command, state, navigate, activate, 
         const listener = (_event, value) => nativeEvents.push(value);
         view.webContents.on('found-in-page', listener);
         try {
+          await click('#find-toggle');
           for (const [action, ordinal] of [['input', 1], ['next', 2], ['previous', 1]]) {
             const start = nativeEvents.length;
             if (action === 'input') await window.webContents.executeJavaScript(`(() => {const input=document.getElementById('find');if(input.disabled||!input.getClientRects().length)throw new Error('The actual find input must be visible and enabled');input.focus();input.value=${JSON.stringify(QUERY)};input.dispatchEvent(new Event('input',{bubbles:true}));})()`);

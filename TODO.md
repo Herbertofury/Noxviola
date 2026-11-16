@@ -1,5 +1,10 @@
 # Active project work
 
+## Standalone creator/project following · 2026-11-16
+
+- [ ] Deliver Noxviola’s premium-quality independent creator/project follow and update center. No Athena runtime dependency. Current implementation checkpoint adds an identity-scoped native watchlist, actual public GitHub releases/repository discovery, opt-in hourly checks, all-page/ETag collection, last-good/error state, pause/read controls and explicit manual-only unsupported sources. [Scope, evidence and open gates](docs/browser/FOLLOWING.md). Full cross-social discovery, version/changelog/compatibility history, Obscura’s isolated equivalent-work evaluation and end-to-end native acceptance remain open; this is not a claim of flawless/no-loss universal scraping. Existing parity/PR holds remain unchanged.
+
+
 Updated 2026-11-07 UTC. This is the maintained Noxviola continuation index. Project-local plans remain authoritative for implementation detail. The earlier checklist and verified checkpoints are preserved below; an old checkpoint does not close a whole project.
 
 ## New character/catalog requests · 2026-11-15

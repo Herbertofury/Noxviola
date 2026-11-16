@@ -134,3 +134,8 @@ body[data-theme=light] #tab-search-toggle:hover{background:#70558630;color:#3021
 body[data-window-overlay=true]:not([data-tab-layout=vertical]) #titlebar-drag{display:block;order:7;flex:1 0 20px;height:30px;-webkit-app-region:drag}
 #nav-drag{display:none}
 body[data-window-overlay=true][data-tab-layout=vertical] #nav-drag{display:block;flex:0 0 20px;height:28px;-webkit-app-region:drag}
+
+.follow-compose{display:grid;grid-template-columns:1fr 2fr 1fr;gap:1rem;padding:1.4rem;border:1px solid var(--border,#504367);border-radius:16px;background:linear-gradient(120deg,#38234d55,transparent)}
+.follow-compose label{display:flex;gap:.5rem;flex-direction:column}.follow-compose label:has([type=checkbox]){grid-column:1/-1;flex-direction:row;align-items:center}.follow-compose input,.follow-compose select{min-width:0;width:100%}.follow-compose input[type=checkbox]{width:auto}
+.follow-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:1rem}.follow-card{padding:1.4rem;border:1px solid var(--border,#504367);border-radius:16px;background:linear-gradient(145deg,#271f3766,#13131b55);align-self:start}.follow-card h2{margin:.25rem 0}.follow-address{overflow-wrap:anywhere;font-size:.85rem}.follow-status{font-weight:600}.follow-updates{display:grid;gap:.75rem;margin-top:1rem}.follow-update{display:grid;gap:.4rem;padding:.8rem;border-radius:10px;background:#8881}.follow-badge{font-size:.75rem;color:var(--accent,#d8b9ff)}.follow-card summary{cursor:pointer;margin-top:1rem}
+@media(max-width:760px){.follow-compose{grid-template-columns:1fr}.follow-compose label:has([type=checkbox]){grid-column:auto}}

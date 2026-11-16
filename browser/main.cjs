@@ -10,6 +10,7 @@ const preferenceStore = require('./preferences.cjs');
 const {ResourceMonitor} = require('./resources.cjs');
 const {SpellcheckService} = require('./spellcheck.cjs');
 const {HistoryService} = require('./history.cjs');
+const {FollowService} = require('./follows.cjs');
 const {BookmarkService,rootIds:bookmarkRootIds} = require('./bookmarks.cjs');
 const {WorkspaceService} = require('./workspaces.cjs');
 const storage = require('./storage.cjs');
@@ -32,7 +33,7 @@ let writer, saveError = '', sessionFile, dataDirectory, downloads, permissions, 
 let vaultFile, vaultDocument = {version:1, items:[]}, vaultError = '', vaultRecovery = null, vaultImport = null;
 let accountFile, accounts = [], accountError = '', accountRecovery = null;
 let permissionOpening = null, extensionBusy = false;
-let resolveIdentitySession, history, bookmarks, workspaces, resourceMonitor, extensionBridge, spellcheck;
+let resolveIdentitySession, history, bookmarks, workspaces, follows, followTimer, resourceMonitor, extensionBridge, spellcheck;
 let activeWorkspaceId = 'default', nextRuntimeTabId = 1, preferencePreview = null;
 const runtimeTabs = new Map(), nativeTabs = new Map(), sessionTargets = new Map(), browserEvents = new EventEmitter();
 const configuredSessions = new Set(), identityInitializations = new Map(), extensionWindows = new Map(), pendingOperations = new Set();
@@ -108,6 +109,7 @@ function serviceView(service, read) {
   try{return {status:service?.status||'blocked',error:service?.error||'',recoveryAvailable:service?.status==='recovery',...read()};}
   catch(error){return {status:service?.status||'blocked',error:error.message,recoveryAvailable:service?.status==='recovery'};}
 }
+function publishFollows() { if(panel==='following')send('follows',serviceView(follows,()=>({identity:currentIdentity,items:follows.list(currentIdentity)}))); }
 function publishHistory() { if(panel==='history')send('history',serviceView(history,()=>({identity:currentIdentity,...history.query(currentIdentity,{}),settings:history.settings(currentIdentity)}))); }
 function publishBookmarks() { if(panel==='bookmarks'||preferences.showBookmarksBar)send('bookmarks',serviceView(bookmarks,()=>({identity:currentIdentity,tree:bookmarks.getTree(currentIdentity)}))); }
 function publishWorkspaces() { send('workspaces',serviceView(workspaces,()=>({items:workspaces.list(),groups:workspaces.list().flatMap(item=>workspaces.listGroups(item.id)),activeWorkspaceId}))); }
@@ -132,7 +134,7 @@ function setPanel(value) {
   tabPreview.hide();
   panel = panel === value ? null : value;
   layout(); publish(false); publishVault(); publishAccounts(); publishExtensions(); publishPermissions();
-  publishHistory();publishBookmarks();publishWorkspaces();
+  publishHistory();publishBookmarks();publishWorkspaces();publishFollows();
   if (panel === 'downloads') send('downloads', downloads.list());
   if (panel === 'capabilities') send('capabilities', require('./capabilities.json'));
   if (panel === 'resources') send('resources',resourceMonitor.sample());
@@ -479,7 +481,7 @@ function buildMenu() {
   const invoke=(name,value)=>runBrowserOperation(name,value).catch(error=>{notice(error.message);layout();publish(false);});
   const entries=preferenceStore.shortcutList(preferences).map(item=>({label:item.label,...(item.accelerator?{accelerator:item.accelerator}:{}),click:()=>invoke(item.id==='close'&&panel?'panel-close':item.id,item.id==='close'?activeId:undefined)}));
   Menu.setApplicationMenu(Menu.buildFromTemplate([{label:'Browser',submenu:[...entries,{type:'separator'},
-    {label:'Workspaces and tab groups',click:()=>invoke('workspaces')},{label:'Save page as PDF',click:()=>invoke('save-pdf')},
+    {label:'Following · creators and projects',click:()=>invoke('following')},{label:'Workspaces and tab groups',click:()=>invoke('workspaces')},{label:'Save page as PDF',click:()=>invoke('save-pdf')},
     {label:'Save visible screenshot',click:()=>invoke('save-screenshot')},{label:'Resource monitor',click:()=>invoke('resources')},
     {label:'Customize',click:()=>invoke('settings')},{type:'separator'},{role:'quit'}]}]));
 }
@@ -554,7 +556,7 @@ async function perform(name, value) {
     case 'settings-import-apply':if(!preferencePreview)throw new Error('Review a preference preset first.');if(preferencePreview.baseline!==JSON.stringify(preferences))throw new Error('Preferences changed after this review. Inspect the preset again.');await savePreferences(preferencePreview.preferences);send('settings-preview',null);break;
     case 'settings-import-cancel':preferencePreview=null;send('settings-preview',null);break;
     case 'save-session': writer.request(snapshot()); await writer.flush(); notice('Session saved.'); break;
-    case 'tools':case 'vault':case 'accounts':case 'extensions':case 'downloads':case 'permissions':case 'settings':case 'capabilities':case 'bookmarks':case 'history':case 'workspaces':case 'resources':setPanel(name);break;
+    case 'following':case 'tools':case 'vault':case 'accounts':case 'extensions':case 'downloads':case 'permissions':case 'settings':case 'capabilities':case 'bookmarks':case 'history':case 'workspaces':case 'resources':setPanel(name);break;
     case 'resource-sample':return resourceMonitor.sample();
     case 'history-query':return history.query(currentIdentity,value||{});
     case 'history-settings':{const {identity=currentIdentity,...changes}=value||{};history.configure(identity,changes);publishHistory();break;}
@@ -562,6 +564,11 @@ async function perform(name, value) {
     case 'history-remove':history.deleteUrl(typeof value==='object'?value.identity:currentIdentity,typeof value==='object'?value.url:value);publishHistory();break;
     case 'history-clear':{const identity=value?.identity||currentIdentity;history.settings(identity);const choice=await dialog.showMessageBox(win,{type:'question',message:`Remove history for ${profiles.find(profile=>profile.id===identity)?.name||identity}?`,detail:'This removes the active history list. Recovery checkpoints can retain earlier records; this is not secure erasure of browsing data.',buttons:['Cancel','Remove history entries'],defaultId:0,cancelId:0,noLink:true});if(choice.response===1)history.clear(identity);publishHistory();break;}
     case 'history-recover':await recoverService(history,'history');publishHistory();break;
+    case 'follow-add':{const {identity=currentIdentity,...input}=value||{};const result=follows.add(identity,input);publishFollows();return result;}
+    case 'follow-change':{const {identity=currentIdentity,id,...patch}=value||{};follows.change(identity,id,patch);publishFollows();break;}
+    case 'follow-refresh':await follows.refresh(value?.identity||currentIdentity,value?.id);publishFollows();break;
+    case 'follow-open':{const source=follows.get(value?.identity||currentIdentity,value?.id);const address=value?.itemId?source.items.find(item=>item.id===value.itemId)?.url:source.url;if(!address)throw new Error('Saved update not found.');newTab(address,source.identity);break;}
+    case 'follow-recover':await recoverService(follows,'following');publishFollows();break;
     case 'bookmark-current':{
       const tab=active();if(!tab||!httpUrl(tab.url))throw new Error('Open a website before bookmarking it.');
       const item=bookmarks.create(tab.identity,{title:tab.title,url:tab.url,parentId:bookmarkRootIds(tab.identity).bar});notice(`Bookmarked ${item.title}.`);publishBookmarks();return item;
@@ -713,7 +720,7 @@ async function requestClose() {
   }
   closeExtensionWindows();
   try { if (!extensionError) await extensions.dispose(); } catch (error) { notice(error.message); }
-  try{await extensionBridge?.dispose();}catch(error){notice(`Extension host cleanup: ${error.message}`);}history?.dispose();bookmarks?.dispose();workspaces?.dispose();
+  try{await extensionBridge?.dispose();}catch(error){notice(`Extension host cleanup: ${error.message}`);}clearInterval(followTimer);follows?.dispose();history?.dispose();bookmarks?.dispose();workspaces?.dispose();
   permissions.dispose(); downloads.dispose(); await writer.close().catch(() => {});
   allowClose = true; win.close();
 }
@@ -735,10 +742,12 @@ async function start() {
   vaultFile = path.join(dataDirectory,'private-vault.json'); accountFile = path.join(dataDirectory,'private-accounts.json');
   try { const opened = vaultStore.inspect(vaultFile); if (opened.status === 'recovery') {vaultRecovery = opened;vaultError = 'The library needs explicit recovery before editing.';} else vaultDocument = opened.value; } catch (error) {vaultError = error.message;}
   try { const opened = accountStore.inspect(accountFile); if (opened.status === 'recovery') {accountRecovery = opened;accountError = 'The account inventory needs explicit recovery before editing.';} else accounts = opened.value.accounts; } catch (error) {accountError = error.message;}
+  follows=new FollowService({file:path.join(dataDirectory,'browser-follows.json'),getIdentities:()=>profiles.map(profile=>profile.id),onChange:publishFollows});
   history=new HistoryService({file:path.join(dataDirectory,'browser-history.json'),getIdentities:()=>profiles.map(profile=>profile.id),onChange:publishHistory});
   bookmarks=new BookmarkService({file:path.join(dataDirectory,'browser-bookmarks.json'),getIdentities:()=>profiles.map(profile=>profile.id),onChange:publishBookmarks});
   workspaces=new WorkspaceService({file:path.join(dataDirectory,'browser-workspaces.json'),onChange:publishWorkspaces,isWorkspaceInUse:id=>tabs.some(tab=>tabWorkspace(tab)===id),isGroupInUse:id=>tabs.some(tab=>tab.saved.groupId===id)});
-  for(const service of [history,bookmarks,workspaces])try{service.open();}catch{/* The corresponding panel retains the service error and recovery state. */}
+  for(const service of [history,bookmarks,workspaces,follows])try{service.open();}catch{/* The corresponding panel retains the service error and recovery state. */}
+  followTimer=setInterval(()=>follows.tick().catch(error=>notice(`Following: ${error.message}`)),60000);followTimer.unref();
   permissions = new PermissionManager({file:path.join(dataDirectory,'site-permissions.json'),onChange:publishPermissions,prompt:async request => {
     if (closing || !win || win.isDestroyed() || request.signal?.aborted) return 'block';
     const identity = profiles.find(profile => profile.id === request.identity)?.name || request.identity;

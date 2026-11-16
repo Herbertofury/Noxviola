@@ -1,0 +1,121 @@
+'use strict';
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const os=require('node:os');
+const path=require('node:path');
+const {FollowService,decode,sourceFor,githubCollect,INTERVAL}=require('../browser/follows.cjs');
+function fixture(t, options={}){
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'nox-follow-test-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
+ let now=1000;const setup={file:path.join(dir,'following.json'),getIdentities:()=>['personal','work'],now:()=>now,...options};
+ const service=new FollowService(setup);service.open();t.after(()=>service.dispose());
+ return {service,file:setup.file,setTime:v=>now=v,reopen:()=>{const next=new FollowService(setup);next.open();t.after(()=>next.dispose());return next;}};
+}
+const add=(s,owner='personal',extra={})=>s.add(owner,{name:'Project',url:'https://github.com/example/project',...extra});
+const row=(id=1,extra={})=>({id,html_url:`https://github.com/example/project/releases/tag/v${id}`,name:`Release ${id}`,tag_name:`v${id}`,published_at:'2026-11-16T00:00:00Z',body:'Release notes',...extra});
+const response=(rows,headers={},status=200)=>({status,ok:status>=200&&status<300,headers:{get:k=>headers[k]??null},json:async()=>rows});
+const normalized=(id='1',fingerprint='original')=>({id,title:`Release ${id}`,url:`https://github.com/example/project/releases/tag/v${id}`,publishedAt:'2026-11-16T00:00:00Z',fingerprint});
+test('follow list persists locally, preserves identity boundary and does not expose cache',t=>{
+ const {service,file,reopen}=fixture(t);assert.equal(fs.existsSync(file),false);const s=add(service);add(service,'work');
+ assert.equal(service.list('personal').length,1);assert.equal(service.list('personal')[0].cache,undefined);assert.throws(()=>service.get('work',s.id),/identity/);assert.throws(()=>service.list('unknown'),/identity/);
+ assert.equal(reopen().list('personal')[0].url,s.url);assert.throws(()=>add(service,'personal',{url:'https://github.com/EXAMPLE/PROJECT/'}),/Already following/);
+});
+test('manual sources are honestly manual and reject automatic enablement or refresh',async t=>{
+ const {service}=fixture(t);const s=add(service,'personal',{url:'https://example.com/artist',automatic:true,kind:'creator'});
+ assert.equal(s.provider,'manual');assert.equal(s.automatic,false);assert.equal(s.kind,'creator');assert.throws(()=>service.change('personal',s.id,{automatic:true}),/adapter/);await assert.rejects(service.refresh('personal',s.id),/Manual source/);
+});
+test('source construction cannot send credentials or HTTP to collection; GitHub routes are fixed',()=>{
+ assert.throws(()=>sourceFor('http://github.com/example/project'),/HTTPS/);assert.throws(()=>sourceFor('https://secret:password@github.com/example/project'));
+ assert.equal(sourceFor('https://github.com/example').endpoint,'https://api.github.com/users/example/repos?per_page=100&type=owner&sort=updated');
+ for(const url of ['https://127.0.0.1/project','https://api.github.com/project','https://github.com.evil.test/example/project'])assert.equal(sourceFor(url).provider,'manual');
+});
+test('refresh deduplicates unchanged updates, unread state survives restart and modified records become unread',async t=>{
+ let fingerprint='one';const {service,reopen,setTime}=fixture(t,{collect:async()=>({cache:{},items:[normalized('1',fingerprint)]})});const s=add(service);
+ await service.refresh('personal',s.id);assert.equal(service.get('personal',s.id).items[0].read,false);service.change('personal',s.id,{read:true});
+ setTime(2000);await service.refresh('personal',s.id);let source=service.get('personal',s.id);assert.equal(source.items.length,1);assert.equal(source.items[0].read,true);assert.equal(source.items[0].observedAt,1000);assert.equal(reopen().get('personal',s.id).items[0].read,true);
+ fingerprint='two';setTime(3000);await service.refresh('personal',s.id);source=service.get('personal',s.id);assert.equal(source.items[0].read,false);assert.equal(source.items[0].observedAt,3000);
+});
+test('failed refresh retains last-good records and success timestamp, exposes failure and retries later',async t=>{
+ let fail=false;const {service,setTime}=fixture(t,{collect:async()=>{if(fail)throw new Error('HTTP 503');return{cache:{},items:[normalized()]};}});const s=add(service);
+ await service.refresh('personal',s.id);fail=true;setTime(2000);await service.refresh('personal',s.id);const failed=service.get('personal',s.id);assert.equal(failed.items.length,1);assert.equal(failed.lastSuccess,1000);assert.equal(failed.lastAttempt,2000);assert.equal(failed.nextCheck,2000+INTERVAL);assert.match(failed.error,/503/);
+ fail=false;await service.refresh('personal',s.id);assert.equal(service.get('personal',s.id).error,'');
+});
+test('records missing from a later source response are retained, not silently discarded',async t=>{
+ let items=[normalized()];const {service}=fixture(t,{collect:async()=>({cache:{},items})});const s=add(service);await service.refresh('personal',s.id);items=[];await service.refresh('personal',s.id);assert.equal(service.get('personal',s.id).items.length,1);
+});
+test('pause cancels in-flight collection and late success cannot overwrite pause or add updates',async t=>{
+ let resolve,signal;const {service}=fixture(t,{collect:async(_s,opts)=>{signal=opts.signal;return new Promise(r=>resolve=r);}});const s=add(service);const pending=service.refresh('personal',s.id);
+ assert.equal(service.list('personal')[0].busy,true);service.change('personal',s.id,{paused:true});assert.equal(signal.aborted,true);resolve({cache:{},items:[normalized()]});await pending;
+ assert.equal(service.get('personal',s.id).paused,true);assert.equal(service.get('personal',s.id).items.length,0);assert.equal(service.list('personal')[0].busy,false);await assert.rejects(service.refresh('personal',s.id),/Resume/);
+});
+test('duplicate in-flight refresh coalesces; dispose aborts without writing results',async t=>{
+ let count=0,resolve,signal;const {service,file}=fixture(t,{collect:async(_s,opts)=>{count++;signal=opts.signal;return new Promise(r=>resolve=r);}});const s=add(service);const bytes=fs.readFileSync(file,'utf8');const pending=service.refresh('personal',s.id);await service.refresh('personal',s.id);assert.equal(count,1);
+ service.dispose();assert.equal(signal.aborted,true);resolve({cache:{},items:[normalized()]});await pending;assert.equal(fs.readFileSync(file,'utf8'),bytes);
+});
+test('tick checks only explicitly enabled due and unpaused sources',async t=>{
+ const calls=[];const {service,setTime}=fixture(t,{collect:async s=>{calls.push(s.id);return{cache:{},items:[]};}});const automatic=add(service,'personal',{automatic:true});add(service,'work');const paused=add(service,'personal',{url:'https://github.com/other/project',automatic:true});service.change('personal',paused.id,{paused:true});
+ await service.tick();assert.deepEqual(calls,[automatic.id]);await service.tick();assert.equal(calls.length,1);setTime(1000+INTERVAL);await service.tick();assert.equal(calls.length,2);
+});
+test('GitHub collector follows all pages and revalidates ETags without cookies or redirects',async()=>{
+ const source={...sourceFor('https://github.com/example/project'),cache:{}};const first=source.endpoint,second=first+'&page=2',requests=[];
+ const result=await githubCollect(source,{fetcher:async(url,options)=>{requests.push({url,options});return url===first?response([row(1)],{etag:'page1',link:`<${second}>; rel="next"`}):response([row(2)],{etag:'page2'});}});
+ assert.deepEqual(result.items.map(i=>i.id),['1','2']);assert.equal(requests.length,2);for(const {options}of requests){assert.equal(options.redirect,'error');assert.equal(options.credentials,'omit');assert.equal(options.headers.Authorization,undefined);}
+ source.cache=result.cache;const cached=await githubCollect(source,{fetcher:async(url,options)=>{assert.equal(options.headers['If-None-Match'],url===first?'page1':'page2');return response(null,{},304);}});assert.deepEqual(cached,result);
+});
+test('pagination blocks cross-origin/local network and changed paths before issuing the unsafe request',async()=>{
+ for(const next of ['http://127.0.0.1/private','https://evil.test/path','https://api.github.com/user','https://api.github.com:443@127.0.0.1/path']){
+  let count=0;await assert.rejects(githubCollect({...sourceFor('https://github.com/example/project'),cache:{}},{fetcher:async()=>{count++;return response([row()],{link:`<${next}>; rel="next"`});}}),/destination/);assert.equal(count,1);
+ }
+});
+test('collector fails whole check on malformed, duplicate and inaccessible pages',async()=>{
+ const source={...sourceFor('https://github.com/example/project'),cache:{}};
+ for(const bad of [response({error:'no'}),response([{id:'wrong'}]),response([row(1,{html_url:'https://evil.test/1'})]),response([row(),row()]),response(null,{},429),response(null,{},403),response(null,{},500),response(null,{},304)])await assert.rejects(githubCollect(source,{fetcher:async()=>bad}));
+ let n=0;await assert.rejects(githubCollect(source,{fetcher:async()=>++n===1?response([row()],{link:`<${source.endpoint}&page=2>; rel="next"`}):response(null,{},503)}),/503/);
+});
+test('creator collection captures complete repo metadata changes without pretending to track all socials',async()=>{
+ const source={...sourceFor('https://github.com/example'),cache:{}};const result=await githubCollect(source,{fetcher:async()=>response([row(4,{full_name:'example/project',html_url:'https://github.com/example/project',pushed_at:'2026-11-16T01:00:00Z',description:'One',default_branch:'main'})])});
+ assert.equal(result.items[0].title,'example/project');assert.equal(result.items[0].publishedAt,'2026-11-16T01:00:00Z');
+});
+test('decoder rejects duplicate source IDs that could cross identity boundaries',t=>{
+ const {service,file}=fixture(t);add(service);add(service,'work');const data=JSON.parse(fs.readFileSync(file,'utf8'));data.sources[1].id=data.sources[0].id;assert.throws(()=>decode(data));
+});
+test('manual source keeps query that identifies a specific project',()=>{
+ assert.equal(sourceFor('https://example.com/view?project=one').url,'https://example.com/view?project=one');
+});
+test('manual source keeps fragment routes for single-page project sites',()=>{
+ assert.equal(sourceFor('https://example.com/#/project/one').url,'https://example.com/#/project/one');
+});
+test('malformed saved follow documents do not replace last-good disk state on reopen',t=>{
+ const {service,file,reopen}=fixture(t);const s=add(service);const original=fs.readFileSync(file,'utf8');service.change('personal',s.id,{paused:true});fs.writeFileSync(file,'{invalid JSON');
+ const recovered=reopen();assert.equal(recovered.status,'recovery');assert.throws(()=>recovered.add('personal',{name:'new',url:'https://github.com/other/project'}),/recovery|checkpoint/i);assert.equal(fs.readFileSync(file,'utf8'),'{invalid JSON');assert.ok(original.includes(s.id));
+});
+test('decoder rejects malformed or off-origin conditional response caches',t=>{
+ const {service,file}=fixture(t);add(service);const pristine=JSON.parse(fs.readFileSync(file,'utf8'));const endpoint=sourceFor(pristine.sources[0].url).endpoint;
+ const goodPage={etag:'"v1"',next:null,items:[normalized()]};
+ const variants=[
+  ['https://127.0.0.1/private',goodPage],
+  [endpoint,{...goodPage,next:'https://evil.test/page2'}],
+  [endpoint,{...goodPage,next:'https://api.github.com/user'}],
+  [endpoint,{...goodPage,etag:4}],
+  [endpoint,{...goodPage,items:null}],
+  [endpoint,{...goodPage,items:[{...normalized(),url:'https://evil.test/update'}]}],
+  [endpoint,{...goodPage,items:[{...normalized(),url:'http://github.com/example/project'}]}],
+  [endpoint,{...goodPage,items:[{...normalized(),url:'https://user:secret@github.com/example/project'}]}],
+ ];
+ for(const [address,page] of variants){const data=structuredClone(pristine);data.sources[0].cache={[address]:page};assert.throws(()=>decode(data),`accepted ${address} ${JSON.stringify(page)}`);}
+ const valid=structuredClone(pristine);valid.sources[0].cache={[endpoint]:goodPage};assert.deepEqual(decode(valid),valid);
+});
+test('all follow mutation and collection entry points enforce source ownership',async t=>{
+ let calls=0;const {service}=fixture(t,{collect:async()=>{calls++;return{cache:{},items:[]};}});const source=add(service);
+ assert.throws(()=>service.change('work',source.id,{paused:true}),/identity/);await assert.rejects(service.refresh('work',source.id),/identity/);assert.equal(calls,0);assert.equal(service.get('personal',source.id).paused,false);
+});
+test('overlapping scheduler ticks never refresh an already refreshed later source from a stale snapshot',async t=>{
+ let unblock;const calls=[];const {service}=fixture(t,{collect:async source=>{calls.push(source.url);if(source.url.endsWith('/first'))await new Promise(resolve=>unblock=resolve);return{cache:{},items:[]};}});
+ add(service,'personal',{url:'https://github.com/example/first',automatic:true});add(service,'personal',{url:'https://github.com/example/second',automatic:true});
+ const firstTick=service.tick();await service.tick();unblock();await firstTick;assert.equal(calls.filter(url=>url.endsWith('/second')).length,1);
+});
+test('timeout is a visible failed attempt, not a silent unchanged or successful check',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});
+ const {service}=fixture(t,{collect:async(_source,{signal})=>new Promise((_resolve,reject)=>signal.addEventListener('abort',()=>reject(new Error('aborted')),{once:true}))});const source=add(service);const pending=service.refresh('personal',source.id);t.mock.timers.tick(60000);await pending;
+ const saved=service.get('personal',source.id);assert.match(saved.error,/timed out/);assert.equal(saved.lastAttempt,1000);assert.equal(saved.lastSuccess,0);assert.equal(saved.nextCheck,1000+INTERVAL);assert.equal(service.list('personal')[0].busy,false);
+});

@@ -870,6 +870,18 @@ async function clearPersonalDownloadHistory(expected) {
 async function firstLaunch() {
   const expected = {};
   const initial = await state();
+  await check('native Following form persists a manual source without claiming automatic collection', async () => {
+    await command('following');
+    await until(()=>window.webContents.executeJavaScript("Boolean(document.getElementById('follow-form').getClientRects().length)"),'following form');
+    await window.webContents.executeJavaScript(`(() => { const form=document.getElementById('follow-form');form.elements.namedItem('name').value='Native follow fixture';form.elements.namedItem('url').value='https://example.invalid/project?item=one#details';form.requestSubmit(); })()`);
+    const file=path.join(context.profile,'browser-follows.json');
+    const saved=await until(()=>{if(!fs.existsSync(file))return null;const data=JSON.parse(fs.readFileSync(file,'utf8'));return data.sources.find(row=>row.name==='Native follow fixture')||null;},'durable follow created by actual renderer');
+    assert.equal(saved.identity,initial.currentIdentity);assert.equal(saved.provider,'manual');assert.equal(saved.automatic,false);assert.equal(saved.url,'https://example.invalid/project?item=one#details');
+    await until(()=>window.webContents.executeJavaScript("document.getElementById('follow-items').textContent.includes('automatic tracking unavailable')"),'honest manual-source status');
+    await command('follow-change',{identity:saved.identity,id:saved.id,paused:true});expected.followId=saved.id;
+    await captureShell('synthetic-following',1320,860);
+    await command('panel-close');
+  });
   await assertSpellcheck('fresh-default-before-any-settings-change', true, []);
   await check('capture actual synthetic blank and settings shell at narrow and desktop widths', async () => {
     for (const [width, height] of [[700, 600], [1320, 860]]) await captureShell('synthetic-blank', width, height);
@@ -1186,6 +1198,10 @@ async function firstLaunch() {
 
 async function secondLaunch() {
   const expected = JSON.parse(fs.readFileSync(path.join(context.directory, 'restart-expectations.json'), 'utf8'));
+  await check('follow source and pause choice survive a real process restart', async () => {
+    const data=JSON.parse(fs.readFileSync(path.join(context.profile,'browser-follows.json'),'utf8'));
+    const saved=data.sources.find(row=>row.id===expected.followId);assert.ok(saved);assert.equal(saved.paused,true);assert.equal(saved.automatic,false);assert.equal(saved.provider,'manual');
+  });
   await check('real process restart restores complete duplicate-preserving tab and identity metadata', async () => {
     const restored = await state();
     assert.deepEqual(restored.tabs.map(({ id, url, identity }) => ({ id, url, identity })), expected.tabs);

@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('browser', Object.freeze({
   onDownloads:callback => subscribe('downloads',callback),
   onPermissions:callback => subscribe('permissions',callback),
   onCapabilities:callback => subscribe('capabilities',callback),
+  onFollows:callback => subscribe('follows',callback),
   onHistory:callback => subscribe('history',callback),
   onBookmarks:callback => subscribe('bookmarks',callback),
   onWorkspaces:callback => subscribe('workspaces',callback),

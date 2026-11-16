@@ -5,6 +5,7 @@ const api = window.browser;
 let currentState = {profiles:[],tabs:[],preferences:{},currentIdentity:'personal',panel:null};
 let vaultItems = [], accountItems = [], extensionData = {items:[],profiles:[],busy:false};
 let permissionData = {items:[]}, downloadItems = [], capabilityData = null, extensionPreview = null;
+let followData={items:[]},followDraftIdentity=null;
 let historyData={items:[]},bookmarkData={tree:[]},workspaceData={items:[],groups:[]},resourceData=null,bookmarkFolder=null,extensionActions=[];
 let settingsDirty=false,historySettingsDirty=false;
 let bookmarkDraftIdentity=null,bookmarkMoveIdentity=null,historyDraftIdentity=null;
@@ -221,6 +222,7 @@ function renderPanel(panel) {
   else if (panel === 'downloads') renderDownloads();
   else if (panel === 'permissions') renderPermissions();
   else if (panel === 'capabilities') renderCapabilities();
+  else if(panel==='following')renderFollows();
   else if(panel==='history')renderHistory();
   else if(panel==='bookmarks')renderBookmarks();
   else if(panel==='workspaces')renderWorkspaces();
@@ -698,3 +700,35 @@ api.onCapabilities(data=>{
 });
 $('capability-search').oninput=renderCapabilities;$('capability-status').onchange=renderCapabilities;
 api.command('state').then(renderState).catch(error=>announce(error.message));
+
+function renderFollows(){
+  errorMessage('follow-error',followData.error);$('follow-recover').hidden=!followData.recoveryAvailable;
+  $('follow-identity').textContent=`Following for ${identityName(followData.identity||currentState.currentIdentity)}.${followDraftIdentity?` Unsaved follow will be added to ${identityName(followDraftIdentity)}.`:''} Pausing keeps saved updates; automatic checks stop when the browser closes.`;
+  const query=$('follow-search').value.toLocaleLowerCase(),filter=$('follow-filter').value;
+  const sources=(followData.items||[]).filter(source=>(filter==='all'||filter===source.kind||(filter==='unread'&&source.items.some(item=>!item.read))||(filter==='paused'&&source.paused))&&[source.name,source.url,...source.items.map(i=>i.title)].join(' ').toLocaleLowerCase().includes(query));
+  $('follow-count').textContent=`${sources.length} sources · ${(followData.items||[]).reduce((n,s)=>n+s.items.filter(i=>!i.read).length,0)} unread updates`;
+  paintList($('follow-items'),sources,source=>{
+    const card=node('article',undefined,'follow-card'),key={id:source.id,identity:source.identity};
+    card.append(node('p',`${source.kind.toUpperCase()} · ${source.provider==='manual'?'MANUAL CHECK':source.provider==='github-releases'?'GITHUB RELEASES':'GITHUB PROJECT ACTIVITY'}`,'subtle'),node('h2',source.name),node('p',source.url,'follow-address'));
+    card.append(node('p',source.paused?'Paused · saved updates retained':source.busy?'Checking public source…':source.provider==='manual'?'Saved only · automatic tracking unavailable':source.automatic?'Hourly checks enabled while browser is open':'Manual refresh · automatic checks off','follow-status'));
+    card.append(node('p',source.lastSuccess?`Last successful check: ${new Date(source.lastSuccess).toLocaleString()}`:'Not checked yet.','subtle'));
+    if(source.error)card.append(node('p',source.error,'error'));
+    const actions=node('div',undefined,'card-actions');actions.append(action('Open source','follow-open',key),action(source.paused?'Resume':'Pause','follow-change',{...key,paused:!source.paused}));
+    if(source.provider!=='manual'){
+      const refresh=action('Check now','follow-refresh',key);refresh.disabled=source.busy||source.paused;actions.append(refresh,action(source.automatic?'Turn off automatic checks':'Enable hourly checks','follow-change',{...key,automatic:!source.automatic}));
+    }
+    if(source.items.length)actions.append(action('Mark all read','follow-change',{...key,read:true}));card.append(actions);
+    const updates=node('details');updates.open=source.items.some(item=>!item.read);updates.append(node('summary',`${source.items.filter(i=>!i.read).length} unread · ${source.items.length} saved updates`));
+    const list=node('div',undefined,'follow-updates');
+    for(const item of [...source.items].sort((a,b)=>b.observedAt-a.observedAt)){
+      const row=node('div',undefined,'follow-update');row.append(node('span',item.read?'Read':'New','follow-badge'),node('strong',item.title),node('small',item.publishedAt?`Source date: ${item.publishedAt}`:'Source date unavailable'),action('Open update','follow-open',{...key,itemId:item.id}));list.append(row);
+    }
+    if(!source.items.length)list.append(node('p',source.lastSuccess?'No items returned by the last successful check. This does not establish that no other activity exists.':'Check this source to load its supported updates.','subtle'));
+    updates.append(list);card.append(updates);return card;
+  },'Your watchlist starts here. Add a creator or project above.');
+}
+api.onFollows(data=>{followData=data;if(currentState.panel==='following')renderFollows();});
+$('follow-search').oninput=renderFollows;$('follow-filter').onchange=renderFollows;
+$('follow-form').addEventListener('input',()=>{followDraftIdentity ||= followData.identity||currentState.currentIdentity;renderFollows();});
+$('follow-form').onsubmit=event=>{event.preventDefault();const form=event.currentTarget,fields=form.elements;
+  saveForm(form,'follow-add',{identity:followDraftIdentity||followData.identity||currentState.currentIdentity,name:fields.namedItem('name').value,url:fields.namedItem('url').value,kind:fields.namedItem('kind').value,automatic:fields.namedItem('automatic').checked},()=>{form.reset();followDraftIdentity=null;renderFollows();announce('Source saved. Supported updates can now be checked.');});};

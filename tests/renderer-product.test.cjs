@@ -12,7 +12,7 @@ const html = fs.readFileSync(path.join(__dirname, '../browser/index.html'), 'utf
 const source = fs.readFileSync(path.join(__dirname, '../browser/renderer.js'), 'utf8');
 const subscriptions = ['onState','onVault','onVaultDraft','onAccounts','onExtensions','onExtensionPreview',
   'onDownloads','onPermissions','onCapabilities','onNotice','onAddress','onFind','onHistory','onBookmarks',
-  'onWorkspaces','onResources','onSettingsPreview','onFindResult','onExtensionActions'];
+  'onFollows','onWorkspaces','onResources','onSettingsPreview','onFindResult','onExtensionActions'];
 const profiles = [{id:'personal',name:'Personal'},{id:'work',name:'Work'}];
 const copy = value => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
 const tick = () => new Promise(resolve => setImmediate(resolve));
@@ -344,4 +344,23 @@ test('DOM product: preference controls preserve a dirty draft and apply committe
   assert.equal(h.$('bookmarks-bar').hidden,false);
   assert.equal(field(form,'homePage').value,expected.homePage);
   assert.equal(field(form,'shortcut.focus-address').value,'');
+});
+
+test('following shows honest adapter coverage, last-good errors, scoped commands and full update list',async t=>{
+ const h=await harness(t,{initial:state({panel:'following'})});
+ const source={id:'repo',identity:'personal',name:'<script>creator</script>',kind:'project',url:'https://github.com/example/project',provider:'github-releases',automatic:false,paused:false,busy:false,lastSuccess:1700000000000,error:'HTTP 429: last-good data kept',items:[{id:'one',title:'<img src=x onerror=alert(1)>',url:'https://github.com/example/project/releases/tag/v1',read:false,observedAt:1,publishedAt:'2026-11-16'}]};
+ h.emit('onFollows',{identity:'personal',items:[source,{...source,id:'manual',name:'Manual creator',kind:'creator',provider:'manual',items:[],lastSuccess:0,error:''}]});await painted(h,'follow-items');
+ assert.match(h.$('follow-items').textContent,/HTTP 429/);assert.match(h.$('follow-items').textContent,/automatic tracking unavailable/);assert.equal(h.$('follow-items').querySelector('img'),null);
+ const cards=h.$('follow-items').querySelectorAll('article');assert.equal(cards.length,2);
+ const refresh=[...cards[0].querySelectorAll('button')].find(b=>b.textContent==='Check now');refresh.click();await tick();assert.deepEqual(h.calls.at(-1),{name:'follow-refresh',value:{id:'repo',identity:'personal'}});
+ assert.equal([...cards[1].querySelectorAll('button')].some(b=>b.textContent==='Check now'),false);
+ h.select(h.$('follow-filter'),'unread');await painted(h,'follow-items');assert.equal(h.$('follow-items').querySelectorAll('article').length,1);
+ h.input(h.$('follow-search'),'no-match');await painted(h,'follow-items');assert.equal(h.$('follow-items').querySelectorAll('article').length,0);
+});
+
+test('following add preserves form after failure and carries the displayed browser identity',async t=>{
+ let fail=true;const h=await harness(t,{initial:state({panel:'following'}),command:async name=>{if(name==='follow-add'&&fail)throw new Error('Storage unavailable');}});
+ h.emit('onFollows',{identity:'work',items:[]});const form=h.$('follow-form');h.input(field(form,'name'),'Project');h.input(field(form,'url'),'https://github.com/test/project');h.check(field(form,'automatic'),true);
+ h.submit(form);await tick();assert.equal(field(form,'name').value,'Project');assert.match(h.$('notice').textContent,/Storage unavailable/);assert.equal(h.calls.at(-1).value.identity,'work');
+ fail=false;h.submit(form);await tick();assert.equal(field(form,'name').value,'');
 });

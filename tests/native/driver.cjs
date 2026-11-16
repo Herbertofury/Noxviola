@@ -997,7 +997,9 @@ async function firstLaunch() {
     await popup.webContents.executeJavaScript("document.querySelector('#open .close').click()");
     await until(async()=>!(await state()).tabs.some(tab=>tab.id===id),'the tab closed through the dropdown');
     await until(()=>popup.webContents.executeJavaScript("Boolean(document.querySelector('#closed .open-tab'))"),'the recently closed result');
-    await popup.webContents.executeJavaScript("document.querySelector('#closed .open-tab').click()");
+    // Restoring intentionally destroys the popup; acknowledge the request before
+    // the click so Chromium cannot dispose the evaluating frame mid-response.
+    await popup.webContents.executeJavaScript("setTimeout(()=>document.querySelector('#closed .open-tab').click(),0);true");
     await until(async()=>(await state()).tabs.some(tab=>tab.id===id),'the original tab restored through the dropdown');
     await command('activate',previous);await command('close',id);
   });

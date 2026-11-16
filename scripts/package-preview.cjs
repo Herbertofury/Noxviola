@@ -17,7 +17,8 @@ const APP_FILES = [
   'browser/extension-api.preload.cjs', 'browser/extension-bridge.cjs', 'browser/extension-policy.cjs',
   'browser/extension-menus.cjs', 'browser/extension-icons.cjs', 'browser/extension-adapter-LICENSE.txt', 'browser/extension-browser-polyfill-LICENSE.txt',
   'browser/preferences.cjs', 'browser/resources.cjs', 'browser/spellcheck.cjs', 'browser/service-store.cjs',
-  'browser/curseforge-follow.cjs', 'browser/pane-layout.cjs', 'browser/follow-transitions.cjs', 'browser/modhold-follow.cjs', 'browser/modrinth-follow.cjs', 'browser/follows.cjs', 'browser/history.cjs', 'browser/bookmarks.cjs', 'browser/workspaces.cjs',
+  'browser/pane-layout.cjs', 'browser/creator-discovery.cjs', 'browser/creator-following.cjs', 'browser/follow-transitions.cjs', 'browser/modhold-project.cjs', 'browser/nexus-author-status.cjs', 'browser/modhold-follow.cjs', 'browser/creator-continuity.cjs', 'shared/creator-continuity.v1.json',
+  'browser/curseforge-follow.cjs', 'browser/modrinth-follow.cjs', 'browser/follows.cjs', 'browser/history.cjs', 'browser/bookmarks.cjs', 'browser/workspaces.cjs',
   'browser/vault.cjs', 'browser/accounts.cjs', 'LICENSE', 'THIRD_PARTY_NOTICES.md',
 ];
 

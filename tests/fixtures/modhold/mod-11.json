@@ -1,0 +1,59 @@
+{
+  "id": 11,
+  "name": "Estates of Skyrim - Immersive Settlement and Survival Overhaul (Player Homes-Hire Workers-Economy)",
+  "version": "0.1.21",
+  "game": "skyrim-se",
+  "author": {
+    "handle": "SethSaidThat",
+    "name": "SethSaidThat"
+  },
+  "updated": "2026-11-14 18:10:48",
+  "published": "2026-10-25 03:00:53",
+  "page": "https://modholdmods.com/g/skyrim-se/mods/11/estates-of-skyrim-immersive-settlement-and-survival-overhaul",
+  "files": [
+    {
+      "id": 541,
+      "kind": "main",
+      "label": "Main file",
+      "name": "Estates of Skyrim 0.1.21 Beta.zip",
+      "version": "0.1.21",
+      "size": 47022769,
+      "sha256": "92afbc70e19d437c5abef606ea9467905391ac35820430abf7c845a2ffbc64fa",
+      "scanned": "2026-11-16 19:06:06",
+      "downloads": 104
+    },
+    {
+      "id": 586,
+      "kind": "optional",
+      "label": "SkyrimNet Add-on",
+      "name": "Estates of Skyrim - SkyrimNet Add-on 1.0.1.zip",
+      "version": "1.0.1",
+      "size": 2657,
+      "sha256": "6a56e85b5480082ec1b66b7299fd7c86689c4d47d5bc3c1f6a6c3bf0e865a03c",
+      "scanned": "2026-11-16 18:14:34",
+      "downloads": 13
+    },
+    {
+      "id": 414,
+      "kind": "optional",
+      "label": "Seths Grass 0.1.5 (optional)",
+      "name": "Seths Grass 0.1.5.zip",
+      "version": "0.1.5",
+      "size": 267885,
+      "sha256": "6b177cbc66fbf835bdaa3800efe1040a08e8b03d7215f8793cbea2ee76b13ada",
+      "scanned": "2026-11-15 22:38:47",
+      "downloads": 22
+    },
+    {
+      "id": 227,
+      "kind": "optional",
+      "label": "Translation Kit",
+      "name": "Estates of Skyrim - Translation Kit 0.1.11.zip",
+      "version": "0.1.11",
+      "size": 39957,
+      "sha256": "f7342532d24c443cd7e84bea6f0bf8ba29256c31ddfa67d305ad28ecc8c645c2",
+      "scanned": "2026-11-15 20:49:45",
+      "downloads": 5
+    }
+  ]
+}

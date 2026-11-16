@@ -1,0 +1,8 @@
+{
+  "attemptedAt": "2026-11-16T19:42:35.247143+00:00",
+  "status": "blocked",
+  "scope": "Attempt to run the production renderer and service in system Chromium with a test transport. No visual/native acceptance established.",
+  "reason": "Chromium process_singleton_posix.cc: socket() failed: Operation not permitted (1); process aborted before any page loaded.",
+  "preservedVerification": "Production renderer DOM interactions are exercised through jsdom by npm test; live primary provider collectors are separately checked.",
+  "nextCheck": "Run the renderer/actual Electron gates on a supported host; do not bypass the restricted socket boundary."
+}

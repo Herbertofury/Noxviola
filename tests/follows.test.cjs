@@ -212,7 +212,7 @@ test('ModHold file hash and size history retain old values rather than inventing
 });
 
 test('ModHold real collector contract survives durable cache validation and reopen',async t=>{
- const modhold=require('../browser/modhold-follow.cjs');const {service,reopen}=fixture(t,{collect:(s,o)=>modhold.collect(s,{...o,fetcher:async()=>new Response(JSON.stringify({id:12,name:'Fixture',version:'1.0',updated:'2026-11-16 12:00:00',author:{handle:'Example'},page:'https://modholdmods.com/g/skyrim-se/mods/12/example',files:[]}))})});const s=service.add('personal',{name:'Fixture',url:'https://modholdmods.com/g/skyrim-se/mods/12'});await service.refresh('personal',s.id);const saved=reopen().get('personal',s.id);assert.equal(saved.error,'');assert.equal(saved.lastSuccess,1000);assert.equal(saved.items[0].title,'Fixture');assert.equal(Object.keys(saved.cache).length,1);
+ const modhold=require('../browser/modhold-follow.cjs');const {service,reopen}=fixture(t,{collect:(s,o)=>modhold.collect(s,{...o,fetcher:async()=>new Response(JSON.stringify({id:12,game:'skyrim-se',name:'Fixture',version:'1.0',updated:'2026-11-16 12:00:00',author:{handle:'Example'},page:'https://modholdmods.com/g/skyrim-se/mods/12/example',files:[]}))})});const s=service.add('personal',{name:'Fixture',url:'https://modholdmods.com/g/skyrim-se/mods/12'});await service.refresh('personal',s.id);const saved=reopen().get('personal',s.id);assert.equal(saved.error,'');assert.equal(saved.lastSuccess,1000);assert.equal(saved.items[0].title,'Fixture');assert.equal(Object.keys(saved.cache).length,1);
 });
 
 test('transition reports persist with source identity corrections but never add or switch follows',t=>{

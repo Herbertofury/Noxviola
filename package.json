@@ -24,6 +24,7 @@
   },
   "productName": "Noxviola",
   "dependencies": {
+    "parse5": "8.1.1",
     "yauzl": "3.4.0"
   }
 }

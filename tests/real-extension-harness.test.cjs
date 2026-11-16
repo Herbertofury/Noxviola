@@ -109,17 +109,59 @@ test('real-package observers bind canonical owned directories across Windows sho
   const linked = path.join(profile, 'extensions', 'packages', 'foreign-link');
   fs.symlinkSync(outside, linked, process.platform === 'win32' ? 'junction' : 'dir');
   assert.equal(ownedPackageId(profile, linked), null);
+  const nested = path.join(owned, 'nested'); fs.mkdirSync(nested);
+  assert.equal(ownedPackageId(profile, nested), null, 'Nested directories are not directly owned package roots');
+  const ordinaryFile = path.join(profile, 'extensions', 'packages', 'file'); fs.writeFileSync(ordinaryFile, 'not a directory');
+  assert.equal(ownedPackageId(profile, ordinaryFile), null);
   const short = 'C:\\Users\\RUNNER~1\\profile', long = 'C:\\Users\\runneradmin\\profile', root = path.win32.join(long, 'extensions', 'packages');
-  const calls = [];
+  const calls = [], normalize = value => value.replace(short, long), target = path.win32.join(root, 'owned-id');
   const filesystem = {
-    realpathSync(value) {calls.push(value); return value.replace(short, long);},
-    statSync(value) {return {isDirectory: () => true, dev: 1n, ino: value === root ? 10n : value === path.win32.join(root, 'owned-id') ? 11n : 12n};},
+    // Like pinned Node's ordinary realpath walk, this preserves a non-link
+    // short name. Only the supported native entry resolves the opened handle.
+    realpathSync(value) {return value;},
+    statSync(value) {value = normalize(value); return {isDirectory: () => true, dev: 1n, ino: value === root ? 10n : value === target ? 11n : 12n};},
   };
-  assert.equal(ownedPackageId(short, path.win32.join(root, 'owned-id'), filesystem, path.win32), 'owned-id');
-  assert.deepEqual(calls, [path.win32.join(short, 'extensions', 'packages'), path.win32.join(root, 'owned-id')]);
+  filesystem.realpathSync.native = value => {calls.push(value); return normalize(value);};
+  assert.equal(ownedPackageId(short, target, filesystem, path.win32), 'owned-id');
+  assert.deepEqual(calls, [path.win32.join(short, 'extensions', 'packages'), target, target]);
+  // Parent and root/basename file identities must remain authoritative even
+  // when canonical path spellings differ. No final lexical check may undo it.
+  filesystem.realpathSync.native = value => value;
+  assert.equal(ownedPackageId(short, target, filesystem, path.win32), 'owned-id');
   // Case-sensitive Windows directories can be distinct. Case-folding path
   // comparison alone must not admit a different physical parent.
   assert.equal(ownedPackageId(short, path.win32.join(root.toUpperCase(), 'owned-id'), filesystem, path.win32), null);
+  let targetReads = 0;
+  const replaced = {...filesystem, statSync(value) {
+    const stat = filesystem.statSync(value);
+    return normalize(value) === target && ++targetReads === 2 ? {...stat, ino: 99n} : stat;
+  }};
+  assert.equal(ownedPackageId(short, target, replaced, path.win32), null, 'The independently resolved direct child must remain the same physical target');
+  assert.equal(ownedPackageId(short, target, {...filesystem, statSync() {return {isDirectory: () => true, dev: 1n, ino: 0n};}}, path.win32), null, 'Unavailable file identity is not ownership proof');
+});
+
+test('actual extension diagnostics preserve unavailable native preferences and still inspect the committed document', async () => {
+  const {extensionContextDiagnostics} = require('./native/real-extension-driver.cjs');
+  const fields = {webContentsId: 3, type: 'backgroundPage', url: 'chrome-extension://fixture/background/index.html'};
+  const document = {url: fields.url, readyState: 'complete', title: 'Package background', api: {permissionsContains: 'function'}};
+  let preferences = null, loading = false;
+  const queries = [], contents = {
+    getLastWebPreferences: () => preferences, isLoading: () => loading,
+    executeJavaScript: async source => {queries.push(source); return document;},
+  };
+  const missing = await extensionContextDiagnostics(contents, fields);
+  assert.deepEqual(missing, {...fields, loading: false, preferences: null, document});
+  assert.equal(queries.length, 1);
+  assert.match(queries[0], /permissionsContains:typeof chrome\.permissions\?\.contains/);
+  preferences = {contextIsolation: false, nodeIntegration: true, sandbox: false, webSecurity: false, preload: 'observed-preload.cjs'};
+  assert.deepEqual((await extensionContextDiagnostics(contents, fields)).preferences, preferences, 'Diagnostic evidence is never replaced with expected secure values');
+  preferences = {};
+  assert.deepEqual((await extensionContextDiagnostics(contents, fields)).preferences, {contextIsolation: null, nodeIntegration: null, sandbox: null, webSecurity: null, preload: null});
+  loading = true;
+  const queryCount = queries.length;
+  assert.equal((await extensionContextDiagnostics(contents, fields)).document, undefined);
+  assert.equal(queries.length, queryCount, 'A loading context must not execute a premature document probe');
+  await assert.rejects(extensionContextDiagnostics({...contents, getLastWebPreferences() {throw new Error('native read failure');}}, fields), /native read failure/);
 });
 
 test('real-package CLI requires an explicit archive and refuses unsafe or silently ignored options', () => {

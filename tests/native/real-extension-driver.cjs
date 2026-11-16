@@ -39,17 +39,37 @@ async function clickVisibleControl(contents, selector, observe) {
 
 function ownedPackageId(profile, directory, filesystem = fs, paths = path) {
   try {
-    // Electron may expand a Windows 8.3 profile path. Compare actual canonical
-    // directories instead of treating that harmless spelling difference as a
-    // foreign package and losing its startup exceptions.
-    const root = filesystem.realpathSync(paths.join(profile, 'extensions', 'packages'));
-    const target = filesystem.realpathSync(directory);
-    if (!filesystem.statSync(target, {bigint: true}).isDirectory()) return null;
+    // The ordinary Node realpath walk preserves non-link Windows 8.3 names.
+    // Use the native opened-handle path, then prove parent and child identity;
+    // neither case folding nor a final lexical relative path is authority.
+    const canonical = value => filesystem.realpathSync.native(value);
+    const sameDirectory = (left, right) => left.isDirectory() && right.isDirectory() &&
+      typeof left.ino === 'bigint' && left.ino > 0n && left.dev === right.dev && left.ino === right.ino;
+    const root = canonical(paths.join(profile, 'extensions', 'packages'));
+    const target = canonical(directory), targetStat = filesystem.statSync(target, {bigint: true});
     const owner = filesystem.statSync(root, {bigint: true}), parent = filesystem.statSync(paths.dirname(target), {bigint: true});
-    if (!owner.isDirectory() || !parent.isDirectory() || owner.dev !== parent.dev || owner.ino !== parent.ino) return null;
-    const relative = paths.relative(root, target);
-    return relative && relative !== '..' && !paths.isAbsolute(relative) && !relative.includes(paths.sep) ? relative : null;
+    if (!sameDirectory(owner, parent)) return null;
+    const name = paths.basename(target);
+    if (!name || name === '.' || name === '..') return null;
+    const child = filesystem.statSync(canonical(paths.join(root, name)), {bigint: true});
+    return sameDirectory(targetStat, child) ? name : null;
   } catch { return null; }
+}
+
+async function extensionContextDiagnostics(contents, fields) {
+  const preferences = contents.getLastWebPreferences();
+  const detail = { ...fields, loading: contents.isLoading(), preferences: preferences == null ? null : {
+    contextIsolation: preferences.contextIsolation ?? null, nodeIntegration: preferences.nodeIntegration ?? null,
+    sandbox: preferences.sandbox ?? null, webSecurity: preferences.webSecurity ?? null, preload: preferences.preload ?? null,
+  } };
+  // Electron explicitly returns null for contexts without its own preference
+  // object. Preserve unavailable evidence; never invent secure preferences or
+  // let an optional diagnostic hide the observed extension document/error.
+  if (!detail.loading) detail.document = await contents.executeJavaScript(`(() => ({url:location.href,readyState:document.readyState,title:document.title,
+    api:{alarms:typeof chrome.alarms,alarmListener:typeof chrome.alarms?.onAlarm?.addListener,
+    permissionsContains:typeof chrome.permissions?.contains,storageLocal:typeof chrome.storage?.local,
+    tabsCreate:typeof chrome.tabs?.create,tabsQuery:typeof chrome.tabs?.query,setIcon:typeof chrome.browserAction?.setIcon}}))()`);
+  return detail;
 }
 
 async function main() {
@@ -245,16 +265,7 @@ async function main() {
     for (const entry of observed.values()) {
       const contents = entry.contents;
       if (contents.isDestroyed() || !isPackageURL(contents.getURL())) continue;
-      const preferences = contents.getLastWebPreferences();
-      const detail = { ...targetFields(contents), loading: contents.isLoading(), preferences: {
-        contextIsolation: preferences.contextIsolation, nodeIntegration: preferences.nodeIntegration,
-        sandbox: preferences.sandbox, webSecurity: preferences.webSecurity, preload: preferences.preload,
-      } };
-      if (!contents.isLoading()) detail.document = await contents.executeJavaScript(`(() => ({url:location.href,readyState:document.readyState,title:document.title,
-        api:{alarms:typeof chrome.alarms,alarmListener:typeof chrome.alarms?.onAlarm?.addListener,
-        permissionsContains:typeof chrome.permissions?.contains,storageLocal:typeof chrome.storage?.local,
-        tabsCreate:typeof chrome.tabs?.create,tabsQuery:typeof chrome.tabs?.query,setIcon:typeof chrome.browserAction?.setIcon}}))()`);
-      contexts.push(detail);
+      contexts.push(await extensionContextDiagnostics(contents, targetFields(contents)));
     }
     return contexts;
   }
@@ -463,4 +474,4 @@ if (isElectronEntry()) main().catch(error => {
   console.error(error.stack || error);
   require('electron').app.exit(1); // An early failure must not idle until the outer deadline.
 });
-module.exports = { errorDetails, stackDetails, isElectronEntry, clickVisibleControl, ownedPackageId, main };
+module.exports = { errorDetails, stackDetails, isElectronEntry, clickVisibleControl, ownedPackageId, extensionContextDiagnostics, main };

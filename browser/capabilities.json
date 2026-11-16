@@ -17595,7 +17595,7 @@
           "browser/preferences.cjs"
         ],
         "integrationStrategy": "Use a shared opt-in panel/adaptor service; preserve provider-specific behavior as variants.",
-        "note": "A user can explicitly add a provider website to an identity-scoped sidebar WebContentsView. This is a generic website panel, not a verified provider-specific integration; login popups, notifications, service controls and extension integration remain open."
+        "note": "A user can explicitly add a provider website to an identity-scoped sidebar WebContentsView. This is a generic website panel, not a verified provider-specific integration; synthetic identity-isolated login popups work; real provider login flows, notifications, service controls and extension integration remain open."
       },
       "performance": "No startup, polling or hidden page processes for disabled integrations.",
       "privacy": "Disclose data recipients and account scope; never transmit browsing or extension inventories to Noxviola.",
@@ -17674,7 +17674,7 @@
           "browser/preferences.cjs"
         ],
         "integrationStrategy": "Use a shared opt-in panel/adaptor service; preserve provider-specific behavior as variants.",
-        "note": "A user can explicitly add a provider website to an identity-scoped sidebar WebContentsView. This is a generic website panel, not a verified provider-specific integration; login popups, notifications, service controls and extension integration remain open."
+        "note": "A user can explicitly add a provider website to an identity-scoped sidebar WebContentsView. This is a generic website panel, not a verified provider-specific integration; synthetic identity-isolated login popups work; real provider login flows, notifications, service controls and extension integration remain open."
       },
       "performance": "No startup, polling or hidden page processes for disabled integrations.",
       "privacy": "Disclose data recipients and account scope; never transmit browsing or extension inventories to Noxviola.",
@@ -19045,7 +19045,7 @@
           "browser/preferences.cjs"
         ],
         "integrationStrategy": "Use a shared opt-in panel/adaptor service; preserve provider-specific behavior as variants.",
-        "note": "A user can explicitly add a provider website to an identity-scoped sidebar WebContentsView. This is a generic website panel, not a verified provider-specific integration; login popups, notifications, service controls and extension integration remain open."
+        "note": "A user can explicitly add a provider website to an identity-scoped sidebar WebContentsView. This is a generic website panel, not a verified provider-specific integration; synthetic identity-isolated login popups work; real provider login flows, notifications, service controls and extension integration remain open."
       },
       "performance": "No startup, polling or hidden page processes for disabled integrations.",
       "privacy": "Disclose data recipients and account scope; never transmit browsing or extension inventories to Noxviola.",

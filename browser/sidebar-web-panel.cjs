@@ -1,6 +1,6 @@
 'use strict';
 // A real, on-demand web panel. It uses the existing identity Session; it never
-// executes browser-shell code in the website or opens a separate popup.
+// executes browser-shell code in the website. Popups remain in that identity.
 const {httpUrl}=require('./state.cjs');
 
 function createSidebarWebPanel({WebContentsView,getWindow,getSession,identityReady=async()=>{},onChange=()=>{}}){
@@ -50,14 +50,36 @@ function createSidebarWebPanel({WebContentsView,getWindow,getSession,identityRea
       entry.error='This identity could not be initialized for the sidebar.';if(current===entry)notify();
     });
   }
+  function popupAddress(url){return url==='about:blank'||Boolean(httpUrl(url));}
+  function protectPopupSource(source,entry,session){
+    source.setWindowOpenHandler(({url})=>{
+      if(disposed||!entries.has(entry.key)||!popupAddress(url))return {action:'deny'};
+      return {action:'allow',overrideBrowserWindowOptions:{parent:getWindow(),autoHideMenuBar:true,show:true,
+        webPreferences:{session,nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true,allowRunningInsecureContent:false}}};
+    });
+    source.on('did-create-window',child=>{
+      const wc=child.webContents;
+      if(disposed||!entries.has(entry.key)||wc.session!==session){child.close();return;}
+      entry.popups.add(child);
+      child.on('closed',()=>entry.popups.delete(child));
+      child.setMenu(null);
+      const title=url=>{let origin='Blank page';try{const parsed=new URL(url);if(httpUrl(url))origin=parsed.origin;}catch{}child.setTitle(`Noxviola · ${entry.identity} · ${origin}`);};
+      child.on('page-title-updated',event=>event.preventDefault());
+      title(wc.getURL());
+      for(const eventName of ['will-navigate','will-redirect'])wc.on(eventName,(event,url)=>{if(!popupAddress(url))event.preventDefault();});
+      wc.on('did-navigate',(_event,url)=>title(url));
+      wc.on('did-navigate-in-page',(_event,url,isMainFrame)=>{if(isMainFrame)title(url);});
+      protectPopupSource(wc,entry,session);
+    });
+  }
   function make(identity,site,session){
     const win=getWindow();if(!win||win.isDestroyed())throw new Error('The browser window is unavailable.');
     const view=new WebContentsView({webPreferences:{session,nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true,allowRunningInsecureContent:false,spellcheck:true}});
     const wc=view.webContents;
     if(wc.session!==session){wc.close();throw new Error('The sidebar identity session could not be verified.');}
-    const entry={key:keyFor(identity,site),identity,site,url:site,title:'',view,started:false,pending:null,loading:false,error:''};
+    const entry={key:keyFor(identity,site),identity,site,url:site,title:'',view,popups:new Set(),started:false,pending:null,loading:false,error:''};
     view.setBackgroundColor('#171122');view.setVisible(false);win.contentView.addChildView(view);
-    wc.setWindowOpenHandler(()=>({action:'deny'}));
+    protectPopupSource(wc,entry,session);
     for(const eventName of ['will-navigate','will-redirect'])wc.on(eventName,(event,url)=>{if(!httpUrl(url))event.preventDefault();});
     wc.on('page-title-updated',(_event,title)=>{entry.title=title;if(current===entry)notify();});
     wc.on('did-start-loading',()=>{entry.loading=true;entry.error='';if(current===entry)notify();});
@@ -90,6 +112,7 @@ function createSidebarWebPanel({WebContentsView,getWindow,getSession,identityRea
   function release({identity,url}={}){
     const site=httpUrl(url),entry=site&&entries.get(keyFor(identity,site));if(!entry)return false;
     entries.delete(entry.key);if(current===entry){current=null;visible=false;}
+    for(const popup of entry.popups)if(!popup.isDestroyed())popup.close();
     const win=getWindow();if(!entry.view.webContents.isDestroyed()){if(win&&!win.isDestroyed())win.contentView.removeChildView(entry.view);entry.view.webContents.close();}notify();return true;
   }
   function destroy(){if(disposed)return;for(const entry of [...entries.values()])release({identity:entry.identity,url:entry.site});disposed=true;current=null;visible=false;}

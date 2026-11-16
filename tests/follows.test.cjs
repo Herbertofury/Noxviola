@@ -169,3 +169,9 @@ test('queued check honors prior source error cooldown before any network request
  let unblock;let calls=0;const {service}=fixture(t,{collect:async()=>{calls++;await new Promise(resolve=>unblock=resolve);const error=new Error('rate limited');error.retryAt=5000000;throw error;}});const a=add(service),b=add(service,'work',{url:'https://github.com/other/project'});
  const first=service.refresh('personal',a.id);await new Promise(setImmediate);const second=service.refresh('work',b.id);unblock();await first;await new Promise(setImmediate);if(calls>1)unblock();await second;assert.equal(calls,1);
 });
+
+test('CurseForge manual references remain isolated, persistent and explicitly credential-blocked',t=>{
+ const {service,reopen}=fixture(t);const s=service.add('personal',{name:'Synthetic CurseForge reference',url:'https://www.curseforge.com/minecraft/mc-mods/example',automatic:true});
+ assert.equal(s.provider,'manual');assert.equal(s.automatic,false);assert.match(service.list('personal')[0].coverage,/authorized API key/);assert.equal(service.list('work').length,0);
+ assert.throws(()=>service.change('personal',s.id,{automatic:true}),/No automatic adapter/);assert.equal(reopen().list('personal')[0].provider,'manual');
+});

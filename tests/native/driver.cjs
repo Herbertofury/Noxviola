@@ -4,12 +4,14 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const { performance } = require('node:perf_hooks');
 const { app, BrowserWindow, dialog, session, webContents } = require('electron');
 const { readContext, preflight, sourceEvidence } = require('../../scripts/native-smoke.cjs');
 const { createIdentitySessionResolver, identityStoragePaths } = require('../../browser/session-path.cjs');
 const { DOWNLOAD } = require('./fixture-server.cjs');
 const { assertOnlySpellingChanged } = require('./preferences-evidence.cjs');
+const { createPageTools } = require('./page-tools.cjs');
 const bridgeManifest = require('./fixtures/extension-bridge/manifest.json');
 const BRIDGE_CHECKS = ['chrome-callback-query', 'browser-promise-query', 'first-tab-event', 'canonical-tabs', 'native-message-ids', 'bookmark-service', 'cookie-host-and-identity', 'foreign-tab-denied', 'callback-last-error', 'promise-rejection', 'action-state', 'action-icons', 'cleanup'];
 const BRIDGE_ICON_STAGES = [
@@ -749,6 +751,118 @@ async function selectDownload(view, route, filename) {
   return itemPromise;
 }
 
+function pageTools() {
+  return createPageTools({ window, context, command, state, navigate, activate, check, result });
+}
+function downloadEvidence() {
+  result.downloadHistory ||= {
+    scope: 'Actual native-session attribution, durable terminal transfer records, preserved downloaded bytes, and identity-scoped metadata clearing. The browser downloads list remains app-wide and identity-tagged; this does not claim confidentiality between identities.',
+    snapshots: [], rendered: [], completedFiles: [],
+  };
+  return result.downloadHistory;
+}
+function digest(bytes) { return crypto.createHash('sha256').update(bytes).digest('hex'); }
+async function captureDownloadHistory(stage) {
+  assert.ok(['before-close', 'after-restart', 'after-personal-clear'].includes(stage));
+  const evidence = downloadEvidence();
+  const status = await until(async () => {
+    const value = (await state()).downloadHistory; evidence.latestStatus = value;
+    if (value?.error) throw new Error(`Actual download history error: ${value.error}`);
+    return value?.persistent && value.status === 'ready' && value.pendingCount === 0 ? value : null;
+  }, 'the actual durable download-history status');
+  const bytes = fs.readFileSync(path.join(context.profile, 'browser-downloads.json'));
+  const document = JSON.parse(bytes.toString('utf8'));
+  assert.equal(document.version, 1); assert.ok(Array.isArray(document.downloads));
+  const rows = await command('download-list');
+  assert.equal(rows.length, document.downloads.length, 'The full app-wide native history must match the durable document');
+  for (const saved of document.downloads) {
+    const row = rows.find(item => item.id === saved.id); assert.ok(row);
+    assert.equal(row.terminal, true); assert.equal(row.historySaved, true); assert.equal(row.historyPending, false);
+    assert.equal(row.hasNativeItem, false); assert.equal(row.canResume, false); assert.equal(row.cancelPending, false);
+    assert.deepEqual(Object.fromEntries(Object.keys(saved).map(key => [key, row[key]])), saved, 'Every stored terminal field must match actual manager data');
+  }
+  const file = `download-history-${stage}.json`;
+  fs.writeFileSync(path.join(context.output, file), bytes, { flag: 'wx', mode: 0o600 });
+  const snapshot = { stage, status, document, rows, rawLedger: { file, bytes: bytes.length, sha256: digest(bytes) } };
+  evidence.snapshots.push(snapshot); return snapshot;
+}
+function preserveCompletedDownload(completed, row, label) {
+  assert.equal(row.state, 'completed'); assert.equal(row.path, completed.destination); assert.equal(row.url, completed.url);
+  assert.equal(row.received, DOWNLOAD.length); assert.equal(row.total, DOWNLOAD.length); assert.equal(row.error, '');
+  assert.equal(new Date(row.finishedAt).toISOString(), row.finishedAt);
+  const bytes = fs.readFileSync(completed.destination); assert.deepEqual(bytes, DOWNLOAD);
+  const file = `actual-download-${label}.txt`;
+  fs.copyFileSync(completed.destination, path.join(context.output, file), fs.constants.COPYFILE_EXCL);
+  const value = { id: row.id, identity: row.identity, path: completed.destination, file, bytes: bytes.length, sha256: digest(bytes) };
+  downloadEvidence().completedFiles.push(value); return value;
+}
+function assertCompletedDownloadBytes(files) {
+  for (const record of files) {
+    for (const file of [record.path, path.join(context.output, record.file)]) {
+      const bytes = fs.readFileSync(file); assert.deepEqual(bytes, DOWNLOAD, 'Removing transfer metadata must never remove or rewrite the actual completed download');
+      assert.equal(bytes.length, record.bytes); assert.equal(digest(bytes), record.sha256);
+    }
+  }
+}
+async function assertDownloadHistoryUI(records, stage, { restored = false } = {}) {
+  if ((await state()).panel !== 'downloads') await command('downloads');
+  const rendered = await until(() => window.webContents.executeJavaScript(`(() => {
+    const list=document.getElementById('download-items');
+    if(document.getElementById('downloads').hidden||list.hasAttribute('aria-busy')||list.querySelectorAll('article').length!==${records.length})return null;
+    const clear=document.getElementById('download-history-clear');
+    return {status:document.getElementById('download-history-status').textContent,error:document.getElementById('download-history-error').textContent,
+      clear:{text:clear.textContent,disabled:clear.disabled,visible:Boolean(clear.getClientRects().length)},
+      cards:[...list.querySelectorAll('article')].map(card=>({filename:card.querySelector('h2')?.textContent,path:card.querySelector('.source')?.textContent,
+        text:card.textContent,paragraphs:[...card.querySelectorAll('p')].map(item=>item.textContent),
+        progress:card.querySelector('progress')?{value:card.querySelector('progress').value,max:card.querySelector('progress').max}:null,
+        actions:[...card.querySelectorAll('button')].map(item=>({label:item.textContent,disabled:item.disabled}))}))};
+  })()`), 'the actual complete download-history cards');
+  assert.equal(rendered.error, ''); assert.match(rendered.status, /No unsaved transfer status/);
+  const current = await state();
+  for (const record of records) {
+    const card = rendered.cards.find(item => item.path === record.path); assert.ok(card, 'Every generated record must have its own actual rendered card');
+    assert.equal(card.filename, record.filename);
+    const owner = current.profiles.find(item => item.id === record.identity); assert.ok(owner);
+    assert.ok(card.paragraphs.includes(`${owner.name} · ${record.state}`), 'The actual card must retain its native identity attribution');
+    if (record.total > 0) assert.deepEqual(card.progress, { value: record.received, max: record.total });
+    assert.ok(card.actions.some(item => item.label === 'Remove from history' && !item.disabled));
+    assert.ok(!card.actions.some(item => ['Pause', 'Resume', 'Cancel'].includes(item.label)), 'A terminal/restored record must not expose a fictitious native resume or cancel');
+    if (record.state === 'completed') assert.ok(card.actions.some(item => item.label === 'Show in folder' && !item.disabled));
+    if (restored) assert.match(card.text, /Restored from saved download history/);
+  }
+  downloadEvidence().rendered.push({ stage, ...rendered });
+  return rendered;
+}
+async function clearPersonalDownloadHistory(expected) {
+  await activate(expected.personalTab);
+  const rendered = await assertDownloadHistoryUI(expected.downloadHistory.records, 'before-personal-clear', { restored: true });
+  const owner = (await state()).profiles.find(item => item.id === expected.personalIdentity);
+  assert.deepEqual(rendered.clear, { text: `Clear saved history for ${owner.name}`, disabled: false, visible: true });
+  const previous = dialog.showMessageBox, choices = [];
+  dialog.showMessageBox = async (parent, options) => {
+    assert.equal(parent, window); assert.equal(options.message, `Clear download history for ${owner.name}?`);
+    assert.equal(options.detail, 'This removes transfer records for this identity. Downloaded files are kept. Finish or cancel active transfers first.');
+    assert.deepEqual(options.buttons, ['Cancel', 'Clear history']); assert.equal(options.defaultId, 0); assert.equal(options.cancelId, 0);
+    assert.equal(choices.length, 0, 'Exactly one generated, identity-bound clear confirmation is allowed');
+    choices.push({ message: options.message, detail: options.detail, buttons: options.buttons, response: 1 });
+    return { response: 1, checkboxChecked: false };
+  };
+  try {
+    await window.webContents.executeJavaScript("document.getElementById('download-history-clear').click()");
+    await until(async () => {
+      const rows = await command('download-list');
+      return choices.length === 1 && rows.every(row => row.identity !== expected.personalIdentity) ? rows : null;
+    }, 'the actual confirmed identity-scoped history clearing');
+    const saved = await captureDownloadHistory('after-personal-clear');
+    assert.deepEqual(saved.document.downloads, expected.downloadHistory.records.filter(row => row.identity !== expected.personalIdentity), 'Clearing one identity must preserve every other identity record exactly');
+    assert.ok(saved.document.downloads.some(row => row.identity === expected.secondIdentity));
+    assertCompletedDownloadBytes(expected.downloadHistory.completedFiles);
+    await assertDownloadHistoryUI(saved.document.downloads, 'after-personal-clear', { restored: true });
+    downloadEvidence().clearConfirmation = choices;
+  } finally { dialog.showMessageBox = previous; }
+  await command('panel-close');
+}
+
 async function firstLaunch() {
   const expected = {};
   const initial = await state();
@@ -837,9 +951,20 @@ async function firstLaunch() {
   });
   await check('actual DownloadItem completion, pause/resume and cancellation are reflected by browser commands', async () => {
     const view = await activate(expected.personalTab);
-    const completed = await selectDownload(view, '/download', 'complete.txt');
+    const completed = await selectDownload(view, '/download?identity=personal', 'complete-personal.txt');
     assert.equal(await completed.done, 'completed');
     assert.deepEqual(fs.readFileSync(completed.destination), DOWNLOAD);
+    const personalRow = await until(async () => (await command('download-list')).find(item => item.url === completed.url && item.state === 'completed' && item.historySaved), 'the completed personal native transfer and saved history');
+    assert.equal(personalRow.identity, expected.personalIdentity);
+    preserveCompletedDownload(completed, personalRow, 'personal');
+    const secondView = await activate(expected.secondTab);
+    assert.notEqual(secondView.webContents.session, view.webContents.session, 'The two native transfers must originate from separate identity Sessions');
+    const secondCompleted = await selectDownload(secondView, '/download?identity=second', 'complete-second.txt');
+    assert.equal(await secondCompleted.done, 'completed');
+    const secondRow = await until(async () => (await command('download-list')).find(item => item.url === secondCompleted.url && item.state === 'completed' && item.historySaved), 'the completed second-identity native transfer and saved history');
+    assert.equal(secondRow.identity, expected.secondIdentity);
+    preserveCompletedDownload(secondCompleted, secondRow, 'second');
+    await activate(expected.personalTab);
     const cancelled = await selectDownload(view, '/slow-download', 'cancelled.txt');
     const row = await until(async () => (await command('download-list')).find(item => item.url === cancelled.url && item.state === 'progressing'), 'progressing download manager row');
     await command('download-action', { id: row.id, action: 'pause' });
@@ -848,6 +973,13 @@ async function firstLaunch() {
     assert.equal(cancelled.item.isPaused(), false);
     await command('download-action', { id: row.id, action: 'cancel' });
     assert.equal(await cancelled.done, 'cancelled');
+    const saved = await captureDownloadHistory('before-close');
+    assert.equal(saved.document.downloads.length, 3);
+    const cancelledRow = saved.document.downloads.find(item => item.id === row.id);
+    assert.equal(cancelledRow.state, 'cancelled'); assert.equal(cancelledRow.identity, expected.personalIdentity);
+    expected.downloadHistory = { records: saved.document.downloads, rawLedgerSha256: saved.rawLedger.sha256, completedFiles: downloadEvidence().completedFiles };
+    await assertDownloadHistoryUI(saved.document.downloads, 'before-close');
+    await command('panel-close');
   });
   await check('MV3 content script executes with persistent, per-identity extension storage and real enable/disable', async () => {
     const preview = await previewFixture('extension');
@@ -988,6 +1120,7 @@ async function firstLaunch() {
     await assertCookieLifetimes(expected.personalIdentity, 'personal', 'before-normal-close');
     await assertCookieLifetimes(expected.secondIdentity, 'second', 'before-normal-close');
   });
+  expected.pageTools = await pageTools().firstLaunch(expected);
   expected.extensionVisits = (await extensionData(await site())).visits;
   const final = await state();
   expected.tabs = final.tabs.map(({ id, url, identity }) => ({ id, url, identity }));
@@ -1030,6 +1163,17 @@ async function secondLaunch() {
     result.spellcheck.restoredControl = choice;
     await command('panel-close');
     await activate(previousTab);
+  });
+  await pageTools().afterRestart(expected.pageTools);
+  await check('download history and completed bytes survive restart with truthful native status and identity-scoped clearing', async () => {
+    const saved = await captureDownloadHistory('after-restart');
+    assert.equal(saved.rawLedger.sha256, expected.downloadHistory.rawLedgerSha256, 'Normal close and restart must preserve the exact saved terminal download document');
+    assert.deepEqual(saved.document.downloads, expected.downloadHistory.records);
+    for (const row of saved.rows) { assert.equal(row.restored, true); assert.equal(row.interruptedByRestart, false); }
+    assertCompletedDownloadBytes(expected.downloadHistory.completedFiles);
+    downloadEvidence().completedFiles = expected.downloadHistory.completedFiles;
+    await assertDownloadHistoryUI(saved.document.downloads, 'after-restart', { restored: true });
+    await clearPersonalDownloadHistory(expected);
   });
   await check('extension identity, storage and background execution survive a real process restart', async () => {
     const entries = await command('extension-list');

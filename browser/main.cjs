@@ -64,7 +64,7 @@ function tabDescriptor(tab) {
 }
 function stateView() {
   return {version:1, profiles, preferences, activeId, currentIdentity, splitId, panel, closing, saveError,
-    activeWorkspaceId,chromeHeight:chromeHeight(),shortcuts:preferenceStore.shortcutList(preferences),
+    activeWorkspaceId,chromeHeight:chromeHeight(),shortcuts:preferenceStore.shortcutList(preferences),downloadHistory:downloads?.getStatus(),
     canRestore:closed.length > 0, tabs:tabs.map(tab => ({id:tab.id,url:tab.url,title:tab.title,identity:tab.identity,loading:tab.loading,live:!!tab.view,
       workspaceId:tabWorkspace(tab),groupId:tab.saved.groupId||null,pinned:!!tab.saved.pinned,muted:tab.view?.webContents.isAudioMuted()??!!tab.saved.muted,audible:tab.view?.webContents.isCurrentlyAudible()||false})),
     canBack:active()?.view?.webContents.navigationHistory.canGoBack() || false,
@@ -559,6 +559,19 @@ async function perform(name, value) {
     case 'account-recover': if (await confirmRecovery('account inventory',accountFile,accountStore,accountRecovery)) {accounts = accountStore.load(accountFile);accountRecovery = null;accountError = '';publishAccounts();} break;
     case 'download-list': return downloads.list();
     case 'download-action': downloads.action(value?.id,value?.action); break;
+    case 'download-history-remove': downloads.remove(value); break;
+    case 'download-history-clear': {
+      if (!profiles.some(profile => profile.id === value)) throw new Error('Select an existing identity before clearing download history.');
+      const identityName = profiles.find(profile => profile.id === value).name;
+      const choice = await dialog.showMessageBox(win,{type:'question',message:`Clear download history for ${identityName}?`,detail:'This removes transfer records for this identity. Downloaded files are kept. Finish or cancel active transfers first.',buttons:['Cancel','Clear history'],defaultId:0,cancelId:0,noLink:true});
+      if (choice.response === 1) downloads.clear({identity:value}); break;
+    }
+    case 'download-history-retry': downloads.open(); downloads.flush(); notice('Download history saved.'); break;
+    case 'download-history-recover': {
+      if (!downloads.getStatus().recoveryAvailable) throw new Error('No previous download-history checkpoint is available.');
+      const choice = await dialog.showMessageBox(win,{type:'warning',message:'Restore the previous download-history checkpoint?',detail:'The current file is preserved separately. Current transfers remain visible; saved transfers are not restarted. Downloaded files are kept.',buttons:['Cancel','Restore history'],defaultId:0,cancelId:0,noLink:true});
+      if (choice.response === 1) { downloads.recover(); downloads.flush(); notice('Download history recovered and saved.'); } break;
+    }
     case 'permission-list': return permissions.list();
     case 'permission-revoke': await permissions.revoke(value); publishPermissions(); break;
     case 'permission-reset': await permissions.reset(value || undefined); publishPermissions(); break;
@@ -615,9 +628,14 @@ async function requestClose() {
   if (downloads.activeCount()) {
     const choice = await dialog.showMessageBox(win,{type:'question',message:'Downloads are still active.',detail:'Closing now cancels the active downloads.',buttons:['Keep browser open','Cancel downloads and close'],defaultId:0,cancelId:0,noLink:true});
     if (choice.response !== 1) {resumeAfterCloseError('Downloads continue.');return;}
-    downloads.cancelActive();
+    await downloads.cancelActive();
   }
   refreshLiveTabs();
+  try { downloads.flush(); }
+  catch (error) {
+    const choice = await dialog.showMessageBox(win,{type:'warning',message:'Recent download history could not be saved.',detail:`${error.message}\nDownloaded files are kept. Keep the browser open to retry or recover history, or explicitly exit without saving recent transfer records.`,buttons:['Keep browser open','Exit without saving recent download history'],defaultId:0,cancelId:0,noLink:true});
+    if (choice.response !== 1) {resumeAfterCloseError('Close canceled. Open Downloads to retry or recover its history.');return;}
+  }
   try { writer.request(snapshot()); await writer.flush(); }
   catch (error) {
     saveError = error.message;
@@ -660,8 +678,10 @@ async function start() {
     return response.response === 2 ? 'allow' : response.response === 1 ? 'allow-once' : 'block';
   }});
   try {permissionOpening = permissions.open();} catch (error) {permissionOpening = {status:'blocked',error:error.message};}
-  downloads = new DownloadManager({directory:app.getPath('downloads'),reveal:file => shell.showItemInFolder(file)});
-  downloads.on('change', rows => { if (panel === 'downloads') send('downloads',rows); });
+  downloads = new DownloadManager({directory:app.getPath('downloads'),reveal:file => shell.showItemInFolder(file),file:path.join(dataDirectory,'browser-downloads.json'),getIdentities:()=>profiles.map(profile=>profile.id)});
+  downloads.on('change', () => { if (panel === 'downloads') send('downloads',downloads.list()); });
+  downloads.on('status', () => publish(false));
+  try { downloads.open(); } catch { /* Downloads exposes its history error and recovery controls without hiding live transfers. */ }
   extensions = new ExtensionManager({directory:path.join(dataDirectory,'extensions'),getSession:identitySession,getIdentities:() => profiles.map(profile => profile.id),loadExtension:createExtensionLoader({app,webContents})});
   const {createExtensionBridge}=require('./extension-bridge.cjs');
   extensionBridge=createExtensionBridge({ipcMain,manager:extensions,host:extensionHost(),nativeImage});

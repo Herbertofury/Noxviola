@@ -184,8 +184,18 @@ Two subsequent actual Noxviola processes exercise:
   dictionaries independently of the checking switch. The separate packaged
   NetLog workload retains its ordinary default behavior and makes no assertion
   that dictionary traffic disappears.
-- Actual DownloadItem completion, bytes, pause/resume and cancellation through
-  the application's download commands.
+- Actual DownloadItem completion in two distinct identity Sessions, plus
+  pause/resume and cancellation through the application's download commands.
+  The native records, full downloaded bytes and `browser-downloads.json` must
+  survive normal process restart. Actual rendered cards must show their original
+  identity, terminal state, byte counts and restored-history status without
+  offering a fictitious resume. The real identity-scoped Clear history control
+  receives one exact generated confirmation; it must retain the other identity's
+  complete records and both downloaded files. The list is deliberately app-wide
+  and identity-tagged, so this proves attribution and scoped metadata removal,
+  not confidentiality of transfer metadata between identities. Before-close,
+  restart and after-clear ledger bytes are retained alongside the actual generated
+  downloads and their hashes. No test-only download-history flush is used.
 - MV3 content-script execution and `chrome.storage.local` across identities,
   disable/re-enable and process restart. Installation uses the actual renderer's
   identity choices, consent checkbox and Install button before the runtime checks.
@@ -216,6 +226,25 @@ Two subsequent actual Noxviola processes exercise:
   background context stop. This does not claim stored extension data was erased.
 - Library editing, archive/restore, export, import preview/cancel/merge and
   complete metadata recovery after a real process restart.
+- The real Find input, Next, Previous and Escape controls, checked against
+  native `found-in-page` match counts/ordinals, rendered counter text and actual
+  selection pixels. Clearing must return the document to its original pixels.
+- Actual Zoom in, Zoom out and Reset zoom application-menu handlers, with
+  native zoom-factor and rendered viewport readback. The selected origin's zoom
+  must survive same-origin navigation and a normal process restart while the
+  other identity retains its own factor. The restart check activates the saved
+  lazy tab and waits for its committed fixture document before inspecting it.
+- The real Save page as PDF control and Save visible screenshot menu handler.
+  The source gate supplies only fresh generated native picker destinations, keeps
+  the actual PDF/PNG files with hashes, independently decodes the PNG and compares
+  its dimensions and pixels to the visible page, and verifies that declining an
+  existing-file replacement preserves its exact bytes. PDF header/completion
+  checks run in the gate; installed `pdfinfo`/`pdftotext` tools also verify page
+  structure and document text when available. Missing readers leave content
+  readback explicitly pending, and the retained PDF allows later independent
+  rendering/visual review without another Electron launch. These checks do not
+  qualify a hardware printer, native OS dialog/menu interaction, arbitrary PDF
+  layout fidelity, or packaged-executable page exports.
 
 The driver and application share the same identity Session resolver. Windows
 uses its original persistent partition where the pinned cache lifecycle path

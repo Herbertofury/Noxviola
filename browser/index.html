@@ -93,7 +93,10 @@
 </section>
 <section id="downloads" class="panel" hidden>
  <div class="panel-heading"><div><h1>Downloads</h1><p>Choose a destination, then control each transfer.</p></div><button data-command="panel-close">Back to page</button></div>
- <p class="subtle">Downloaded files are never opened automatically. This transfer list lasts for the current browser run; restart-resume is not implemented.</p><div id="download-items" class="cards"></div>
+ <p class="subtle">Download history stays in this browser profile across restarts. Removing history keeps downloaded files. Files are never opened automatically; interrupted transfers from a previous run cannot resume yet.</p>
+ <p id="download-history-status" class="subtle" role="status" aria-live="polite"></p><p id="download-history-error" class="error" hidden></p>
+ <div class="card-actions"><button id="download-history-retry" hidden>Retry history save</button><button id="download-history-recover" hidden>Restore previous history checkpoint</button><button id="download-history-clear">Clear saved history for this identity</button></div>
+ <div id="download-items" class="cards"></div>
 </section>
 <section id="permissions" class="panel" hidden>
  <div class="panel-heading"><div><h1>Site permissions</h1><p>Decisions are scoped to the requesting site, embedding site and browser identity.</p></div><button data-command="panel-close">Back to page</button></div>

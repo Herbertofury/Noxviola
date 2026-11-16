@@ -293,3 +293,28 @@ The dedicated [real-extension run 43780308399](https://github.com/Herbertofury/N
 | Windows `14188057235` | 59,850 | `408434603dec46321f75113b0286ea955aa8c6b62f3a037d010ff55887bcd9893` |
 
 Both failure archives and raw native receipts were hash-verified and retained. Their unchanged source-input manifest is `ec70c941e041d93892c893ed1c6ca806803abbb176aa56869fef26efb0ba94cd`. This failure provides no evidence about an extension API dependency. The next run must perform the original unchanged-package workflow; universal compatibility and all master gates remain open.
+
+### First unchanged-package dependency at `f76e79d9`
+
+The readiness repair was published as `f76e79d96790d104573cb55cd0b666467da9f4b7`, tree `26b4ac2dadf4513a0f8684afe151d27c5b9ca2d6`, with 270 portable contracts and 71 syntax checks passing in the isolated snapshot. [Real-extension run 43780643491](https://github.com/Herbertofury/Noxviola/actions/runs/43780643491) completed unsuccessfully on both platforms; the original artifacts and raw receipts were retained before continuing.
+
+Windows job `133016813343` passed the light-page baseline, exact reviewed installation and committed persistent background-document checks, but the page stayed light. The retained native console/CDP error identifies the real package's `background/index.js:6356`: `chrome.permissions` is absent when initialization reads `onRemoved`. The background document existing is not successful extension initialization. Its earlier alarms setup did not throw, so this evidence does not justify replacing alarms. The source-directory observer classification also missed the expanded Windows profile path and consequently surfaced the startup error as a later page-darkening timeout; both the raw startup error and timeout remain preserved. The unchanged accepted package digest was `bf953c7dbe3dce677017c56d84969f51027a777189408ac19969bac9e0126b50`.
+
+Linux job `133016813591` stopped at the first native baseline capture with `UnknownVizError`, before installing any package; a later diagnostic capture succeeded. That compositor/readiness failure remains separate from the Windows extension dependency. It cannot be counted as a pass or repaired by suppressing pixel verification.
+
+| Original failed real-package artifact | Bytes | SHA-256 |
+| --- | ---: | --- |
+| Windows `14188326832` | 71,489 | `63066ebcde02c337c5b93a97f1509d28967159a4000dee7921410488ea981f58` |
+| Linux `14187868766` | 45,115 | `4798a9b2ffbd8bfdd37048e69aeec846d094348798ccfe02a18d6afd2860ce63` |
+
+The dependency-ready next extension task is genuine permission-query semantics tied to accepted grants and current native enrollment, including real host-pattern coverage and optional-grant boundaries. No no-op event or assumed successful request/removal may substitute for missing permission behavior. This work is independent of the following core workflow additions and is not included in their source checkpoint until implemented and verified.
+
+### Next core source: durable transfers and real page-tool acceptance
+
+The canonical DownloadManager now persists complete transfer history through the existing ServiceStore/storage primitives. It preserves unknown metadata, original recovery bytes and native callback identity; failed saves keep live controls available and pending state visible. Remove and identity-scoped Clear commit only metadata and never touch downloaded files. Restored unfinished records expose their previous state as interrupted without a fake native item, finish time, resume or automatic URL request. Close waits for actual native terminal cancellation before flushing; history failure offers explicit keep-open/retry/recovery or exit without saving recent transfer metadata. Byte progress does not repeatedly write or clone hidden history. The 20 download contracts and 18 production-DOM contracts passed, including asynchronous cancellation, delayed responses, storage failure/recovery, foreign-identity retention and complete 1,250-record history. Whole-history I/O and visible-list cost remain unmeasured; no performance advantage is claimed.
+
+The expanded source-app gate completes one actual transfer in each identity Session, retains the full downloaded bytes, compares the raw saved history before/after normal restart, verifies actual restored cards and uses the real identity-bound Clear control to preserve the other identity's records and both files. The app-wide list is explicitly identity-tagged, not confidential between identities. No test-only history flush supplies the result.
+
+The same source gate now invokes real Find/Next/Previous/Escape controls with native match results, visible counters and selection clearing; actual zoom menu handlers with viewport/identity/origin/restart readback; the real PDF Tools control; and the visible-page PNG menu handler. It retains output files and hashes, checks decoded PNG dimensions/pixels, and verifies that Cancel preserves an existing destination exactly. Optional PDF readers report missing tools honestly, leaving content/visual readback pending for independent follow-up. The gate does not qualify physical OS menu/picker interaction, hardware printing, arbitrary page fidelity or packaged page-tool exports.
+
+These new production and acceptance changes require their own hosted source/package run. The completed `0c25987e` receipt does not automatically qualify the changed download lifecycle or new page-tool coverage. All original full capability procedures and all master gates remain open.

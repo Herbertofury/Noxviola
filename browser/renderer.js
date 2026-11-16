@@ -160,6 +160,7 @@ function renderState(state) {
   document.querySelectorAll('[data-command="restore"]').forEach(control=>{control.disabled=!state.canRestore;});
   if (old.panel !== state.panel) renderPanel(state.panel);
   else if(state.panel==='workspaces')refreshWorkspaceState();
+  else if(state.panel==='downloads'&&(old.currentIdentity!==state.currentIdentity||JSON.stringify(old.downloadHistory)!==JSON.stringify(state.downloadHistory)||JSON.stringify(old.profiles)!==profilesKey))renderDownloads();
   if(old.currentIdentity!==state.currentIdentity)renderBookmarksBar();
   renderWorkspaceSelector();
 }
@@ -353,21 +354,38 @@ function bytes(value) {
   return `${index?value.toFixed(1):value} ${units[index]}`;
 }
 function renderDownloads() {
+  const history=currentState.downloadHistory||{status:'memory',persistent:false,pendingCount:0},editable=history.persistent&&['new','ready'].includes(history.status);
+  const mine=downloadItems.filter(item=>item.identity===currentState.currentIdentity),active=mine.some(item=>!item.terminal);
+  errorMessage('download-history-error',history.error);
+  $('download-history-status').textContent=!history.persistent?'Transfer records are available for this browser run.':history.pendingCount?`${history.pendingCount} transfer record${history.pendingCount===1?' has':'s have'} changes waiting to be saved.`:editable?'Download history is ready. No unsaved transfer status.':'Download history needs attention. Current transfers remain available.';
+  $('download-history-retry').hidden=!history.persistent||history.recoveryAvailable||(!history.error&&!history.pendingCount);
+  $('download-history-recover').hidden=!history.recoveryAvailable;
+  const clear=$('download-history-clear');clear.textContent=`Clear saved history for ${identityName(currentState.currentIdentity)}`;clear.hidden=!history.persistent;clear.disabled=!editable||active||!mine.length;
+  clear.title=active?'Finish or cancel active transfers for this identity first.':'Downloaded files are kept.';
   paintList($('download-items'),[...downloadItems].reverse(),item=>{
     const card=node('article'),actions=node('div',undefined,'card-actions');
     card.append(node('h2',item.filename),node('p',`${identityName(item.identity)} · ${item.state}${item.paused?' · paused':''}`),node('p',`${bytes(item.received)}${item.total>0?` of ${bytes(item.total)}`:''}`));
     if(item.total>0){const progress=node('progress');progress.max=item.total;progress.value=item.received;progress.setAttribute('aria-label',`Download progress for ${item.filename}`);card.append(progress);}
     if(item.path)card.append(node('p',item.path,'source'));if(item.error)card.append(node('p',item.error,'error'));
+    if(item.historyPending)card.append(node('p','The latest transfer status is waiting to be saved.','error'));
+    else if(item.restored&&item.historySaved)card.append(node('p','Restored from saved download history.','subtle'));
     if(item.state==='completed')actions.append(action('Show in folder','download-action',{id:item.id,action:'reveal'}));
-    if(!item.terminal){
+    if(!item.terminal&&item.cancelPending){
+      const waiting=node('button','Canceling…');waiting.type='button';waiting.disabled=true;actions.append(waiting);
+    }else if(!item.terminal){
       if(item.paused||item.canResume)actions.append(action('Resume','download-action',{id:item.id,action:'resume'}));
       else if(item.state==='progressing')actions.append(action('Pause','download-action',{id:item.id,action:'pause'}));
       actions.append(action('Cancel','download-action',{id:item.id,action:'cancel'}));
     }
+    if(item.terminal&&history.persistent){const remove=action('Remove from history','download-history-remove',item.id);remove.disabled=!editable;remove.title='Downloaded files are kept.';actions.append(remove);}
     card.append(actions);return card;
-  },'No transfers in this browser run.');
+  },'No download records.');
 }
 api.onDownloads(items=>{downloadItems=items;if(currentState.panel==='downloads')renderDownloads();});
+async function downloadHistoryAction(control,name,value){await guarded(control,()=>api.command(name,value));if(currentState.panel==='downloads')renderDownloads();}
+$('download-history-clear').onclick=()=>downloadHistoryAction($('download-history-clear'),'download-history-clear',currentState.currentIdentity);
+$('download-history-retry').onclick=()=>downloadHistoryAction($('download-history-retry'),'download-history-retry');
+$('download-history-recover').onclick=()=>downloadHistoryAction($('download-history-recover'),'download-history-recover');
 function renderPermissions() {
   errorMessage('permission-error',permissionData.error);$('permission-recover').hidden=!permissionData.recoveryAvailable;
   $('permission-reset').disabled=!['new','ready'].includes(permissionData.status);

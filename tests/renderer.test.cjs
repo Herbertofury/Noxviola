@@ -325,14 +325,78 @@ test('DOM: terminal interrupted downloads expose no resume/cancel while resumabl
   h.emit('onDownloads', [
     {id: 'terminal', filename: 'Terminal fixture', identity: 'personal', state: 'interrupted', terminal: true, canResume: false, paused: false, received: 10, total: 100},
     {id: 'resumable', filename: 'Resumable fixture', identity: 'work', state: 'interrupted', terminal: false, canResume: true, paused: false, received: 30, total: 100},
+    {id: 'canceling', filename: 'Canceling fixture', identity: 'work', state: 'progressing', terminal: false, canResume: false, paused: false, received: 30, total: 100, cancelPending:true},
   ]);
   await painted(h, 'download-items');
   const cards = [...h.$('download-items').querySelectorAll('article')];
   const terminal = cards.find(card => card.querySelector('h2').textContent === 'Terminal fixture');
   const resumable = cards.find(card => card.querySelector('h2').textContent === 'Resumable fixture');
+  const canceling = cards.find(card => card.querySelector('h2').textContent === 'Canceling fixture');
   assert.equal(terminal.querySelectorAll('button').length, 0);
+  assert.deepEqual([...canceling.querySelectorAll('button')].map(button=>[button.textContent,button.disabled]),[['Canceling…',true]]);
   findButton(resumable, 'Resume').click(); await tick();
   assert.deepEqual(h.calls.at(-1), {name: 'download-action', value: {id: 'resumable', action: 'resume'}});
+});
+
+test('DOM: saved download history keeps restored results and scopes clear to the selected identity', async t => {
+  const h = await harness(t);
+  h.update({panel:'downloads',downloadHistory:{status:'ready',persistent:true,pendingCount:0,error:null,recoveryAvailable:false}});
+  const rows=[
+    {id:'old-complete',filename:'Saved completed file',identity:'personal',state:'completed',terminal:true,received:100,total:100,path:'/generated/completed.bin',restored:true,historySaved:true},
+    {id:'old-interrupted',filename:'Saved unfinished file',identity:'personal',state:'interrupted',terminal:true,received:30,total:100,restored:true,interruptedByRestart:true,historySaved:true,error:'The previous process ended before a terminal result was saved. No native download is attached; restart or resume is not available.'},
+    {id:'work-active',filename:'Active Work file',identity:'work',state:'progressing',terminal:false,received:20,total:100,hasNativeItem:true,historySaved:true},
+  ];
+  h.emit('onDownloads',rows);await painted(h,'download-items');
+  const completed=[...h.$('download-items').querySelectorAll('article')].find(card=>card.querySelector('h2').textContent==='Saved completed file');
+  const interrupted=[...h.$('download-items').querySelectorAll('article')].find(card=>card.querySelector('h2').textContent==='Saved unfinished file');
+  assert.match(completed.textContent,/Restored from saved download history/);
+  assert.deepEqual([...interrupted.querySelectorAll('button')].map(button=>button.textContent),['Remove from history']);
+  findButton(completed,'Show in folder').click();await tick();
+  assert.deepEqual(h.calls.at(-1),{name:'download-action',value:{id:'old-complete',action:'reveal'}});
+  findButton(interrupted,'Remove from history').click();await tick();
+  assert.deepEqual(h.calls.at(-1),{name:'download-history-remove',value:'old-interrupted'});
+  const clear=h.$('download-history-clear');assert.equal(clear.textContent,'Clear saved history for Personal');assert.equal(clear.disabled,false);
+  clear.click();await tick();assert.deepEqual(h.calls.at(-1),{name:'download-history-clear',value:'personal'});
+  h.update({currentIdentity:'work'});assert.equal(clear.textContent,'Clear saved history for Work');assert.equal(clear.disabled,true);
+  h.emit('onDownloads',rows.map(row=>row.id==='work-active'?{...row,state:'completed',terminal:true}:row));
+  assert.equal(clear.disabled,false);
+});
+
+test('DOM: blocked download history exposes recovery while live transfer controls remain usable', async t => {
+  const h=await harness(t);
+  h.update({panel:'downloads',downloadHistory:{status:'recovery',persistent:true,pendingCount:1,error:'Generated checkpoint requires recovery.',recoveryAvailable:true}});
+  h.emit('onDownloads',[
+    {id:'saved',filename:'Saved record',identity:'personal',state:'completed',terminal:true,received:100,total:100,historySaved:true},
+    {id:'live',filename:'Live pending record',identity:'personal',state:'progressing',terminal:false,received:20,total:100,hasNativeItem:true,historyPending:true},
+  ]);await painted(h,'download-items');
+  assert.match(h.$('download-history-error').textContent,/requires recovery/);
+  assert.match(h.$('download-history-status').textContent,/1 transfer record has changes waiting/);
+  assert.equal(h.$('download-history-clear').disabled,true);assert.equal(h.$('download-history-retry').hidden,true);assert.equal(h.$('download-history-recover').hidden,false);
+  assert.equal(findButton(h.$('download-items'),'Remove from history').disabled,true);
+  findButton(h.$('download-items'),'Pause').click();await tick();
+  assert.deepEqual(h.calls.at(-1),{name:'download-action',value:{id:'live',action:'pause'}});
+  h.$('download-history-recover').click();await tick();assert.equal(h.calls.at(-1).name,'download-history-recover');
+  h.update({downloadHistory:{status:'error',persistent:true,pendingCount:1,error:'Generated write failure.',recoveryAvailable:false}});
+  assert.equal(h.$('download-history-retry').hidden,false);assert.equal(h.$('download-history-recover').hidden,true);
+  h.$('download-history-retry').click();await tick();assert.equal(h.calls.at(-1).name,'download-history-retry');
+  h.update({downloadHistory:{status:'ready',persistent:true,pendingCount:0,error:null,recoveryAvailable:false}});
+  assert.equal(h.$('download-history-error').hidden,true);assert.equal(h.$('download-history-retry').hidden,true);
+});
+
+test('DOM: a late history action completion cannot re-enable clear after identity or storage changes', async t => {
+  let release;
+  const h=await harness(t,{command:async name=>{if(name==='download-history-clear')await new Promise(resolve=>{release=resolve;});}});
+  h.update({panel:'downloads',downloadHistory:{status:'ready',persistent:true,pendingCount:0,error:null,recoveryAvailable:false}});
+  h.emit('onDownloads',[
+    {id:'saved',filename:'Personal record',identity:'personal',state:'completed',terminal:true,received:1,total:1},
+    {id:'live',filename:'Work transfer',identity:'work',state:'progressing',terminal:false,received:0,total:1,hasNativeItem:true},
+  ]);
+  h.$('download-history-clear').click();await tick();
+  h.update({currentIdentity:'work',downloadHistory:{status:'error',persistent:true,pendingCount:1,error:'History changed externally.',recoveryAvailable:false}});
+  release();await tick();await tick();
+  assert.equal(h.$('download-history-clear').disabled,true);assert.equal(h.$('download-history-clear').textContent,'Clear saved history for Work');
+  assert.match(h.$('download-history-error').textContent,/changed externally/);
+  assert.deepEqual(h.calls.find(call=>call.name==='download-history-clear'),{name:'download-history-clear',value:'personal'});
 });
 
 test('DOM: permission controls retain requesting site, embedding site, selected identity and document scope', async t => {

@@ -2,6 +2,7 @@
 const crypto = require('node:crypto');
 const storage = require('./storage.cjs');
 const preferenceStore = require('./preferences.cjs');
+const paneLayout=require('./pane-layout.cjs');
 const ID = /^[a-zA-Z0-9_-]+$/;
 const SEARCH = Object.freeze({google: 'https://www.google.com/search?q=', duckduckgo: 'https://duckduckgo.com/?q=', bing: 'https://www.bing.com/search?q='});
 function assertDistinctIdentityPartitions(raw) {
@@ -91,6 +92,8 @@ function cleanState(raw = {}, {strict = false} = {}) {
       for(const [origin,factor] of Object.entries(values))if(!httpUrl(origin)||new URL(origin).origin!==origin||typeof factor!=='number'||!Number.isFinite(factor)||factor<0.25||factor>5)throw storage.fail('Saved page zoom values are unsupported.','UNSUPPORTED_DATA');
     }
   }
+  if(raw.paneTree!==undefined){paneLayout.validate(raw.paneTree,tabs.map(t=>t.id));const paneTabs=paneLayout.ids(raw.paneTree).map(id=>tabs.find(t=>t.id===id));if(paneTabs.length&&(!paneTabs.some(t=>t.id===raw.activeId)||new Set(paneTabs.map(t=>t.workspaceId||'default')).size>1))throw storage.fail('Pane layout must contain the active tab in one workspace.');}
+  if(raw.paneLayouts!==undefined){if(!Array.isArray(raw.paneLayouts))throw storage.fail('Saved pane units must be an array.');const seen=new Set(paneLayout.ids(raw.paneTree));for(const tree of raw.paneLayouts){paneLayout.validate(tree,tabs.map(t=>t.id));const ids=paneLayout.ids(tree);if(ids.length<2||ids.some(id=>seen.has(id)||id===raw.activeId)||new Set(ids.map(id=>tabs.find(t=>t.id===id).workspaceId||'default')).size!==1)throw storage.fail('Saved pane units must be distinct and within one workspace.');for(const id of ids)seen.add(id);}}
   return {...raw, version: 1, profiles, tabs, preferences, activeId: tabs.some(tab => tab.id === raw.activeId) ? raw.activeId : tabs[0]?.id || null};
 }
 function decode(value) { return cleanState(value, {strict: true}); }

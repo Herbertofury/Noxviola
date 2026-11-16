@@ -1,5 +1,9 @@
 # Active project work
 
+## Prime feature: independent multi-pane browser
+
+- [ ] Deliver arbitrary nested side-by-side/stacked real browser panes, resize and position controls, independent account/container selection, durable layouts and split-unit grouping/moving. Current implementation is under native qualification; source-code study of Firefox/Chromium informs unit movement and explicit pane swap. Cross-window detach/drop, drag-to-edge, complete parity and high-count performance acceptance remain open. [Scope and evidence gates](docs/browser/MULTI-PANE.md).
+
 ## Standalone creator/project following · 2026-11-16
 
 - [ ] Source-continuity consumer: explicit shared-v1 report import, evidence-linked review notices, retained corrections/retractions and conservative conflict states. Native truth verification, verified mapping actions and live shared-source sync remain open; imported reports never trigger auto-switch/download.

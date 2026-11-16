@@ -20,6 +20,7 @@ const {createExtensionLoader} = require('./extension-runtime.cjs');
 const {createIdentitySessionResolver} = require('./session-path.cjs');
 const {PermissionManager} = require('./permissions.cjs');
 const {createFaviconLoader} = require('./favicons.cjs');
+const findSession = require('./find-session.cjs').createFindSession();
 const accountStore = require('./accounts.cjs');
 const vaultStore = require('./vault.cjs');
 app.enableSandbox();
@@ -194,7 +195,7 @@ function ensureView(tab) {
   wc.on('did-start-loading', () => {tabPreview.invalidate(tab.id);tab.loading=true;publish(false);hostEvent(tab.identity,'tabs.onUpdated',tab.runtimeId,{status:'loading'},tabDescriptor(tab));});
   wc.on('did-stop-loading', () => {tab.loading=false;publish(false);hostEvent(tab.identity,'tabs.onUpdated',tab.runtimeId,{status:'complete'},tabDescriptor(tab));});
   wc.on('audio-state-changed',()=>{publish(false);hostEvent(tab.identity,'tabs.onUpdated',tab.runtimeId,{audible:wc.isCurrentlyAudible()},tabDescriptor(tab));});
-  wc.on('found-in-page',(_event,result)=>{if(tab.id===activeId)send('find-result',result);});
+  wc.on('found-in-page',(_event,result)=>{if(tab.id===activeId && findSession.accepts(wc,result))send('find-result',result);});
   function navigated(_event,url,isMainFrame=true,sameDocument=false) {
     if(isMainFrame===false)return;tabPreview.invalidate(tab.id);const target=httpUrl(url)||(tabNavigationAllowed(tab,url)?extensionUrl(url):null);
     if(!closing&&target){tab.url=target;if(httpUrl(target)){recordHistory(tab,target);const zoom=originalSession.siteZooms?.[tab.identity]?.[new URL(target).origin];if(zoom!==undefined)wc.setZoomFactor(zoom);}publish();hostEvent(tab.identity,'tab-navigation-committed',tab.runtimeId,{sameDocument});hostEvent(tab.identity,'tabs.onUpdated',tab.runtimeId,{url:target},tabDescriptor(tab));}else publish(false);
@@ -527,7 +528,7 @@ async function perform(name, value) {
     }
     // Electron's findNext maps to Chromium new_session: true starts a search.
     // Our command's findNext means a follow-up, so its native flag is inverted.
-    case 'find':{const query=typeof value==='string'?value:value?.query;if(query)wc?.findInPage(String(query),{forward:value?.forward!==false,findNext:value?.findNext!==true});else{wc?.stopFindInPage('clearSelection');send('find-result',{matches:0,activeMatchOrdinal:0});}break;}
+    case 'find':{const query=typeof value==='string'?value:value?.query;if(query&&wc)findSession.search(wc,String(query),{forward:value?.forward!==false,findNext:value?.findNext!==true});else{if(wc)findSession.clear(wc);send('find-result',{matches:0,activeMatchOrdinal:0});}break;}
     case 'zoom-in':case 'zoom-out':case 'zoom-reset':changeZoom(name);break;
     case 'fullscreen':win.setFullScreen(!win.isFullScreen());break;
     case 'devtools':if(wc)wc.isDevToolsOpened()?wc.closeDevTools():wc.openDevTools({mode:'detach'});break;

@@ -6,6 +6,7 @@ let currentState = {profiles:[],tabs:[],preferences:{},currentIdentity:'personal
 let vaultItems = [], accountItems = [], extensionData = {items:[],profiles:[],busy:false};
 let permissionData = {items:[]}, downloadItems = [], capabilityData = null, extensionPreview = null;
 const followCompatibilityDrafts=new Map();
+const followTransitionDrafts=new Map();
 let followData={items:[]},followDraftIdentity=null,followDeadlineTimer;
 let historyData={items:[]},bookmarkData={tree:[]},workspaceData={items:[],groups:[]},resourceData=null,bookmarkFolder=null,extensionActions=[];
 let settingsDirty=false,historySettingsDirty=false;
@@ -820,8 +821,8 @@ api.command('state').then(renderState).catch(error=>announce(error.message));
 
 function renderFollows(){
   clearTimeout(followDeadlineTimer);
-  const now=Date.now(),deadlines=(followData.items||[]).flatMap(source=>[source.providerNotBefore,source.lastSuccess?source.nextCheck:0]).filter(value=>Number.isFinite(value)&&value>now);
-  if(currentState.panel==='following'&&deadlines.length)followDeadlineTimer=setTimeout(()=>{if(currentState.panel==='following')renderFollows();},Math.min(2147483647,Math.min(...deadlines)-now+20));
+  const now=Date.now(),deadlines=(followData.items||[]).flatMap(source=>[source.providerNotBefore,source.lastSuccess?source.nextCheck:0,...(source.transitionNotices||[]).map(n=>n.record.review_after_unix*1000)]).filter(value=>Number.isFinite(value)&&value>now);
+  if(currentState.panel==='following'&&deadlines.length)followDeadlineTimer=setTimeout(()=>{if(currentState.panel==='following'){renderFollows();api.command('follow-list').catch(error=>errorMessage('follow-error',error.message));}},Math.min(2147483647,Math.min(...deadlines)-now+20));
   errorMessage('follow-error',followData.error);$('follow-recover').hidden=!followData.recoveryAvailable;
   $('follow-identity').textContent=`Following for ${identityName(followData.identity||currentState.currentIdentity)}.${followDraftIdentity?` Unsaved follow will be added to ${identityName(followDraftIdentity)}.`:''} Pausing keeps saved updates; automatic checks stop when the browser closes.`;
   const query=$('follow-search').value.toLocaleLowerCase(),filter=$('follow-filter').value;
@@ -849,6 +850,16 @@ function renderFollows(){
       const changed=()=>followCompatibilityDrafts.set(draftKey,{loader:loader.value,gameVersion:game.value});loader.oninput=changed;game.oninput=changed;
       form.onsubmit=event=>{event.preventDefault();const wanted={loader:loader.value,gameVersion:game.value};guarded(save,async()=>{await api.command('follow-change',{...key,compatibility:wanted});if(JSON.stringify(followCompatibilityDrafts.get(draftKey))===JSON.stringify(wanted))followCompatibilityDrafts.delete(draftKey);renderFollows();announce('Compatibility filter saved. Matching metadata is not a runtime test.');});};
       card.append(form,node('p',`${(source.matchingVersionIds||[]).length} versions in the last successful snapshot match both saved filters${source.compatibility?.loader||source.compatibility?.gameVersion?` (${source.compatibility.loader||'any loader'} / ${source.compatibility.gameVersion||'any Minecraft version'})`:''}. This is declared metadata, not verified installation compatibility.`,'subtle'));
+    }
+    const importNotice=node('details');importNotice.append(node('summary','Import source-continuity evidence record'));
+    const importForm=node('form'),input=node('textarea'),label=node('label','Shared schema-v1 JSON record'),submit=node('button','Save evidence report'),transitionDraftKey=`${source.identity}:${source.id}`;input.value=followTransitionDrafts.get(transitionDraftKey)||'';input.oninput=()=>followTransitionDrafts.set(transitionDraftKey,input.value);submit.type='submit';label.append(input);importForm.append(label,node('p','Imported claims are not independently verified. Saving does not switch sources, enable tracking, or download anything.'),submit);
+    importForm.onsubmit=event=>{event.preventDefault();guarded(submit,async()=>{const submitted=input.value,transition=JSON.parse(submitted);await api.command('follow-change',{...key,transition});if(followTransitionDrafts.get(transitionDraftKey)===submitted)followTransitionDrafts.delete(transitionDraftKey);renderFollows();announce('Evidence report saved for review. No source changed.');});};importNotice.append(importForm);card.append(importNotice);
+    for(const notice of source.transitionNotices||[]){const r=notice.record,entry=node('section',undefined,'follow-transition');
+      const stale=Date.now()>=r.review_after_unix*1000,state=notice.current&&r.lifecycle==='active'&&stale?'review overdue':notice.state;
+      entry.append(node('h3',`Imported report: ${r.status} · ${state}`),node('p','Not independently verified. Evidence authority below is supplied by the record, not a browser verdict.'),node('p',`Record: ${r.id} · Creator identity: ${r.creator_id}`),node('p',`Source account: ${r.source_account}`),node('p',`Claimed destination: ${r.destination_account||'not supplied'}`),node('p',`Review by ${new Date(r.review_after_unix*1000).toLocaleString()}`));
+      for(const section of ['status_evidence','identity_evidence'])r[section].forEach((e,index)=>entry.append(action(`Open ${e.kind} evidence`,'follow-evidence-open',{...key,transitionIndex:notice.index,section,evidenceIndex:index})));
+      r.project_mappings.forEach((m,index)=>entry.append(node('p',`${m.game}: ${m.source_project} → ${m.destination_project} · mapping claimed ${m.verified?'verified':'unverified'}; no automatic switch`),action('Open mapping evidence','follow-evidence-open',{...key,transitionIndex:notice.index,section:'project_mappings',evidenceIndex:index})));
+      if(notice.conflict)entry.append(node('p','Conflicting active reports: resolve evidence before any tracking decision.','error'));card.append(entry);
     }
     const updates=node('details');updates.open=source.items.some(item=>!item.read);updates.append(node('summary',`${source.items.filter(i=>!i.read).length} unread · ${source.items.length} saved updates`));
     const list=node('div',undefined,'follow-updates');

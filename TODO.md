@@ -2,6 +2,8 @@
 
 ## Standalone creator/project following · 2026-11-16
 
+- [ ] Source-continuity consumer: explicit shared-v1 report import, evidence-linked review notices, retained corrections/retractions and conservative conflict states. Native truth verification, verified mapping actions and live shared-source sync remain open; imported reports never trigger auto-switch/download.
+
 - [ ] Verified relocation/ban warnings and independent destination tracking: ModHold public project/file and author-catalog adapter in progress. Preserve source evidence and uncertainty; never infer a ban/cause from missing data or cross-site names alone. Shared Modding-Knowledge evidence integration remains open.
 
 - [ ] Verify observed-update revision history: retain previous supported metadata on actual fingerprint changes, show field differences on demand, preserve restart/identity/last-good behavior. This is not complete source history or release-note archival.

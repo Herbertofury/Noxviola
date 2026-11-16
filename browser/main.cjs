@@ -625,8 +625,10 @@ async function perform(name, value) {
     case 'history-clear':{const identity=value?.identity||currentIdentity;history.settings(identity);const choice=await dialog.showMessageBox(win,{type:'question',message:`Remove history for ${profiles.find(profile=>profile.id===identity)?.name||identity}?`,detail:'This removes the active history list. Recovery checkpoints can retain earlier records; this is not secure erasure of browsing data.',buttons:['Cancel','Remove history entries'],defaultId:0,cancelId:0,noLink:true});if(choice.response===1)history.clear(identity);publishHistory();break;}
     case 'history-recover':await recoverService(history,'history');publishHistory();break;
     case 'follow-add':{const {identity=currentIdentity,...input}=value||{};const result=follows.add(identity,input);publishFollows();return result;}
+    case 'follow-list':publishFollows();break;
     case 'follow-change':{const {identity=currentIdentity,id,...patch}=value||{};follows.change(identity,id,patch);publishFollows();break;}
     case 'follow-refresh':await follows.refresh(value?.identity||currentIdentity,value?.id);publishFollows();break;
+    case 'follow-evidence-open':{const source=follows.get(value?.identity||currentIdentity,value?.id);const record=source.transitions?.[value?.transitionIndex];const section=['status_evidence','identity_evidence','project_mappings'].includes(value?.section)?value.section:null;const address=section?record?.[section]?.[value?.evidenceIndex]?.[section==='project_mappings'?'evidence_url':'url']:null;if(!address)throw new Error('Saved transition evidence not found.');newTab(address,source.identity);break;}
     case 'follow-open':{const source=follows.get(value?.identity||currentIdentity,value?.id);const address=value?.itemId?source.items.find(item=>item.id===value.itemId)?.url:source.url;if(!address)throw new Error('Saved update not found.');newTab(address,source.identity);break;}
     case 'follow-recover':await recoverService(follows,'following');publishFollows();break;
     case 'bookmark-current':{

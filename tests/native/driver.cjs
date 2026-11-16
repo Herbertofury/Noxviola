@@ -899,6 +899,10 @@ async function firstLaunch() {
     const saved=await until(()=>JSON.parse(fs.readFileSync(path.join(context.profile,'browser-follows.json'),'utf8')).sources.find(row=>row.name==='Synthetic ModHold author'),'durable native ModHold follow');
     assert.equal(saved.provider,'modhold-author');assert.equal(saved.automatic,false);assert.equal(saved.lastSuccess,0);expected.modholdFollowId=saved.id;
     await until(()=>window.webContents.executeJavaScript("document.getElementById('follow-items').textContent.includes('Missing data does not verify a ban')"),'ModHold uncertainty scope');
+    const observed=Math.floor(Date.now()/1000),report={schema_version:1,id:'native:report',creator_id:'native:fixture',source_account:saved.url,status:'unavailable',status_evidence:[{url:'https://example.invalid/evidence',kind:'retrieval_result',observed_unix:observed}],destination_account:null,identity_evidence:[],project_mappings:[],observed_unix:observed,review_after_unix:observed+86400,lifecycle:'active'};
+    await window.webContents.executeJavaScript(`(() => {const card=[...document.querySelectorAll('#follow-items article')].find(c=>c.querySelector('h2')?.textContent==='Synthetic ModHold author');const input=card.querySelector('textarea');input.closest('details').open=true;input.value=${JSON.stringify(JSON.stringify(report))};input.dispatchEvent(new Event('input',{bubbles:true}));input.closest('form').requestSubmit();})()`);
+    await until(()=>JSON.parse(fs.readFileSync(path.join(context.profile,'browser-follows.json'),'utf8')).sources.find(row=>row.id===saved.id)?.transitions?.length===1,'native imported report persisted');
+    await until(()=>window.webContents.executeJavaScript("document.getElementById('follow-items').textContent.includes('Imported report: unavailable')"),'attributed native evidence report');
     await captureShell('synthetic-modhold-following',1320,860);await command('panel-close');
   });
   await assertSpellcheck('fresh-default-before-any-settings-change', true, []);
@@ -1239,7 +1243,7 @@ async function secondLaunch() {
   await check('follow source and pause choice survive a real process restart', async () => {
     const data=JSON.parse(fs.readFileSync(path.join(context.profile,'browser-follows.json'),'utf8'));
     const saved=data.sources.find(row=>row.id===expected.followId);assert.ok(saved);assert.equal(saved.paused,true);assert.equal(saved.automatic,false);assert.equal(saved.provider,'manual');
-    const modhold=data.sources.find(row=>row.id===expected.modholdFollowId);assert.ok(modhold);assert.equal(modhold.provider,'modhold-author');assert.equal(modhold.automatic,false);
+    const modhold=data.sources.find(row=>row.id===expected.modholdFollowId);assert.ok(modhold);assert.equal(modhold.provider,'modhold-author');assert.equal(modhold.automatic,false);assert.equal(modhold.transitions[0].id,'native:report');
     const modrinth=data.sources.find(row=>row.id===expected.modrinthFollowId);assert.ok(modrinth);assert.equal(modrinth.provider,'modrinth-versions');assert.deepEqual(modrinth.compatibility,{loader:'forge',gameVersion:'1.20.1'});assert.equal(modrinth.automatic,false);
   });
   await check('real process restart restores complete duplicate-preserving tab and identity metadata', async () => {

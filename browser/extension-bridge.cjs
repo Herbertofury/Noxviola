@@ -285,6 +285,29 @@ class ExtensionBridge {
       if (options.url !== undefined) options.url = policy.navigationURL(options.url,context);
       return this.tab(context,await api.create(context.identity,options));
     }
+    if (name === 'goBack' || name === 'goForward') {
+      // Chromium resolves when traversal is requested. Firefox documents a
+      // different completion contract, which this adapter cannot yet ensure.
+      if (context.apiProfile === 'firefox') reject('UNSUPPORTED_API','Firefox history traversal completion semantics are not yet supported.');
+      if (args.length > 1) reject('INVALID_ARGUMENT','History traversal accepts at most one tab ID.');
+      const tabId = args[0] === undefined ? (await this.tabList(context)).find(tab => tab.active)?.id : args[0];
+      this.requireCurrent(context);
+      this.getTab(context,tabId);
+      if (!api.nativeId || !api.browserId || !this.host.messageSource) reject('UNSUPPORTED_API','Native tab history is unavailable.');
+      const nativeId = api.nativeId(context.identity,tabId);
+      if (!Number.isSafeInteger(nativeId)) reject('TAB_UNAVAILABLE','The tab has no live native history in this identity.');
+      const source = this.host.messageSource(nativeId), contents = source?.contents;
+      if (!contents || source.owner || contents.isDestroyed() || contents.id !== nativeId || contents.session !== context.session || api.browserId(context.identity,nativeId) !== tabId) reject('TAB_UNAVAILABLE','The tab has no live native history in this identity.');
+      const history = contents.navigationHistory, back = name === 'goBack';
+      if (!history || typeof history.canGoBack !== 'function' || typeof history.canGoForward !== 'function' || typeof history.getActiveIndex !== 'function' || typeof history.getEntryAtIndex !== 'function' || typeof history[name] !== 'function') reject('UNSUPPORTED_API','Native tab history traversal is unavailable.');
+      if (!(back ? history.canGoBack() : history.canGoForward())) reject('NO_NAVIGATION_HISTORY','No history entry exists in that direction.');
+      const target = history.getEntryAtIndex(history.getActiveIndex() + (back ? -1 : 1));
+      if (!target || typeof target.url !== 'string') reject('TAB_UNAVAILABLE','The target history entry is unavailable.');
+      policy.navigationURL(target.url,context);
+      this.requireCurrent(context);
+      history[name]();
+      return;
+    }
     let tabId = args[0], options = args[1];
     if (name === 'update' && (tabId === undefined || typeof tabId === 'object')) { options = tabId || {}; tabId = (await this.tabList(context)).find(tab => tab.active)?.id; }
     if (name === 'remove') {

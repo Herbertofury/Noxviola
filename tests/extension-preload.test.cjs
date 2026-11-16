@@ -32,6 +32,15 @@ function fixture({address='chrome-extension://'+EXT+'/popup.html',contextIsolate
   execute(name=>{assert.equal(name,'electron');required++;return {ipcRenderer,contextBridge};},{contextIsolated});
   return {main,chrome:main.chrome,browser:main.browser,calls,mappings,subscriptions,nativeCalls,nativeRuntime,nativePort,ipcRenderer,errors,contextBridgeCalls,get required(){return required;}};
 }
+test('history traversal exposes real callback and Promise calls and propagates failure',async()=>{
+  for(const contextIsolated of [true,false]){
+    const f=fixture({contextIsolated,invoke:async(method)=>method==='tabs.goForward'?{ok:false,error:{message:'No forward history'}}:{ok:true,value:undefined}});
+    assert.equal(await f.browser.tabs.goBack(10),undefined);
+    let error;await new Promise(resolve=>f.chrome.tabs.goForward(10,()=>{error=f.chrome.runtime.lastError?.message;resolve();}));
+    assert.equal(error,'No forward history');assert.equal(f.chrome.runtime.lastError,undefined);
+    assert.deepEqual(f.calls.map(call=>call[1]),['tabs.goBack','tabs.goForward']);
+  }
+});
 test('actual preload exposes no transport or added APIs in ordinary website documents',()=>{
   for(const contextIsolated of [true,false]){
     const f=fixture({address:'https://example.test/',contextIsolated});

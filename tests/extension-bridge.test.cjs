@@ -34,6 +34,33 @@ function fixture(t,{permissions=['tabs','cookies','bookmarks','contextMenus','ac
 }
 function iconCodec(){return {createFromBuffer:png=>({isEmpty:()=>false,getSize:()=>pngDimensions(png),toPNG:()=>png})};}
 const imageData=color=>({width:1,height:1,data:new Uint8ClampedArray(color)});
+test('history traversal operates on the live tab in the extension identity and rejects unsafe contexts',async t=>{
+  const f=fixture(t,{permissions:[]}),calls=[];
+  let canBack=true,canForward=true,target='https://allowed.test/previous',owner=null;
+  const history={canGoBack:()=>canBack,canGoForward:()=>canForward,getActiveIndex:()=>1,getEntryAtIndex:index=>({url:target,index}),goBack:()=>calls.push('back'),goForward:()=>calls.push('forward')};
+  const contents={id:110,session:f.sessions[0],isDestroyed:()=>false,navigationHistory:history};
+  f.host.messageSource=id=>id===110?{contents,owner}:null;
+  assert.equal(await f.call('tabs.goBack',[]),undefined);
+  assert.equal(await f.call('tabs.goForward',[10]),undefined);
+  assert.deepEqual(calls,['back','forward']);
+  await assert.rejects(f.call('tabs.goBack',[20]),{code:'TAB_NOT_FOUND'});
+  await assert.rejects(f.call('tabs.goBack',[11]),{code:'TAB_UNAVAILABLE'});
+  await assert.rejects(f.call('tabs.goBack',[10,11]),{code:'INVALID_ARGUMENT'});
+  canBack=false;await assert.rejects(f.call('tabs.goBack',[10]),{code:'NO_NAVIGATION_HISTORY'});canBack=true;
+  canForward=false;await assert.rejects(f.call('tabs.goForward',[10]),{code:'NO_NAVIGATION_HISTORY'});canForward=true;
+  target='file:///secret';await assert.rejects(f.call('tabs.goBack',[10]),/not supported/);target='https://allowed.test/';
+  contents.session=f.sessions[1];await assert.rejects(f.call('tabs.goBack',[10]),{code:'TAB_UNAVAILABLE'});contents.session=f.sessions[0];
+  owner={};await assert.rejects(f.call('tabs.goBack',[10]),{code:'TAB_UNAVAILABLE'});owner=null;
+  contents.isDestroyed=()=>true;await assert.rejects(f.call('tabs.goBack',[10]),{code:'TAB_UNAVAILABLE'});
+  assert.deepEqual(calls,['back','forward']);
+});
+test('history traversal rejects revoked extensions and Firefox completion semantics',async t=>{
+  const f=fixture(t),firefox=fixture(t,{apiProfile:'firefox'});let resolveList,called=false;
+  f.host.tabs.list=()=>new Promise(resolve=>{resolveList=resolve;});f.host.messageSource=()=>{called=true;};
+  const pending=f.call('tabs.goBack',[]);await Promise.resolve();f.revoke();resolveList([{id:10,identity:'personal',active:true}]);
+  await assert.rejects(pending,{code:'EXTENSION_REVOKED'});assert.equal(called,false);
+  await assert.rejects(firefox.call('tabs.goBack',[10]),{code:'UNSUPPORTED_API'});
+});
 function senderFixture(t) {
   const f=fixture(t),sources=new Map();
   f.host.messageSource=nativeId=>sources.get(nativeId);

@@ -99,7 +99,7 @@
     for (const name of ['onMessage','onMessageExternal']) if (nativeRuntime[name]) runtime[name] = nativeEvent(nativeRuntime[name],args => [args[0],sender(args[1]),args[2]]);
     for (const name of ['onConnect','onConnectExternal']) if (nativeRuntime[name]) runtime[name] = nativeEvent(nativeRuntime[name],args => [port(args[0])]);
     const definitions = {
-      tabs:{methods:['get','getCurrent','query','create','update','remove','move','reload'],events:['onCreated','onUpdated','onRemoved','onActivated','onMoved']},
+      tabs:{methods:['get','getCurrent','query','create','update','remove','move','reload','goBack','goForward'],events:['onCreated','onUpdated','onRemoved','onActivated','onMoved']},
       windows:{methods:['get','getCurrent','getLastFocused','getAll','create','update','remove'],events:['onCreated','onRemoved','onFocusChanged','onBoundsChanged']},
       permissions:{methods:['contains','getAll','request','remove'],events:[]},
       cookies:{methods:['get','getAll','set','remove','getAllCookieStores'],events:['onChanged']},

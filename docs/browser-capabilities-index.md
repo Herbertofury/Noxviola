@@ -1,8 +1,8 @@
 # Browser capability index
 
-Inventory version **2026-11-15.4**; reviewed 2026-11-15. **Initial documented inventory; incomplete.** The current implementation continues published source `d2c347a5bfc8a07725abf9562f0869a51f6d3b74`. Native and packaged-executable qualification of these new services, controls and extension APIs is **pending**. Earlier source-bound receipts, including the ac3a92f6 generated Windows/Linux passes and preceding failed runs, remain unchanged in the canonical ledger; they do not qualify the new implementation.
+Inventory version **2026-11-16.1**; original documentation audit 2026-11-15. **Initial documented inventory; incomplete.** The latest verified runtime checkpoint is `3253be620fb8065a59e7be84ee2027e4a6993a19`: its scoped source and ordinary packaged-executable workflows passed on hosted Windows/Linux, including actual native close, immediate saved-session comparison and restart. Earlier failures and source-bound receipts remain preserved. The separate spelling/private-memory/real-extension continuation still requires its own hosted result; no full capability or master gate is promoted by these bounded fixtures.
 
-This checkpoint updates 30 affected existing records and retains all **183 capability records and 110 source records**. These are discovered records, not a scope limit. The complete union and configuration audit remains open. Direct inspection of installed Windows browsers has not occurred.
+The inventory retains all **183 capability records and 112 source records**. These are discovered records, not a scope limit. The complete union and configuration audit remains open. Direct inspection of installed Windows browsers has not occurred.
 
 [Method and historical findings](browser-capabilities.md) · [Historical native fixture checkpoint](browser-capabilities.md#verified-native-fixture-checkpoint) · [Current extension architecture](browser/EXTENSION-ARCHITECTURE.md) · [Canonical local data contracts](browser/HISTORY-BOOKMARKS-WORKSPACES.md) · [Canonical JSON](../browser/capabilities.json) · [Master goal](browser/MASTER-GOAL.md)
 

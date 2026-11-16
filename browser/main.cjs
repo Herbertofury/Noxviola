@@ -8,6 +8,7 @@ const {EventEmitter} = require('node:events');
 const {address, httpUrl, cleanState, inspectState, recoverState, SEARCH} = require('./state.cjs');
 const preferenceStore = require('./preferences.cjs');
 const {ResourceMonitor} = require('./resources.cjs');
+const {SpellcheckService} = require('./spellcheck.cjs');
 const {HistoryService} = require('./history.cjs');
 const {BookmarkService,rootIds:bookmarkRootIds} = require('./bookmarks.cjs');
 const {WorkspaceService} = require('./workspaces.cjs');
@@ -29,7 +30,7 @@ let writer, saveError = '', sessionFile, dataDirectory, downloads, permissions, 
 let vaultFile, vaultDocument = {version:1, items:[]}, vaultError = '', vaultRecovery = null, vaultImport = null;
 let accountFile, accounts = [], accountError = '', accountRecovery = null;
 let permissionOpening = null, extensionBusy = false;
-let resolveIdentitySession, history, bookmarks, workspaces, resourceMonitor, extensionBridge;
+let resolveIdentitySession, history, bookmarks, workspaces, resourceMonitor, extensionBridge, spellcheck;
 let activeWorkspaceId = 'default', nextRuntimeTabId = 1, preferencePreview = null;
 const runtimeTabs = new Map(), nativeTabs = new Map(), sessionTargets = new Map(), browserEvents = new EventEmitter();
 const configuredSessions = new Set(), identityInitializations = new Map(), extensionWindows = new Map(), pendingOperations = new Set();
@@ -123,6 +124,7 @@ function identitySession(identity) {
   const partition = `persist:noxviola-identity-${identity}`, target = resolveIdentitySession(identity);
   sessionTargets.set(identity,target);
   if (!configuredSessions.has(partition)) {
+    spellcheck.attach(target);
     target.setPermissionCheckHandler(() => false); target.setPermissionRequestHandler((_wc,_permission,callback) => callback(false));
     permissions?.attach(target, identity); downloads?.attach(target, identity); extensionBridge?.attachSession(target); configuredSessions.add(partition);
   }
@@ -162,6 +164,7 @@ function ensureView(tab) {
   wc.on('render-process-gone', (_event,details) => { tab.loading = false; notice(`Tab stopped (${details.reason}). Reload to recover.`); publish(false); });
   wc.on('did-fail-load', (_event,code,description,_url,mainFrame) => { if (mainFrame && code !== -3) notice(`Page could not load: ${description}`); });
   wc.on('context-menu', (_event,params) => Menu.buildFromTemplate([
+    ...spellcheck.contextMenu(wc,params),
     {role:'copy',enabled:!!params.selectionText},{role:'paste',enabled:params.isEditable},
     {label:'Reload',click:()=>{if(!closing&&!wc.isDestroyed())wc.reload();}},
     {label:'Open link in new tab',enabled:!!httpUrl(params.linkURL),click:()=>eventAction(() => newTab(params.linkURL,tab.identity))},
@@ -378,7 +381,9 @@ async function recoverService(service,label) {
   if(choice.response===1)service.recover(service.inspection.preview);
 }
 async function savePreferences(value) {
-  preferences=preferenceStore.applyPreferences(preferences,value);preferencePreview=null;buildMenu();layout();publish(false);publishBookmarks();
+  const proposed=preferenceStore.applyPreferences(preferences,value);
+  spellcheck.setEnabled(proposed.spellcheckEnabled);
+  preferences=proposed;preferencePreview=null;buildMenu();layout();publish(false);publishBookmarks();
   writer.request(snapshot());await writer.flush();notice('Preferences saved.');
 }
 function changeZoom(command) {
@@ -634,6 +639,8 @@ async function start() {
     restored = {value:recoverState(sessionFile,restored.preview).value};
   }
   originalSession = restored.value; profiles = originalSession.profiles; preferences = originalSession.preferences;
+  spellcheck=new SpellcheckService({enabled:preferences.spellcheckEnabled,canAct:()=>!closing,onError:notice});
+  spellcheck.attach(session.defaultSession);
   resolveIdentitySession = createIdentitySessionResolver({session,root:app.getPath('sessionData')});
   tabs = originalSession.tabs.map(tabFromSaved); activeId = originalSession.activeId;
   currentIdentity = active()?.identity || 'personal';
@@ -665,6 +672,9 @@ async function start() {
   writer = new SessionWriter(sessionFile); writer.on('result',result => {saveError = result.error || '';if (result.error) notice(`Session not saved: ${result.error}`);publish(false);});
   win = new BrowserWindow({title:'Noxviola',width:1320,height:860,minWidth:700,minHeight:480,backgroundColor:'#171122',webPreferences:{preload:path.join(__dirname,'preload.cjs'),nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true}});
   win.webContents.setWindowOpenHandler(() => ({action:'deny'})); win.webContents.on('will-navigate',event => event.preventDefault());
+  win.webContents.on('context-menu',(_event,params)=>Menu.buildFromTemplate([
+    ...spellcheck.contextMenu(win.webContents,params),{role:'copy',enabled:!!params.selectionText},{role:'paste',enabled:params.isEditable},
+  ]).popup({window:win}));
   ipcMain.handle('command',command); win.on('resize',layout);
   win.on('close',event => {if (!allowClose) {event.preventDefault();requestClose().catch(error => resumeAfterCloseError(error.message));}});
   win.webContents.on('did-finish-load',() => {

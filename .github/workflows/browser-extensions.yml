@@ -1,0 +1,66 @@
+name: Real extension acceptance
+
+on:
+  push:
+    branches: ['browser/enderloom-baseline-20261115']
+    paths:
+      - '.gitattributes'
+      - 'browser/**'
+      - 'tests/native/**'
+      - 'tests/real-extension-harness.test.cjs'
+      - 'scripts/native-smoke.cjs'
+      - 'scripts/real-extension-smoke.cjs'
+      - 'scripts/fetch-extension-corpus.cjs'
+      - 'package*.json'
+      - '.github/workflows/browser-extensions.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: real-extensions-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dark-reader:
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Install pinned JavaScript dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Download the pinned official Electron distribution
+        run: npm run setup:electron
+      - name: Verify installed Electron files without launching the engine
+        run: npm run check:electron
+      - name: Fetch and verify the unchanged pinned Dark Reader archive
+        run: node scripts/fetch-extension-corpus.cjs "${{ runner.temp }}/noxviola-darkreader-chrome.zip"
+      - name: Install Linux display dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install --yes xvfb libgtk-3-0 libnss3 libasound2
+      - name: Exercise real Dark Reader on Windows
+        if: runner.os == 'Windows'
+        run: node scripts/real-extension-smoke.cjs --archive "${{ runner.temp }}/noxviola-darkreader-chrome.zip" --output "${{ runner.temp }}/noxviola-real-extension-results"
+      - name: Exercise real Dark Reader on Linux
+        if: runner.os == 'Linux'
+        run: xvfb-run -a node scripts/real-extension-smoke.cjs --archive "${{ runner.temp }}/noxviola-darkreader-chrome.zip" --output "${{ runner.temp }}/noxviola-real-extension-results"
+      - name: Retain actual package behavior and first-failure evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: Noxviola-real-extension-${{ matrix.os }}-${{ github.sha }}
+          path: ${{ runner.temp }}/noxviola-real-extension-results/
+          if-no-files-found: warn
+          retention-days: 14
+
+# This independent gate remains failed when an actual package workflow fails.
+# No API patches, request substitution, alternate extension bytes, private
+# profile, sandbox-disable switch, failure skipping or success fallback.

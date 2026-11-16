@@ -16,10 +16,13 @@ Open **Tools → Preferences** or the native **Browser → Customize** menu. The
 | Home page | `about:blank` or an HTTP(S) address without embedded credentials. |
 | Search | DuckDuckGo, Google, Bing or a custom HTTP(S) template with exactly one `{searchTerms}` placeholder. The whole query is URL-encoded. |
 | Shortcuts | Each supported native menu action can have a different accelerator or an empty value to disable its shortcut. Conflicts are rejected after platform alias resolution. |
+| Local spelling | Enable/disable local checking across browser and identity sessions, with real native correction suggestions. The previous enabled default is retained. This controls checking, **not dictionary downloads**. |
 
 The shortcut editor covers new/close/restore/duplicate/next/previous tabs, address/find focus, bookmarks, history, downloads, reload/bypass-cache, navigation/home, zoom, print, fullscreen and developer tools. **Reset shortcuts** edits the draft; **Save preferences** commits it. `CmdOrCtrl` follows the platform; the literal plus key is written as `Plus`.
 
 Preference defaults are filled for older sessions while unknown saved metadata remains preserved. Known unsupported values block silent reinterpretation. There is no browser-brand mode that disables features from another ecosystem.
+
+Spelling checks use Electron's local dictionaries (or the system spellchecker on macOS). Windows/Linux dictionary loading can begin when Electron creates a Session, independently of its checking-enabled preference. Turning checking off does not block those engine downloads. The settings text discloses that limitation; a real supported downloader opt-out remains open. Appearance presets cannot change this separate setting. Native custom-word writes are not offered here because Electron can also write the Windows/macOS system dictionary; identity-private word storage is not implied.
 
 ## Reviewed presets
 
@@ -38,6 +41,8 @@ Exports use the user's chosen destination. An existing destination requires an e
 Open **Tools → Resource monitor**, then refresh when another sample is useful. There is no periodic timer, monitoring worker, automatic upload or always-running resource collector. The first CPU sample has no previous interval and is displayed as unknown rather than zero. Later samples report Electron's interval values. Missing process fields remain unknown.
 
 The panel records one row per native process and associates all known tab/extension contexts with that row, preserving shared-process ownership. Extension attribution requires both runtime origin and the same native Session. Some processes have no page owner. Memory values are converted from the engine's kilobyte units; summing working sets can count shared physical pages more than once. These observations are diagnostic measurements, not evidence that Noxviola is faster or uses less memory than another browser.
+
+Optional Windows private-memory values are now displayed separately from working sets. A valid reported zero remains zero; an unavailable or invalid field stays unknown. A private-memory total is shown only when every sampled process reports a valid value; otherwise the panel shows how many processes reported and leaves the total unavailable. Neither field is a PSS or overall physical-memory measurement. Linux does not expose the optional Windows/macOS sandbox-status field through this API, so that absence is displayed as not reported.
 
 ## Validation ownership
 

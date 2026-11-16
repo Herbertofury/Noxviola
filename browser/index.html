@@ -114,6 +114,7 @@
   <label>Home page<input name="homePage" placeholder="about:blank or https://…" required></label>
   <label class="wide">Custom search URL<input name="customSearchURL" placeholder="https://example.com/search?q={searchTerms}" required><span>Use {searchTerms} once where the query belongs. Searches go to this address only when you submit them.</span></label>
   <fieldset class="wide"><legend>Toolbar and bookmarks</legend><div class="choices"><label><input name="showBookmarksBar" type="checkbox">Bookmarks bar</label><label><input name="toolbar.home" type="checkbox">Home button</label><label><input name="toolbar.library" type="checkbox">Library button</label><label><input name="toolbar.extensions" type="checkbox">Extension buttons</label><label><input name="toolbar.split" type="checkbox">Split-view button</label></div></fieldset>
+  <fieldset class="wide"><legend>Local spelling</legend><label class="consent"><input name="spellcheckEnabled" type="checkbox" aria-describedby="spellcheck-help">Check spelling locally</label><p id="spellcheck-help" class="subtle">Right-click a marked word for corrections. This choice applies across identities and is excluded from appearance presets. On Windows and Linux, the engine can download dictionaries from Chromium's CDN even when checking is off; this switch does not block those downloads. macOS uses its system spellchecker.</p></fieldset>
   <details class="wide"><summary>Keyboard shortcuts</summary><p class="subtle">Use combinations such as Ctrl+Shift+K, CmdOrCtrl+L or F8. Leave a shortcut empty to disable it. Each active combination must be unique.</p><div id="shortcut-fields" class="editor"></div><button id="shortcuts-reset" type="button">Restore default shortcuts</button></details>
   <div class="form-actions"><button class="primary">Save preferences</button></div>
  </form>
@@ -146,7 +147,7 @@
 <section id="resources" class="panel" hidden>
  <div class="panel-heading"><div><h1>Resource monitor</h1><p>Measure the browser’s processes when you choose. No monitoring timer runs in the background.</p></div><button data-command="panel-close">Back to page</button></div>
  <div class="controls"><button id="resource-refresh" class="primary">Take a new sample</button><p id="resource-summary"></p></div><p id="resource-caveat" class="subtle"></p>
- <div class="table-scroll"><table><thead><tr><th>Process</th><th>Tabs or extensions</th><th>CPU</th><th>Working set</th><th>Sandbox</th></tr></thead><tbody id="resource-items"></tbody></table></div>
+ <div class="table-scroll"><table><thead><tr><th>Process</th><th>Tabs or extensions</th><th>CPU</th><th>Working set</th><th>Private memory</th><th>Sandbox</th></tr></thead><tbody id="resource-items"></tbody></table></div>
 </section>
 <section id="capabilities" class="panel" hidden>
  <div class="panel-heading"><div><h1>Capability tracker</h1><p>The union of browser goals, with source evidence and unfinished acceptance kept visible.</p></div><button data-command="panel-close">Back to page</button></div>

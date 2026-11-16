@@ -13,9 +13,15 @@
 /package-lock.json text eol=lf
 /scripts/native-smoke.cjs text eol=lf
 /scripts/package-preview.cjs text eol=lf
+/scripts/real-extension-smoke.cjs text eol=lf
+/scripts/fetch-extension-corpus.cjs text eol=lf
+/.github/workflows/browser-extensions.yml text eol=lf
 /tests/native/**/*.cjs text eol=lf
 /tests/native/**/*.js text eol=lf
 /tests/native/**/*.json text eol=lf
 /tests/native/**/*.md text eol=lf
+/tests/native/**/*.html text eol=lf
 /tests/native/**/*.py text eol=lf
 /tests/native/**/*.png -text
+/LICENSE text eol=lf
+/THIRD_PARTY_NOTICES.md text eol=lf

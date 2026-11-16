@@ -13,7 +13,7 @@ const APP_FILES = [
   'browser/permissions.cjs', 'browser/downloads.cjs', 'browser/extensions.cjs', 'browser/extension-runtime.cjs',
   'browser/extension-api.preload.cjs', 'browser/extension-bridge.cjs', 'browser/extension-policy.cjs',
   'browser/extension-menus.cjs', 'browser/extension-icons.cjs', 'browser/extension-adapter-LICENSE.txt', 'browser/extension-browser-polyfill-LICENSE.txt',
-  'browser/preferences.cjs', 'browser/resources.cjs', 'browser/service-store.cjs',
+  'browser/preferences.cjs', 'browser/resources.cjs', 'browser/spellcheck.cjs', 'browser/service-store.cjs',
   'browser/history.cjs', 'browser/bookmarks.cjs', 'browser/workspaces.cjs',
   'browser/vault.cjs', 'browser/accounts.cjs', 'LICENSE', 'THIRD_PARTY_NOTICES.md',
 ];

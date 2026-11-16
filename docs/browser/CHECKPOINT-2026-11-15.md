@@ -233,3 +233,35 @@ Retained failed-run artifacts were independently downloaded and matched their ex
 The extension action implementation now reads only the exact accepted, hash-verified package resources for a live runtime enrollment, validates and re-encodes PNGs through the actual engine decoder, and serializes real ImageData pixels. It preserves every supplied image resolution, supports global/per-tab defaults and updates, rejects stale or revoked asynchronous results and displays a visible text fallback on actual decode/resource failure. Reviewed Chromium/Firefox API behavior is persisted per installation: Chromium scalar inputs declare size 16 and reject empty setters; the Firefox profile supports empty/reset inheritance and full-document tab reset. Package format supplies a reviewable suggestion, not publisher verification or extra permission. Native acceptance now verifies six acknowledged toolbar states, including decoded colors and visible pixels; those new checks have not yet passed a hosted run at this checkpoint.
 
 Native captures also exposed stale workspace group counts/removal controls after tab assignment. The renderer now updates those counts, pin/mute labels and current-state actions without replacing focused selectors or erasing unsaved assignments and workspace/group form fields. A production-DOM regression verifies the observed failure, subsequent toggles and tab removal; packaged acceptance also checks the actual displayed controls before capture.
+
+### Complete packaged close/restart result at `3253be62`
+
+The coherent tree `4851669e65eda89bc55ebc236322ef9b87e6cd17`, published as `3253be620fb8065a59e7be84ee2027e4a6993a19`, passed [247 portable contracts and 63 syntax checks on both platforms](https://github.com/Herbertofury/Noxviola/actions/runs/43778455104). [Native run 43778455094](https://github.com/Herbertofury/Noxviola/actions/runs/43778455094) then passed completely on Windows and Linux:
+
+| Stage, per platform | Result |
+| --- | --- |
+| Original-factory generated store seed | 3/3 checks |
+| First source-app process, including actual six-stage extension-icon pixels | 14/14 checks |
+| Source-app process restart | 7/7 checks |
+| First ordinary packaged executable, including public RFC/MDN HTTPS and native close/save | 11/11 checks |
+| Ordinary packaged restart and second native close/save | 6/6 checks |
+| Complete portable archive readback | All 73 Linux / 74 Windows file entries matched their recorded bytes and SHA-256 |
+
+Both source and packaged receipts contain the same **57 raw-Git-matching native inputs**, clean checkouts and unchanged before/after input manifests: `f9a047bc5dbb0ae6194a79daef15ffd514121e5d0e78f83ed82e0a9e2640a117`. All final ordered tabs, duplicate URLs, profiles, preferences, active workspace/tab IDs and native-close session contents matched before the second launch; the five actual stores, nested bookmark IDs, history, workspace/group data and Library metadata survived the recorded restart. The Windows and Linux workspace captures were reviewed and show the corrected nonempty-group count and disabled removal control. This is scoped hosted-run evidence, not the owner's Windows 11 audit.
+
+| Retained artifact | Bytes | SHA-256 |
+| --- | ---: | --- |
+| Linux native evidence `14186919124` | 4,958,320 | `4331cb4ac3577c01d67a4b048693ceaa383e8d5264561c72be97f68eb6233169` |
+| Windows native evidence `14187685382` | 3,946,941 | `affcd8026c28a34c5f43d4249220dd5a946b5c3fcdbfafe3ec4a0a0bfc7b8721` |
+| Linux portable artifact `14187187765` | 123,464,533 | `34095752d4d482e3ad2063671181b56ca37d16ced0093df8b9671822ead7ac6d` |
+| Windows portable artifact `14186898288` | 158,576,472 | `74593c3136b4281a1db5bfd5c7aa739d3014443e23d27767d0910af9dacdb031` |
+
+The actual distribution files and their separate hashes are recorded in [release status](RELEASES.md). Both downloaded outer artifacts and every inner distribution entry were independently read back. The application manifests differ only in Windows CRLF checkout of `LICENSE` and `THIRD_PARTY_NOTICES.md`; both match the exact verified LF-to-CRLF transformation of the committed files. The next source pins those two packaged text files to LF as well. No byte-identical cross-platform ASAR is claimed for `3253be62`.
+
+### Next source: honest spelling controls, measured private bytes and real-package acceptance
+
+The next implementation adds an explicit local spelling-check preference and native correction suggestions, preserving the previous enabled default. Source investigation disproved the proposed use of that setter as download consent: Electron initializes dictionaries in its Session constructor, and missing Hunspell files can download independently of the enabled preference. The UI therefore discloses that turning checks off does not block downloads; the supported downloader opt-out remains open. A failed partial native update/rollback remains retryable rather than falsely short-circuiting a later disable. Appearance imports cannot alter the separate spelling choice.
+
+The resource service now retains optional Windows private-memory values, preserves reported zero, and leaves missing/invalid values unknown. A total requires valid data from every sampled process. This improves visibility without changing process policy, adding monitoring timers or asserting a memory advantage.
+
+The separate real-extension workflow admits the unchanged, hash-pinned Dark Reader 4.9.135 Chrome MV2 ZIP, supplies only its native picker choice, and drives actual production review/install/toolbar controls plus the package's own popup/settings handlers. It observes a deterministic light page, native pixels, background failures and ordinary public package traffic. The final receipt must retain every required workflow and all observer failures; no API shim or request replacement exists in the test. Actual third-party execution remains pending for this new source; a successful generated fixture is not a Dark Reader compatibility result. Full gates G001–G012, owner-device inspection, marketplace trust, remaining APIs, complete privacy and equivalent-workload performance remain open.

@@ -125,6 +125,7 @@ function renderPreferenceForm(state) {
   const form=$('settings-form'),values={theme:'dark',accent:'violet',density:'comfortable',homePage:'about:blank',customSearchURL:'https://duckduckgo.com/?q={searchTerms}',...state.preferences};
   editForm(form,values,['searchEngine','tabLayout','theme','accent','density','homePage','customSearchURL']);
   form.elements.namedItem('showBookmarksBar').checked=Boolean(values.showBookmarksBar);
+  form.elements.namedItem('spellcheckEnabled').checked=values.spellcheckEnabled!==false;
   for(const name of ['home','library','extensions','split'])form.elements.namedItem(`toolbar.${name}`).checked=values.toolbar?.[name]!==false;
   $('shortcut-fields').replaceChildren(...(state.shortcuts||[]).map(shortcut=>{
     const label=node('label',shortcut.label),input=node('input');input.name=`shortcut.${shortcut.id}`;input.value=shortcut.accelerator;input.autocomplete='off';input.spellcheck=false;label.append(input);return label;
@@ -381,6 +382,7 @@ $('settings-form').onsubmit=event=>{
   event.preventDefault();const form=event.currentTarget,data=new FormData(form),value={toolbar:{},shortcuts:{}};
   for(const name of ['searchEngine','tabLayout','theme','accent','density','homePage','customSearchURL'])value[name]=data.get(name);
   value.showBookmarksBar=form.elements.namedItem('showBookmarksBar').checked;
+  value.spellcheckEnabled=form.elements.namedItem('spellcheckEnabled').checked;
   for(const name of ['home','library','extensions','split'])value.toolbar[name]=form.elements.namedItem(`toolbar.${name}`).checked;
   for(const [key,entry] of data)if(key.startsWith('shortcut.'))value.shortcuts[key.slice(9)]=entry;
   saveForm(form,'settings-save',value,()=>{settingsDirty=false;announce('Preferences saved.');});
@@ -553,11 +555,12 @@ $('group-form').onsubmit=event=>{event.preventDefault();const form=event.current
 
 function renderResources() {
   if(!resourceData)return;
-  $('resource-summary').textContent=`${resourceData.processCount} processes · ${bytes(resourceData.workingSetBytes)} working-set sum · ${resourceData.intervalMs===null?'First sample':`${(resourceData.intervalMs/1000).toFixed(1)}-second interval`}`;
+  const privateSummary=resourceData.privateBytes==null?`Private memory: ${resourceData.privateBytesAvailability?.reportedProcesses||0} of ${resourceData.processCount} processes reported; total unavailable`:`${bytes(resourceData.privateBytes)} private-memory sum`;
+  $('resource-summary').textContent=`${resourceData.processCount} processes · ${bytes(resourceData.workingSetBytes)} working-set sum · ${privateSummary} · ${resourceData.intervalMs===null?'First sample':`${(resourceData.intervalMs/1000).toFixed(1)}-second interval`}`;
   $('resource-caveat').textContent=resourceData.caveat||'';
   paintList($('resource-items'),resourceData.processes||[],process=>{
     const row=node('tr'),owners=(process.owners||[]).map(owner=>`${owner.title}${owner.identity?` · ${identityName(owner.identity)}`:''}`).join('; ');
-    row.append(node('td',`${process.name||process.type} · ${process.pid}`),node('td',owners||'Shared browser service'),node('td',process.cpuPercent===null?'Take another sample':`${process.cpuPercent.toFixed(1)}%`),node('td',bytes(process.workingSetBytes)),node('td',process.sandboxed===null?'Not reported':process.sandboxed?'Yes':'No'));return row;
+    row.append(node('td',`${process.name||process.type} · ${process.pid}`),node('td',owners||'Shared browser service'),node('td',process.cpuPercent===null?'Take another sample':`${process.cpuPercent.toFixed(1)}%`),node('td',bytes(process.workingSetBytes)),node('td',process.privateBytes==null?'Not reported':bytes(process.privateBytes)),node('td',process.sandboxed===null?'Not reported':process.sandboxed?'Yes':'No'));return row;
   },'No process information is available.');
 }
 api.onResources(data=>{resourceData=data;if(currentState.panel==='resources')renderResources();});

@@ -31,9 +31,11 @@ const ENUMS = Object.freeze({
   theme:['dark','light','system'], accent:['violet','blue','teal','rose','amber'], density:['comfortable','compact'],
 });
 const DEFAULTS = Object.freeze({searchEngine:'duckduckgo',tabLayout:'horizontal',theme:'dark',accent:'violet',density:'comfortable',
-  homePage:'about:blank',customSearchURL:'https://duckduckgo.com/?q={searchTerms}',showBookmarksBar:false,
+  homePage:'about:blank',customSearchURL:'https://duckduckgo.com/?q={searchTerms}',showBookmarksBar:false,spellcheckEnabled:true,
   toolbar:{library:true,extensions:true,split:true,home:true},shortcuts:{}});
 const PREFERENCE_KEYS = Object.freeze(Object.keys(DEFAULTS));
+// Appearance imports do not alter the separate local spelling choice.
+const PRESET_KEYS = Object.freeze(PREFERENCE_KEYS.filter(name=>name!=='spellcheckEnabled'));
 const modifierNames = new Map([['cmdorctrl','CmdOrCtrl'],['commandorcontrol','CmdOrCtrl'],['ctrl','Ctrl'],['control','Ctrl'],
   ['cmd','Command'],['command','Command'],['alt','Alt'],['option','Alt'],['shift','Shift'],['super','Super']]);
 const namedKeys = new Map(['Plus','Space','Tab','Enter','Escape','Backspace','Delete','Insert','Home','End','PageUp','PageDown','Up','Down','Left','Right'].map(key=>[key.toLowerCase(),key]));
@@ -81,6 +83,8 @@ function preferences(raw={}, {strict=true,platform=process.platform}={}) {
   if(!searchTemplate(result.customSearchURL))fail('The custom search URL must be HTTP(S), have no embedded credentials, and contain {searchTerms} exactly once.');
   if(result.showBookmarksBar===undefined)result.showBookmarksBar=false;
   if(typeof result.showBookmarksBar!=='boolean')fail('The bookmarks bar setting must be true or false.');
+  if(result.spellcheckEnabled===undefined)result.spellcheckEnabled=true;
+  if(typeof result.spellcheckEnabled!=='boolean')fail('Spellcheck must be explicitly enabled or disabled.');
   for(const name of ['toolbar','shortcuts'])if(result[name]!==undefined&&!object(result[name]))fail(`Saved ${name} preferences must be an object.`);
   result.toolbar={...DEFAULTS.toolbar,...result.toolbar};
   for(const name of Object.keys(DEFAULTS.toolbar))if(typeof result.toolbar[name]!=='boolean')fail('Toolbar visibility settings must be true or false.');
@@ -97,16 +101,16 @@ function applyPreferences(current, patch) {
 }
 function exportPreset(current) {
   const validated=preferences(current), supported={};
-  for(const name of PREFERENCE_KEYS)supported[name]=structuredClone(validated[name]);
+  for(const name of PRESET_KEYS)supported[name]=structuredClone(validated[name]);
   supported.toolbar=Object.fromEntries(Object.keys(DEFAULTS.toolbar).map(name=>[name,validated.toolbar[name]]));
   supported.shortcuts=Object.fromEntries(SHORTCUTS.filter(item=>Object.hasOwn(validated.shortcuts,item.id)).map(item=>[item.id,validated.shortcuts[item.id]]));
   return {format:'noxviola-preferences',version:1,preferences:supported};
 }
 function previewPreset(current, incoming) {
   if(!object(incoming)||incoming.format!=='noxviola-preferences'||incoming.version!==1||!object(incoming.preferences))fail('This is not a supported Noxviola preference preset.');
-  for(const name of Object.keys(incoming.preferences))if(!PREFERENCE_KEYS.includes(name))fail(`This preset contains an unsupported preference: ${name}.`);
+  for(const name of Object.keys(incoming.preferences))if(!PRESET_KEYS.includes(name))fail(`This preset contains an unsupported preference: ${name}. Spelling checks must be chosen separately in settings.`);
   const proposed=applyPreferences(current,incoming.preferences), changes=[];
   for(const name of PREFERENCE_KEYS)if(JSON.stringify(current[name])!==JSON.stringify(proposed[name]))changes.push({name,before:current[name],after:proposed[name]});
   return {preferences:proposed,changes};
 }
-module.exports={SHORTCUTS,ENUMS,DEFAULTS,PREFERENCE_KEYS,preferences,applyPreferences,shortcutList,accelerator,searchTemplate,exportPreset,previewPreset};
+module.exports={SHORTCUTS,ENUMS,DEFAULTS,PREFERENCE_KEYS,PRESET_KEYS,preferences,applyPreferences,shortcutList,accelerator,searchTemplate,exportPreset,previewPreset};

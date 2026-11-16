@@ -37,6 +37,15 @@ test('presets include supported presentation choices only and preview without al
   assert.throws(()=>preference.previewPreset(current,{...incoming,preferences:{extensionGrants:['all']}}),/unsupported preference/);
   assert.throws(()=>preference.previewPreset(current,{...incoming,version:2}),/supported Noxviola/);
 });
+test('local spelling retains its prior enabled default, requires a boolean choice and is excluded from appearance presets',()=>{
+  assert.equal(preference.preferences({}).spellcheckEnabled,true);
+  const disabled=preference.preferences({spellcheckEnabled:false});assert.equal(disabled.spellcheckEnabled,false);
+  const enabled=preference.applyPreferences(disabled,{spellcheckEnabled:true});assert.equal(enabled.spellcheckEnabled,true);
+  for(const value of ['true',1,null,{}])assert.throws(()=>preference.preferences({spellcheckEnabled:value}),/explicitly/);
+  const preset=preference.exportPreset(enabled);assert.equal(Object.hasOwn(preset.preferences,'spellcheckEnabled'),false);
+  assert.equal(preference.previewPreset(enabled,{format:'noxviola-preferences',version:1,preferences:{theme:'light'}}).preferences.spellcheckEnabled,true);
+  assert.throws(()=>preference.previewPreset(disabled,{format:'noxviola-preferences',version:1,preferences:{spellcheckEnabled:true}}),/Spelling checks must be chosen separately/);
+});
 test('saved customization, pinned muted groups and origin zoom survive restart without rewriting unknown metadata',t=>{
   const directory=fs.mkdtempSync(path.join(os.tmpdir(),'nox-preferences-'));t.after(()=>fs.rmSync(directory,{recursive:true,force:true}));const file=path.join(directory,'session.json');
   const saved=cleanState({profiles:[{id:'personal',name:'Personal'}],tabs:[{id:'tab',url:'https://example.com/',identity:'personal',pinned:true,muted:true,workspaceId:'work-1',groupId:'group-1',future:{value:3}}],activeId:'tab',activeWorkspaceId:'work-1',preferences:{theme:'light',searchEngine:'custom',customSearchURL:'https://example.com/?q={searchTerms}',toolbar:{home:false}},siteZooms:{personal:{'https://example.com':1.5}}});

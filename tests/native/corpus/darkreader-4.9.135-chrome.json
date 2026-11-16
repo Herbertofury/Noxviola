@@ -1,0 +1,41 @@
+{
+  "schema": 1,
+  "id": "darkreader-4.9.135-chrome-mv2",
+  "name": "Dark Reader",
+  "version": "4.9.135",
+  "manifestVersion": 2,
+  "apiProfile": "chromium",
+  "repository": "https://github.com/darkreader/darkreader",
+  "release": "https://github.com/darkreader/darkreader/releases/tag/v4.9.135",
+  "releaseId": 435958822,
+  "sourceCommit": "dbf2a1029131280d9dab21ed29f1dfdeb51a6cc7",
+  "asset": {
+    "id": 715443474,
+    "name": "darkreader-chrome.zip",
+    "url": "https://github.com/darkreader/darkreader/releases/download/v4.9.135/darkreader-chrome.zip",
+    "apiUrl": "https://api.github.com/repos/darkreader/darkreader/releases/assets/715443474",
+    "bytes": 849850,
+    "sha256": "13b081f8aa13c8e3887957570e5ff67f42bd48fef5f3fbe04770eae79a0921f3",
+    "digestSource": "GitHub release asset digest, independently matched to retained archive bytes on 2026-11-15 and 2026-11-16"
+  },
+  "license": {
+    "spdx": "MIT",
+    "url": "https://github.com/darkreader/darkreader/blob/dbf2a1029131280d9dab21ed29f1dfdeb51a6cc7/LICENSE",
+    "gitBlob": "73e15f6721385ea7da8d96ec5bd829c3760e214d",
+    "bytes": 1095,
+    "sha256": "f0a5f835174494f8981b2cbb1a34054d4f887a5c865318650d6a17afe1c7850e"
+  },
+  "permissions": {
+    "required": ["alarms", "fontSettings", "storage", "tabs"],
+    "hosts": ["<all_urls>"],
+    "optional": ["contextMenus"]
+  },
+  "packageFiles": [
+    {"path": "manifest.json", "bytes": 1647, "sha256": "4dc144e6b3fc7cb51222e0dc2b71f4cfbb6855e550aaff602799c12e78e5f7bd"},
+    {"path": "background/index.js", "bytes": 262194, "sha256": "1f0abdbf6b5fe6d480454b734a3ba57d4d3841e757039bdfe88a3cd4633fcc30"},
+    {"path": "ui/popup/index.js", "bytes": 278420, "sha256": "bcbc671a49430f685c28ec2a9584b4762fd1d5327a37695bbcc83eb8e3d0223f"},
+    {"path": "ui/options/index.js", "bytes": 182484, "sha256": "e0b2639681e3805beed394be5d0f3caeb5365dabceb7ca38a91db3aaa204a1f5"}
+  ],
+  "trust": "Unchanged upstream release ZIP imported through explicit local review. This does not establish marketplace signatures, publisher trust or source-to-release reproducibility.",
+  "execution": "This descriptor is provenance, not a runtime success receipt. Actual acceptance must come from the separate real-extension gate."
+}

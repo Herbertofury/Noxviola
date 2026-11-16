@@ -305,6 +305,53 @@ async function state() {
   lastState = value;
   return value;
 }
+async function assertSpellcheck(stage, enabled, identities) {
+  const current = await state();
+  const sessions = [{ kind: 'default', enabled: session.defaultSession.isSpellCheckerEnabled(), storagePath: session.defaultSession.getStoragePath() }];
+  assert.equal(window.webContents.session, session.defaultSession, 'The actual shell must use the inspected default Session');
+  for (const identity of identities) {
+    const target = partitionFor(identity);
+    const actualViews = views().filter(view => view.webContents.session === target);
+    assert.ok(actualViews.length > 0, 'Spellcheck evidence must inspect an identity already used by a real browser view');
+    sessions.push({ kind: 'identity', identity, enabled: target.isSpellCheckerEnabled(), storagePath: target.getStoragePath(), webContentsIds: actualViews.map(view => view.webContents.id) });
+  }
+  result.spellcheck ||= {
+    scope: 'Actual local checking state from Session.isSpellCheckerEnabled(), changed through the real settings checkbox and Save preferences handler. This is not dictionary-download consent or a claim that engine requests stop while checking is disabled.',
+    snapshots: [], uiChanges: [],
+  };
+  result.spellcheck.snapshots.push({ stage, expected: enabled, preference: current.preferences.spellcheckEnabled, sessions });
+  assert.equal(current.preferences.spellcheckEnabled, enabled, 'The live preference must retain the explicit spelling choice');
+  for (const entry of sessions) assert.equal(entry.enabled, enabled, `${stage}: ${entry.identity || entry.kind} native checking state`);
+}
+async function setSpellcheckThroughRenderer(enabled) {
+  const before = await state();
+  assert.equal(before.preferences.spellcheckEnabled, !enabled, 'The fixture must make an actual explicit choice, not submit an unchanged default');
+  if (before.panel !== 'settings') await command('settings');
+  await until(() => window.webContents.executeJavaScript(`(() => {
+    const form=document.getElementById('settings-form'),field=form.elements.namedItem('spellcheckEnabled');
+    return !document.getElementById('settings').hidden && !form.dataset.saving && !field.disabled && field.checked===${JSON.stringify(!enabled)};
+  })()`), 'current spelling choice in the actual settings form');
+  const action = await window.webContents.executeJavaScript(`(() => {
+    const form=document.getElementById('settings-form'),field=form.elements.namedItem('spellcheckEnabled'),save=form.querySelector('.form-actions button');
+    if(!field.getClientRects().length||!save.getClientRects().length||field.disabled||save.disabled)throw new Error('The real spelling and Save preferences controls must be available');
+    field.scrollIntoView({block:'nearest'});field.click();
+    if(field.checked!==${JSON.stringify(enabled)})throw new Error('The real checkbox did not change to the requested value');
+    save.scrollIntoView({block:'nearest'});save.click();
+    return {checked:field.checked,help:document.getElementById('spellcheck-help').textContent};
+  })()`);
+  const after = await until(async () => {
+    const current = await state();
+    const form = await window.webContents.executeJavaScript(`(() => {
+      const form=document.getElementById('settings-form');
+      return {saving:Boolean(form.dataset.saving),checked:form.elements.namedItem('spellcheckEnabled').checked,notice:document.getElementById('notice').textContent};
+    })()`);
+    return current.preferences.spellcheckEnabled === enabled && !form.saving ? { current, form } : null;
+  }, 'the production settings save and native spellcheck update');
+  assert.equal(after.form.checked, enabled);
+  assert.deepEqual(after.current.preferences, { ...before.preferences, spellcheckEnabled: enabled }, 'Changing local spelling must preserve every independent preference');
+  result.spellcheck.uiChanges.push({ enabled, action, savedForm: after.form });
+  await command('panel-close');
+}
 async function captureMetrics(milestone) {
   const current = await state();
   const snapshot = {
@@ -700,6 +747,8 @@ async function selectDownload(view, route, filename) {
 
 async function firstLaunch() {
   const expected = {};
+  const initial = await state();
+  await assertSpellcheck('fresh-default-before-any-settings-change', true, []);
   await check('capture actual synthetic blank and settings shell at narrow and desktop widths', async () => {
     for (const [width, height] of [[700, 600], [1320, 860]]) await captureShell('synthetic-blank', width, height);
     await command('settings');
@@ -710,6 +759,7 @@ async function firstLaunch() {
     const one = `${context.origin}/page?navigation=one`;
     const two = `${context.origin}/page?navigation=two`;
     const view = await navigate(one);
+    await assertSpellcheck('fresh-personal-identity-before-any-settings-change', true, [initial.currentIdentity]);
     assert.equal(await view.webContents.executeJavaScript('document.querySelector("h1").textContent'), 'Local browser acceptance fixture');
     await navigate(two);
     await command('back'); await site(one);
@@ -737,6 +787,25 @@ async function firstLaunch() {
     assertIdentity(await identityData(await activate(expected.personalTab)), 'personal');
     assertIdentityStorageLocations();
     result.storageLayouts = fixtureStorageLayout();
+  });
+  await check('real local-spelling settings update existing and later identity Sessions without changing other preferences', async () => {
+    const existing = [expected.personalIdentity, expected.secondIdentity];
+    await assertSpellcheck('default-in-both-existing-identities', true, existing);
+    await setSpellcheckThroughRenderer(false);
+    await assertSpellcheck('explicit-disable-existing-sessions', false, existing);
+    await setSpellcheckThroughRenderer(true);
+    await assertSpellcheck('explicit-reenable-existing-sessions', true, existing);
+    await command('identity-add', 'Synthetic later spelling identity');
+    const later = await state();
+    expected.spellcheckIdentity = later.currentIdentity;
+    expected.spellcheckTab = later.activeId;
+    assert.ok(!existing.includes(expected.spellcheckIdentity), 'A newly used identity must be created after the explicit re-enable');
+    await navigate(`${context.origin}/page?spellcheck=later-identity`);
+    const all = [...existing, expected.spellcheckIdentity];
+    await assertSpellcheck('new-identity-inherits-explicit-enable', true, all);
+    await setSpellcheckThroughRenderer(false);
+    await assertSpellcheck('final-explicit-disable-all-sessions', false, all);
+    await activate(expected.personalTab);
   });
   await check('site geolocation request is denied through production permission handling', async () => {
     const view = await site();
@@ -920,6 +989,8 @@ async function firstLaunch() {
   expected.tabs = final.tabs.map(({ id, url, identity }) => ({ id, url, identity }));
   expected.profiles = final.profiles;
   expected.activeId = final.activeId;
+  expected.spellcheckEnabled = final.preferences.spellcheckEnabled;
+  assert.equal(expected.spellcheckEnabled, false);
   fs.writeFileSync(path.join(context.directory, 'restart-expectations.json'), JSON.stringify(expected), { mode: 0o600 });
 }
 
@@ -938,6 +1009,23 @@ async function secondLaunch() {
     assertIdentity(await identityData(second), 'second', {sessionCookieExpected: false});
     assertIdentityStorageLocations();
     result.storageLayouts = fixtureStorageLayout();
+  });
+  await check('the explicit disabled spelling choice survives restart in the default and every identity Session', async () => {
+    assert.equal(expected.spellcheckEnabled, false);
+    const previousTab = (await state()).activeId;
+    // Restored tabs are intentionally lazy. Enter the actual later-identity
+    // document through production activation before inspecting its Session.
+    await activate(expected.spellcheckTab);
+    await assertSpellcheck('disabled-after-real-process-restart', expected.spellcheckEnabled, [expected.personalIdentity, expected.secondIdentity, expected.spellcheckIdentity]);
+    await command('settings');
+    const choice = await window.webContents.executeJavaScript(`(() => {
+      const field=document.getElementById('settings-form').elements.namedItem('spellcheckEnabled');
+      return {checked:field.checked,visible:Boolean(field.getClientRects().length),disabled:field.disabled};
+    })()`);
+    assert.deepEqual(choice, { checked: false, visible: true, disabled: false });
+    result.spellcheck.restoredControl = choice;
+    await command('panel-close');
+    await activate(previousTab);
   });
   await check('extension identity, storage and background execution survive a real process restart', async () => {
     const entries = await command('extension-list');

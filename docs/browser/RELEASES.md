@@ -4,6 +4,13 @@
 
 The browser is experimental source. **No production release is qualified.** GitHub Actions may publish temporary, unsigned **UNVERIFIED preview packages**; those are not GitHub Releases or proof of native functionality/security. The previous sandbox-enabled native launch failed with a process-socket permission denial, and that denied route is not retried by packaging jobs.
 
+The later [hosted run 43778455094](https://github.com/Herbertofury/Noxviola/actions/runs/43778455094) passed the recorded source and **actual packaged-executable** workflows on both Windows and Linux at `3253be620fb8065a59e7be84ee2027e4a6993a19`. Each package launched through its ordinary ASAR entry, completed public HTTPS cases and generated identity/data workflows, closed through the real OS window protocol, saved the exact final session and restarted successfully. The complete portable archives were then read back and every entry verified. These unsigned **PREVIEW** artifacts qualify those bounded workflows, not a production release, universal extension support or the full privacy/security/performance gates. Earlier unexecuted and failed builds retain their earlier status.
+
+| Exact tested preview | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `Noxviola-PREVIEW-win32-x64-3253be620fb8.zip` | 158,563,426 | `5b8a10ca480aa2c0875ca84dcbd4d620c47333859416d7652290bf5785e95141` |
+| `Noxviola-PREVIEW-linux-x64-3253be620fb8.tar.gz` | 123,451,949 | `0456289c6ee68de4a9e806286857d0551e9c1b3f9f48e0490389a696cdf9976e` |
+
 - [Contract checks](https://github.com/Herbertofury/Noxviola/actions/workflows/browser-contracts.yml): portable service/renderer tests and syntax with locked development dependencies, Windows/Linux.
 - [Native acceptance](https://github.com/Herbertofury/Noxviola/actions/workflows/browser-native.yml): actual sandboxed Electron and synthetic local fixtures on a supported host. A missing desktop is a blocked result, not a pass. A workflow link does not imply that a remote run succeeded.
 - [Preview builds](https://github.com/Herbertofury/Noxviola/actions/workflows/preview-builds.yml): locked dependency installation, tests and packaging, Windows/Linux. A successful run exposes an Actions artifact; these expire after 14 days and may require GitHub sign-in. No claim of a download exists until the job succeeds.

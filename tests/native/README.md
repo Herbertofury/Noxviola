@@ -175,6 +175,15 @@ Two subsequent actual Noxviola processes exercise:
   `Max-Age=86400` must persist, while a separate session-only cookie must expire;
   actual native cookie attributes are checked before close and after restart.
 - A denied geolocation request through application permission handling.
+- Local spelling starts enabled in the actual default and both initial identity
+  Sessions. The real settings checkbox and Save preferences handler disable and
+  re-enable checking, a later identity inherits the enabled choice, and a final
+  explicit disable is preserved in every Session and the visible control across
+  process restart. Native `Session.isSpellCheckerEnabled()` readback verifies the
+  local checking state. This is not download consent: the pinned engine can fetch
+  dictionaries independently of the checking switch. The separate packaged
+  NetLog workload retains its ordinary default behavior and makes no assertion
+  that dictionary traffic disappears.
 - Actual DownloadItem completion, bytes, pause/resume and cancellation through
   the application's download commands.
 - MV3 content-script execution and `chrome.storage.local` across identities,

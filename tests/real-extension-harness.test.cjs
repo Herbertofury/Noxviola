@@ -6,6 +6,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 const { createContext } = require('../scripts/native-smoke.cjs');
 const { options } = require('../scripts/real-extension-smoke.cjs');
 const { fetchCorpus } = require('../scripts/fetch-extension-corpus.cjs');
@@ -17,6 +18,41 @@ function temporary(t) {
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   return directory;
 }
+
+test('actual CJS driver dispatches through Electron-style dynamic import and exits an early startup failure', () => {
+  const driver = path.join(__dirname, 'native/real-extension-driver.cjs');
+  // The child is plain Node, not Electron. Only the engine bootstrap boundary
+  // is replaced. The actual driver source is dynamically imported just as
+  // pinned Electron default_app/main.ts imports a CLI .cjs application.
+  const code = `
+    import { createRequire } from 'node:module';
+    import { pathToFileURL } from 'node:url';
+    const require=createRequire(import.meta.url), Module=require('node:module');
+    const original=Module._load, driver=${JSON.stringify(driver)};
+    Module._load=function(request,parent,...rest){
+      if(request==='electron')return {app:{exit(code){console.log('EARLY_NATIVE_EXIT '+code);process.exitCode=code;}}};
+      const loaded=original.call(this,request,parent,...rest);
+      if(parent?.filename===driver && request==='../../scripts/native-smoke.cjs')return {...loaded,readContext(){
+        console.log('ACTUAL_DRIVER_ENTERED');throw new Error('Generated bootstrap failure before any engine or extension code');
+      }};
+      return loaded;
+    };
+    Object.defineProperty(process.versions,'electron',{value:'44.11.3'});
+    process.type='browser';process.argv=[process.execPath,driver,'generated-missing-context'];
+    await import(pathToFileURL(driver).href);
+    await new Promise(resolve=>setImmediate(resolve));
+  `;
+  const child = spawnSync(process.execPath, ['--input-type=module', '-e', code], { encoding: 'utf8', timeout: 10_000 });
+  assert.equal(child.error, undefined);
+  assert.equal(child.status, 1, child.stderr);
+  assert.match(child.stdout, /ACTUAL_DRIVER_ENTERED/);
+  assert.match(child.stdout, /EARLY_NATIVE_EXIT 1/);
+  assert.match(child.stderr, /Generated bootstrap failure/);
+  const { isElectronEntry } = require('./native/real-extension-driver.cjs');
+  assert.equal(isElectronEntry({ versions: {}, type: 'browser', argv: ['node', driver] }, driver), false);
+  assert.equal(isElectronEntry({ versions: { electron: '44.11.3' }, type: 'renderer', argv: ['electron', driver] }, driver), false);
+  assert.equal(isElectronEntry({ versions: { electron: '44.11.3' }, type: 'browser', argv: ['electron', path.join(__dirname, 'unrelated.cjs')] }, driver), false);
+});
 
 test('real-package CLI requires an explicit archive and refuses unsafe or silently ignored options', () => {
   const parsed = options(['--archive', 'corpus/darkreader.zip', '--output', 'records']);

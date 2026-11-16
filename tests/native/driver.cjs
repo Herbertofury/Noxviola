@@ -9,6 +9,7 @@ const { app, BrowserWindow, dialog, session, webContents } = require('electron')
 const { readContext, preflight, sourceEvidence } = require('../../scripts/native-smoke.cjs');
 const { createIdentitySessionResolver, identityStoragePaths } = require('../../browser/session-path.cjs');
 const { DOWNLOAD } = require('./fixture-server.cjs');
+const { assertOnlySpellingChanged } = require('./preferences-evidence.cjs');
 const bridgeManifest = require('./fixtures/extension-bridge/manifest.json');
 const BRIDGE_CHECKS = ['chrome-callback-query', 'browser-promise-query', 'first-tab-event', 'canonical-tabs', 'native-message-ids', 'bookmark-service', 'cookie-host-and-identity', 'foreign-tab-denied', 'callback-last-error', 'promise-rejection', 'action-state', 'action-icons', 'cleanup'];
 const BRIDGE_ICON_STAGES = [
@@ -348,8 +349,11 @@ async function setSpellcheckThroughRenderer(enabled) {
     return current.preferences.spellcheckEnabled === enabled && !form.saving ? { current, form } : null;
   }, 'the production settings save and native spellcheck update');
   assert.equal(after.form.checked, enabled);
-  assert.deepEqual(after.current.preferences, { ...before.preferences, spellcheckEnabled: enabled }, 'Changing local spelling must preserve every independent preference');
-  result.spellcheck.uiChanges.push({ enabled, action, savedForm: after.form });
+  const evidence = { enabled, action, savedForm: after.form,
+    before: { preferences: before.preferences, shortcuts: before.shortcuts },
+    after: { preferences: after.current.preferences, shortcuts: after.current.shortcuts } };
+  result.spellcheck.uiChanges.push(evidence); // Retain raw values even if comparison fails.
+  evidence.resolution = assertOnlySpellingChanged(before, after.current, enabled);
   await command('panel-close');
 }
 async function captureMetrics(milestone) {

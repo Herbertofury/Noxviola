@@ -132,3 +132,58 @@ test('post-exit session comparison detects stale last navigation, ordering and p
   assert.throws(() => assertSavedSession({ ...saved, tabs: [...saved.tabs].reverse() }, expected), /final ordered tab state/);
   assert.throws(() => assertSavedSession({ ...saved, preferences: { theme: 'dark' } }, expected), /durably save preferences/);
 });
+
+test('spelling evidence accepts explicit default shortcut normalization while preserving complete effective behavior', () => {
+  const { preferences, applyPreferences, shortcutList } = require('../browser/preferences.cjs');
+  const { assertOnlySpellingChanged } = require('./native/preferences-evidence.cjs');
+  for (const platform of ['linux', 'win32', 'darwin']) {
+    const original = preferences({}, { platform });
+    const before = { preferences: original, shortcuts: shortcutList(original, platform) };
+    const submitted = Object.fromEntries(before.shortcuts.map(item => [item.id, item.accelerator]));
+    const saved = applyPreferences(original, { spellcheckEnabled: false, shortcuts: submitted });
+    const after = { preferences: saved, shortcuts: shortcutList(saved, platform) };
+    assert.deepEqual(original.shortcuts, {});
+    assert.ok(Object.keys(saved.shortcuts).length > 0, 'Reproduce the exact native form normalization');
+    const evidence = assertOnlySpellingChanged(before, after, false, platform);
+    assert.deepEqual(evidence.resolvedBefore, evidence.resolvedAfter);
+    assert.deepEqual(evidence.before.preferences.shortcuts, {});
+    assert.deepEqual(evidence.after.preferences.shortcuts, submitted);
+  }
+});
+
+test('spelling evidence rejects rebound or re-enabled shortcuts even when the live projection is stale', () => {
+  const { preferences, applyPreferences, shortcutList } = require('../browser/preferences.cjs');
+  const { assertOnlySpellingChanged } = require('./native/preferences-evidence.cjs');
+  const original = preferences({ shortcuts: { 'focus-find': '', new: 'CmdOrCtrl+Y' } });
+  const before = { preferences: original, shortcuts: shortcutList(original) };
+  const saved = applyPreferences(original, { spellcheckEnabled: false, shortcuts: Object.fromEntries(before.shortcuts.map(item => [item.id, item.accelerator])) });
+  const after = { preferences: saved, shortcuts: shortcutList(saved) };
+  assert.doesNotThrow(() => assertOnlySpellingChanged(before, after, false));
+  for (const change of [{ new: 'CmdOrCtrl+Shift+Y' }, { 'focus-find': 'CmdOrCtrl+F' }]) {
+    const rebound = applyPreferences(saved, { shortcuts: change });
+    assert.throws(() => assertOnlySpellingChanged(before, { preferences: rebound, shortcuts: shortcutList(rebound) }, false), /effective shortcut/);
+    assert.throws(() => assertOnlySpellingChanged(before, { preferences: rebound, shortcuts: before.shortcuts }, false), /saved preference representation/);
+  }
+});
+
+test('spelling evidence preserves unknown shortcut metadata and every unrelated preference exactly', () => {
+  const { preferences, applyPreferences, shortcutList } = require('../browser/preferences.cjs');
+  const { assertOnlySpellingChanged } = require('./native/preferences-evidence.cjs');
+  const original = preferences({ shortcuts: { 'future-action': { note: 'retained generated metadata', values: [1, 2] } } });
+  const before = { preferences: original, shortcuts: shortcutList(original) };
+  const saved = applyPreferences(original, { spellcheckEnabled: false, shortcuts: Object.fromEntries(before.shortcuts.map(item => [item.id, item.accelerator])) });
+  const after = { preferences: saved, shortcuts: shortcutList(saved) };
+  assert.doesNotThrow(() => assertOnlySpellingChanged(before, after, false));
+  for (const mutate of [
+    value => { delete value.shortcuts['future-action']; },
+    value => { value.shortcuts['future-action'].values[1] = 3; },
+    value => { value.shortcuts['new-metadata'] = true; },
+  ]) {
+    const changed = structuredClone(saved); mutate(changed);
+    assert.throws(() => assertOnlySpellingChanged(before, { preferences: changed, shortcuts: after.shortcuts }, false), /Unknown shortcut metadata/);
+  }
+  for (const mutate of [value => { value.theme = 'light'; }, value => { value.toolbar.home = false; }, value => { value.spellcheckEnabled = true; }]) {
+    const changed = structuredClone(saved); mutate(changed);
+    assert.throws(() => assertOnlySpellingChanged(before, { preferences: changed, shortcuts: after.shortcuts }, false), /independent non-shortcut preference/);
+  }
+});

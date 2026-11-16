@@ -416,5 +416,17 @@ async function main() {
   }
 }
 
-if (require.main === module) main().catch(error => { console.error(error.stack || error); process.exitCode = 1; });
-module.exports = { errorDetails, stackDetails, main };
+function isElectronEntry(runtime = process, file = __filename) {
+  return Boolean(runtime.versions?.electron && runtime.type === 'browser' && runtime.argv?.[1] &&
+    path.resolve(runtime.argv[1]) === path.resolve(file));
+}
+
+// Electron 44's default_app/main.ts imports a CLI entry through import(fileURL),
+// including .cjs files. require.main consequently remains the default app and
+// cannot identify this entry. Bind startup to the actual Electron browser
+// process and the exact explicit driver argument; ordinary Node imports stay inert.
+if (isElectronEntry()) main().catch(error => {
+  console.error(error.stack || error);
+  require('electron').app.exit(1); // An early failure must not idle until the outer deadline.
+});
+module.exports = { errorDetails, stackDetails, isElectronEntry, main };

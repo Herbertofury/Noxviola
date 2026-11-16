@@ -1211,6 +1211,11 @@ async function firstLaunch() {
     assert.equal((await site(url)).webContents.getURL(),url,'Re-enabling reopens the preserved active tab');
     await activate(previous);
   });
+  await check('prepare independent workspace focus for real restart',async()=>{
+    const previous=(await state()).activeId,previousWorkspace=(await state()).activeWorkspaceId,workspace=await command('workspace-create',{name:'Synthetic restart workspace',color:'cyan'}),first=await command('new'),last=await command('new');
+    await command('tab-assign',{id:first,workspaceId:workspace.id});await command('tab-assign',{id:last,workspaceId:workspace.id});await command('activate',first);await command('activate',last);await command('activate',previous);
+    expected.workspaceFocus={workspaceId:workspace.id,first,last,previous,previousWorkspace};
+  });
   const final = await state();
   expected.tabs = final.tabs.map(({ id, url, identity }) => ({ id, url, identity }));
   expected.profiles = final.profiles;
@@ -1240,6 +1245,11 @@ async function secondLaunch() {
     assertIdentity(await identityData(second), 'second', {sessionCookieExpected: false});
     assertIdentityStorageLocations();
     result.storageLayouts = fixtureStorageLayout();
+  });
+  await check('workspace launcher restores its last selected tab after real restart',async()=>{
+    const fixture=expected.workspaceFocus,previous=(await state()).activeId;await command('workspace-switch',fixture.workspaceId);assert.equal((await state()).activeId,fixture.last);
+    await command('close',fixture.last);assert.equal((await state()).activeId,fixture.first);await command('activate',fixture.previous);await command('workspace-switch',fixture.workspaceId);assert.equal((await state()).activeId,fixture.first);
+    await command('activate',previous);await command('close',fixture.first);await command('workspace-remove',fixture.workspaceId);
   });
   await check('the explicit disabled spelling choice survives restart in the default and every identity Session', async () => {
     assert.equal(expected.spellcheckEnabled, false);

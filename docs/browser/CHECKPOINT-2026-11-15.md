@@ -318,3 +318,16 @@ The expanded source-app gate completes one actual transfer in each identity Sess
 The same source gate now invokes real Find/Next/Previous/Escape controls with native match results, visible counters and selection clearing; actual zoom menu handlers with viewport/identity/origin/restart readback; the real PDF Tools control; and the visible-page PNG menu handler. It retains output files and hashes, checks decoded PNG dimensions/pixels, and verifies that Cancel preserves an existing destination exactly. Optional PDF readers report missing tools honestly, leaving content/visual readback pending for independent follow-up. The gate does not qualify physical OS menu/picker interaction, hardware printing, arbitrary page fidelity or packaged page-tool exports.
 
 These new production and acceptance changes require their own hosted source/package run. The completed `0c25987e` receipt does not automatically qualify the changed download lifecycle or new page-tool coverage. All original full capability procedures and all master gates remain open.
+
+### `f47a4a38` preserves native download success and exposes a real Find defect
+
+The new core implementation was published as `f47a4a389a17af35bc0708c37e64775c9e71207a`, tree `1b817a98bc72e07d60e2ebbb39153bae5bcd5cb2`. [Native run 43780987710](https://github.com/Herbertofury/Noxviola/actions/runs/43780987710) passed 289 portable contracts and 73 syntax checks on both platforms. Each source process then passed its first 15 checks, including actual completed downloads in two identity Sessions, exact 94,208-byte generated files, three saved terminal history records and real history cards. Both source processes failed at the next Find check, before normal restart, PDF/PNG, zoom restart or packaging. No unexecuted later stage is promoted.
+
+The original Windows and Linux receipts both contain an empty native `found-in-page` event list after typing the initial query. Pinned [Electron 44.11.3's Find implementation](https://github.com/electron/electron/blob/v44.11.3/shell/browser/api/electron_api_web_contents.cc) maps its counterintuitively named `findNext` property directly to Chromium's `new_session`. The [pinned API contract](https://github.com/electron/electron/blob/v44.11.3/docs/api/web-contents.md#contentsfindinpagetext-options) requires true for a new search and false for a follow-up. The browser had passed false for initial text and true for Next/Previous. The causal production repair inverts that translation while retaining the existing browser command meaning. The native test still requires three matches, ordinal sequence 1 → 2 → 1, actual selection geometry, rendered counters and removal of highlighting; no assertion or timeout is relaxed.
+
+| Original failed native artifact | Bytes | SHA-256 |
+| --- | ---: | --- |
+| Linux `14187847993` | 2,409,375 | `4f538e26063e7e0cdd4b6b7fc931f8427c980de1b3f11a0a6bdd903bb99241cb` |
+| Windows `14187978748` | 2,204,288 | `d11482db18ba9072b6a60b3611339650b103c4cd5f23c93f2b6bd64955708e2d` |
+
+Both archives were independently downloaded, hash-verified and extracted, preserving the original receipts and full logs. Native download restart/identity clearing and the new Find correction require the next exact hosted run. The last completely passed source/package checkpoint remains `0c25987e`.

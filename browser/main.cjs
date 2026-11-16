@@ -460,7 +460,9 @@ async function perform(name, value) {
       else { const other = visibleTabs().find(tab => tab.id !== activeId && tab.url !== 'about:blank'); if (other) {splitId = other.id;ensureView(other);} else notice('Open another website tab in this workspace to use split view.'); }
       showPage(); layout(); publish(false); break;
     }
-    case 'find':{const query=typeof value==='string'?value:value?.query;if(query)wc?.findInPage(String(query),{forward:value?.forward!==false,findNext:value?.findNext===true});else{wc?.stopFindInPage('clearSelection');send('find-result',{matches:0,activeMatchOrdinal:0});}break;}
+    // Electron's findNext maps to Chromium new_session: true starts a search.
+    // Our command's findNext means a follow-up, so its native flag is inverted.
+    case 'find':{const query=typeof value==='string'?value:value?.query;if(query)wc?.findInPage(String(query),{forward:value?.forward!==false,findNext:value?.findNext!==true});else{wc?.stopFindInPage('clearSelection');send('find-result',{matches:0,activeMatchOrdinal:0});}break;}
     case 'zoom-in':case 'zoom-out':case 'zoom-reset':changeZoom(name);break;
     case 'fullscreen':win.setFullScreen(!win.isFullScreen());break;
     case 'devtools':if(wc)wc.isDevToolsOpened()?wc.closeDevTools():wc.openDevTools({mode:'detach'});break;

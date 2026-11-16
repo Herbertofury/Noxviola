@@ -329,7 +329,7 @@ function requirePaneIdentity(tab,identity){if(paneMembers(tab).some(member=>memb
 function moveTab(tab,index,after) {
   if(!Number.isInteger(index)||index<0||index>=tabs.length)throw new Error('Choose an existing tab position.');
   const members=paneMembers(tab),anchor=tabs[index];if(members.includes(anchor))return;
-  const before=new Map(members.map(t=>[t.id,tabDescriptor(t).index])),forward=after??(index>tabs.indexOf(tab)),remaining=tabs.filter(t=>!members.includes(t)),destination=remaining.indexOf(anchor)+(forward?1:0);remaining.splice(destination,0,...members);tabs=remaining;
+  const before=new Map(members.map(t=>[t.id,tabDescriptor(t).index])),forward=after??(index>tabs.indexOf(tab));tabs=paneLayout.moveUnit(tabs,members,paneMembers(anchor),forward);
   publish();for(const item of members)hostEvent(item.identity,'tabs.onMoved',item.runtimeId,{windowId:win.id,fromIndex:before.get(item.id),toIndex:tabDescriptor(item).index});
 }
 function pinTab(tab,pinned) {

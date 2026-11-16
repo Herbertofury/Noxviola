@@ -106,7 +106,7 @@ A reviewer caught possible authentication URLs being proposed for transfer; a ne
 
 Late-joining profiles can currently receive nested `Authority bookmarks/Temporary organize` paths after previous imports. Persistent source folder/provenance metadata is not implemented; this known limitation blocks production tree synchronization.
 
-Node 24.22.1: `node --test tests/bookmark-sync-plan.test.cjs` passed 14/14,
+Node 24.22.1: `node --test tests/bookmark-sync-plan.test.cjs` passed 16/16,
 zero skips/failures. Source syntax passed. Includes five synthetic participants,
 10,000 authority links, exact duplicate handling, repeated complete sync plans,
 stale/modified previews, malformed/incomplete inputs and refusal of secret
@@ -132,3 +132,20 @@ also bound incoming serialized bytes before parsing and limit unknown fields;
 these checks only bound the accepted structured fields, not upstream parsing.
 Larger legitimate datasets remain unresolved and require a measured streaming
 adapter rather than hidden truncation or claiming complete synchronization.
+
+### Output fanout budget
+
+Independent review identified multiplicative output amplification despite the
+input field-byte cap. Before allocating normalized snapshots or output, the
+planner now conservatively budgets row count × selected targets (maximum
+250,000 operations), folder-path slots × targets × two metadata copies (maximum
+2,000,000 slots), and worst-case JSON field escaping plus object/path overhead and repeated escaped participant labels
+(maximum 64 MiB projected serialized output). Oversize plans are refused whole.
+This can conservatively refuse duplicate-heavy inputs that would yield a smaller
+actual plan; no hidden truncation or partial success is substituted.
+
+The 32 MiB input cap measures supported field contents, **not JavaScript heap**.
+The output budget is also an estimate, not an exact process memory guarantee.
+An adapter still needs bounded wire parsing and runtime resource tests. The
+regression uses only 1,000-row examples to exercise amplification refusal; the
+reviewer's potentially multi-gigabyte maximal input was never executed.

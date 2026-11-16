@@ -73,3 +73,18 @@ test('oversized whole inputs fail without truncation or mutation',()=>{
   const k=input();k.snapshots[0].bookmarks=Array(100001).fill(row('a','https://example.test/'));assert.throws(()=>planBookmarkSync(k),/count limit/);
   const l=input();l.snapshots[0].bookmarks[0].path=Array(257).fill('folder');assert.throws(()=>planBookmarkSync(l),/path limit/);
 });
+
+test('projected output amplification is refused before building target operations',()=>{
+  const i=input();const path=Array(256).fill('');
+  i.snapshots[0].bookmarks=Array.from({length:1000},(_,n)=>row(String(n),`https://example.test/${n}`,'',path));
+  const before=JSON.stringify(i);assert.throws(()=>planBookmarkSync(i),/Projected plan/);assert.equal(JSON.stringify(i),before);
+  const j=input();j.snapshots[0].bookmarks=Array.from({length:1000},(_,n)=>row(String(n),`https://example.test/${n}`,'x'.repeat(16000)));
+  assert.throws(()=>planBookmarkSync(j),/Projected plan/);
+});
+
+test('long participant labels are budgeted per repeated provenance record',()=>{
+  const label='p'.repeat(32768); const i={authority:label,participants:[label,'noxviola'],snapshots:[
+    {participant:label,revision:'1',bookmarks:Array.from({length:3000},(_,n)=>row(String(n),`https://example.test/${n}`))},
+    {participant:'noxviola',revision:'1',bookmarks:[]}
+  ]};assert.throws(()=>planBookmarkSync(i),/Projected plan/);
+});

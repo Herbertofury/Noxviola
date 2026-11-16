@@ -33,12 +33,12 @@ function snapshot(value) {
 
 // Whole-input refusal is a resource boundary, never truncation. Raise limits
 // deliberately after measured adapter tests; callers retain the original input.
-const LIMITS = Object.freeze({participants:32, bookmarks:100000, stringLength:32768, totalBytes:32 * 1024 * 1024, pathSegments:256});
+const LIMITS = Object.freeze({participants:32, bookmarks:100000, stringLength:32768, totalBytes:32 * 1024 * 1024, pathSegments:256, projectedOperations:250000, projectedPathSlots:2000000, projectedSerializedBytes:64 * 1024 * 1024});
 function boundedInput(input) {
   assert(input && typeof input === 'object', 'Sync input must be an object.');
   assert(Array.isArray(input.participants) && input.participants.length <= LIMITS.participants, 'Too many participants; complete input preserved.');
   assert(Array.isArray(input.snapshots) && input.snapshots.length <= LIMITS.participants, 'Too many snapshots; complete input preserved.');
-  let count = 0, bytes = 0;
+  let count = 0, bytes = 0, pathSlots = 0;
   function measure(value) {
     assert(typeof value === 'string' && value.length <= LIMITS.stringLength, 'Text limit exceeded; complete input preserved.');
     bytes += Buffer.byteLength(value, 'utf8');
@@ -53,10 +53,24 @@ function boundedInput(input) {
     assert(count <= LIMITS.bookmarks, 'Bookmark count limit exceeded; complete input preserved.');
     for (const row of item.bookmarks) {
       assert(row && Array.isArray(row.path) && row.path.length <= LIMITS.pathSegments, 'Folder path limit exceeded; complete input preserved.');
+      pathSlots += row.path.length + 1;
       measure(row.id); measure(row.title); measure(row.url);
       for (const segment of row.path) measure(segment);
     }
   }
+  // Conservative worst-case fanout, checked BEFORE constructing normalized
+  // snapshots, canonical provenance, target additions or JSON preview output.
+  // Count both chosen row metadata and its retained source provenance. JSON
+  // escaping can expand a one-byte control character to six bytes.
+  const fanout = input.participants.length;
+  const operations = count * fanout;
+  const projectedPaths = pathSlots * fanout * 2;
+  // Participant labels recur in every provenance record and conflict, not
+  // just once in the input envelope. Budget their escaped fanout separately.
+  const participantBytes = Math.max(...input.participants.map(value => Buffer.byteLength(value, 'utf8')));
+  const serialized = bytes * 6 * fanout * 2 + projectedPaths * 8 + operations * (512 + participantBytes * 6 * 2);
+  assert(operations <= LIMITS.projectedOperations && projectedPaths <= LIMITS.projectedPathSlots && serialized <= LIMITS.projectedSerializedBytes,
+    'Projected plan resource limit exceeded; complete input preserved.');
 }
 function planBookmarkSync(input) {
   boundedInput(input);

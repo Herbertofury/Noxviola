@@ -311,3 +311,12 @@ test('the deterministic page server serves exact local bytes and provides no for
   assert.equal((await fetch(`${origin}/light`, { method: 'POST' })).status, 404);
   assert.deepEqual(server.requests.map(item => [item.method, item.path]), [['GET', '/light'], ['GET', '/unknown'], ['POST', '/light']]);
 });
+
+test('bounded import diagnostics observe real controls and provider messages without replacing the handler',async t=>{
+ const {JSDOM}=require('jsdom');const {installImportObservation,readImportObservation}=require('./native/real-extension-driver.cjs');
+ const dom=new JSDOM('<p id="notice">Inspection failed</p><p id="extension-error"></p><section id="extensions"><button id="extension-import-package">Inspect</button><div id="extension-preview" hidden></div></section>',{runScripts:'outside-only'});t.after(()=>dom.window.close());
+ const callbacks={};let invoked=0;dom.window.browser={onExtensions:f=>callbacks.state=f,onExtensionPreview:f=>callbacks.preview=f};const control=dom.window.document.getElementById('extension-import-package');const handler=()=>{invoked++;};control.onclick=handler;
+ const contents={executeJavaScript:async script=>dom.window.eval(script)};await installImportObservation(contents);control.click();callbacks.state({busy:true,error:'',open:true});callbacks.preview({name:'fixture'});let observed=await readImportObservation(contents);
+ assert.equal(invoked,1);assert.equal(control.onclick,handler);assert.equal(observed.notice,'Inspection failed');assert.deepEqual(Array.from(observed.trace.events,e=>e.stage),['import-click','extension-state','preview-event']);
+ for(let i=0;i<40;i++)callbacks.state({busy:false,error:'',open:true});observed=await readImportObservation(contents);assert.equal(observed.trace.events.length,32);assert.equal(observed.trace.dropped,11);assert.equal(invoked,1);
+});

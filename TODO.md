@@ -2,6 +2,8 @@
 
 ## Standalone creator/project following · 2026-11-16
 
+- [ ] Diagnose the Windows real-extension ZIP-preview timeout from run 43915656131 without replaying clicks or extending deadlines. Original failure evidence retained; bounded test-only shell/picker diagnostics are added for one causal reproduction. [Evidence and constraints](docs/browser/EXTENSION-PREVIEW-DIAGNOSTIC-20261116.md). Modrinth/native feature passes do not erase this separate failed gate.
+
 - [ ] Modrinth follow-up: collect real public project versions with durable identity and per-version loader/game-version metadata, same-version compatibility filters, separate provider backoff and explicit metadata-only coverage. Do not infer SPMovesets is on Modrinth. Preserve snapshot/freshness and last-good data on incomplete or oversized responses.
 
 - [ ] Follow-up: cover bare Git tags separately from releases, honor provider-requested polling/rate-limit pauses, and expose snapshot/freshness/history gaps. Existing repository lists are not the bounded GitHub Events feed. Validate source/date semantics, restart and concurrent-check behavior before claiming complete version tracking.

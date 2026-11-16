@@ -8,6 +8,7 @@ const { performance } = require('node:perf_hooks');
 const { readContext, preflight } = require('../../scripts/native-smoke.cjs');
 const { PIN, CHECKS, readRegular, sha256, realSourceEvidence, readCorpusReceipt, publicAddress,
   assertLight, assertPinnedPermissions, assertDarkened } = require('./real-extension-support.cjs');
+const { waitForPresentation } = require('./presentation.cjs');
 
 function errorDetails(error) {
   return { name: String(error?.name || typeof error), message: String(error?.message || error), stack: String(error?.stack || '') };
@@ -36,8 +37,23 @@ async function clickVisibleControl(contents, selector, observe) {
   })()`);
 }
 
+function ownedPackageId(profile, directory, filesystem = fs, paths = path) {
+  try {
+    // Electron may expand a Windows 8.3 profile path. Compare actual canonical
+    // directories instead of treating that harmless spelling difference as a
+    // foreign package and losing its startup exceptions.
+    const root = filesystem.realpathSync(paths.join(profile, 'extensions', 'packages'));
+    const target = filesystem.realpathSync(directory);
+    if (!filesystem.statSync(target, {bigint: true}).isDirectory()) return null;
+    const owner = filesystem.statSync(root, {bigint: true}), parent = filesystem.statSync(paths.dirname(target), {bigint: true});
+    if (!owner.isDirectory() || !parent.isDirectory() || owner.dev !== parent.dev || owner.ino !== parent.ino) return null;
+    const relative = paths.relative(root, target);
+    return relative && relative !== '..' && !paths.isAbsolute(relative) && !relative.includes(paths.sep) ? relative : null;
+  } catch { return null; }
+}
+
 async function main() {
-  const { app, BrowserWindow, dialog, session, webContents } = require('electron');
+  const { app, BrowserWindow, dialog, session, webContents, screen } = require('electron');
   const { createIdentitySessionResolver } = require('../../browser/session-path.cjs');
   const context = readContext(process.argv[2]);
   const corpus = readCorpusReceipt(context, process.argv[3]);
@@ -59,7 +75,7 @@ async function main() {
     schema: 1, corpusId: PIN.id, source, archive: corpus, fixtureToken: context.token, origin: context.origin,
     startedAt: new Date().toISOString(), passed: false, completedWorkflows: false, normalCloseObserved: false, runtimeReady: false,
     versions: { electron: process.versions.electron, chrome: process.versions.chrome, node: process.versions.node },
-    sandboxForced: true, checks: [], lifecycle: [], console: [], exceptions: [], network: [], observerErrors: [], pages: [],
+    sandboxForced: true, checks: [], lifecycle: [], console: [], exceptions: [], network: [], observerErrors: [], pages: [], presentations: [],
     plannedChecks: CHECKS,
     dialogBoundary: 'Only the native picker response is supplied with the verified corpus archive. Permission requests are explicitly denied; no account or native OS dialog interaction is claimed. Review, identity/profile consent, Install, toolbar, toggle and Settings controls are the actual production/package handlers.',
     networkScope: 'Ordinary unchanged package traffic is observed through native WebContents CDP Network events. No webRequest interceptor, response rewrite, offline fence, credential or account action. Generated local page has no external resources. This does not capture every browser/worker request or establish a full privacy audit.',
@@ -90,8 +106,7 @@ async function main() {
     observedSessions.add(partition);
     for (const name of ['extension-loaded', 'extension-ready', 'extension-unloaded']) partition.on(name, (_event, extension) => {
       if (extension.name !== PIN.name || extension.version !== PIN.version) return;
-      const relative = path.relative(path.join(context.profile, 'extensions/packages'), extension.path);
-      if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) return;
+      if (!ownedPackageId(context.profile, extension.path)) return;
       extensionIds.add(extension.id);
       result.lifecycle.push(record({ event: name, runtimeId: extension.id, packagePath: extension.path, storagePath: partition.getStoragePath() }));
     });
@@ -184,14 +199,20 @@ async function main() {
       const input=document.getElementById('address'); input.value=${JSON.stringify(address)}; input.dispatchEvent(new Event('input',{bubbles:true}));
       document.getElementById('navigate').requestSubmit();
     })()`);
-    return until(async () => {
+    const view = await until(async () => {
       const current = await state(), tab = current.tabs.find(item => item.id === current.activeId);
       if (!tab || tab.url !== address) return null;
       const view = shell.contentView.children.find(candidate => candidate.webContents && candidate.getVisible() && !candidate.webContents.isDestroyed() && candidate.webContents.getURL() === address);
       if (!view || view.webContents.isLoading()) return null;
       const marker = await view.webContents.executeJavaScript('document.documentElement.dataset.noxviolaRealExtensionFixture');
-      return marker === 'light-v1' ? view.webContents : null;
+      return marker === 'light-v1' ? view : null;
     }, 'the selected actual light document');
+    const presentation = await waitForPresentation(view.webContents, {
+      url: address, bounds: () => view.getBounds(), visible: () => view.getVisible(),
+      scaleFactor: () => screen.getDisplayMatching(shell.getBounds()).scaleFactor,
+    });
+    result.presentations.push(record(presentation));
+    return view.webContents;
   }
   async function sample(contents, name, capture = true) {
     const values = await contents.executeJavaScript(`(() => ({
@@ -324,6 +345,8 @@ async function main() {
       runtimeId = grant.runtimeId;
       const native = partition.extensions.getExtension(runtimeId);
       assert.ok(native, 'The actual identity Session must contain the loaded runtime');
+      assert.equal(ownedPackageId(context.profile, native.path), installed.id, 'Enrollment must identify the actual owned package directory');
+      extensionIds.add(runtimeId);
       result.installedFileVerification = PIN.packageFiles.map(file => {
         const bytes = readRegular(path.join(native.path, file.path));
         assert.equal(bytes.length, file.bytes); assert.equal(sha256(bytes), file.sha256);
@@ -440,4 +463,4 @@ if (isElectronEntry()) main().catch(error => {
   console.error(error.stack || error);
   require('electron').app.exit(1); // An early failure must not idle until the outer deadline.
 });
-module.exports = { errorDetails, stackDetails, isElectronEntry, clickVisibleControl, main };
+module.exports = { errorDetails, stackDetails, isElectronEntry, clickVisibleControl, ownedPackageId, main };

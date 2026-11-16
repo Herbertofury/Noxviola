@@ -33,6 +33,23 @@ test('actual preload exposes no transport or added APIs in ordinary website docu
     assert.equal(f.required,0);assert.equal(f.main.__noxviolaExtensionHost,undefined);assert.equal(f.chrome.cookies,undefined);
   }
 });
+test('permission queries expose real callback and Mozilla Promise results without fabricated grant events',async()=>{
+  for(const contextIsolated of [true,false]){
+    const f=fixture({contextIsolated,invoke:async(method,args)=>{
+      if(method==='permissions.getAll')return {ok:true,value:{permissions:['tabs','storage'],origins:['https://allowed.test/*']}};
+      if(method==='permissions.contains')return {ok:true,value:args[0].permissions?.includes('contextMenus')!==true};
+      return {ok:false,error:{code:'UNSUPPORTED_API',message:'Native optional-grant mutation is unavailable; no grants changed.'}};
+    }});
+    assert.equal(typeof f.chrome.permissions.contains,'function');assert.equal(typeof f.browser.permissions.getAll,'function');
+    assert.equal(f.chrome.permissions.onRemoved,undefined);assert.equal(f.browser.permissions.onAdded,undefined);
+    let actual;await new Promise(resolve=>f.chrome.permissions.contains({permissions:['contextMenus']},value=>{actual=value;resolve();}));
+    assert.equal(actual,false);assert.equal(await f.browser.permissions.contains({permissions:['tabs']}),true);
+    assert.deepEqual(JSON.parse(JSON.stringify(await f.browser.permissions.getAll())),{permissions:['tabs','storage'],origins:['https://allowed.test/*']});
+    await assert.rejects(f.browser.permissions.request({permissions:['contextMenus']}),/no grants changed/);
+    let error;await new Promise(resolve=>f.chrome.permissions.remove({permissions:['tabs']},()=>{error=f.chrome.runtime.lastError?.message;resolve();}));
+    assert.match(error,/no grants changed/);assert.equal(f.chrome.runtime.lastError,undefined);assert.deepEqual(f.subscriptions,[]);
+  }
+});
 test('native non-isolated background context installs real host create/event and Promise denial without contextBridge',async()=>{
   let f;
   f=fixture({contextIsolated:false,invoke:async(method,args)=>{

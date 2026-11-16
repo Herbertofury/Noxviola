@@ -90,6 +90,7 @@
     const definitions = {
       tabs:{methods:['get','getCurrent','query','create','update','remove','move','reload'],events:['onCreated','onUpdated','onRemoved','onActivated','onMoved']},
       windows:{methods:['get','getCurrent','getLastFocused','getAll','create','update','remove'],events:['onCreated','onRemoved','onFocusChanged','onBoundsChanged']},
+      permissions:{methods:['contains','getAll','request','remove'],events:[]},
       cookies:{methods:['get','getAll','set','remove','getAllCookieStores'],events:['onChanged']},
       bookmarks:{methods:['get','getTree','getChildren','getSubTree','getRecent','search','create','update','move','remove','removeTree'],events:['onCreated','onChanged','onMoved','onRemoved','onChildrenReordered']},
       history:{methods:['search','getVisits','addUrl','deleteUrl','deleteRange','deleteAll'],events:['onVisited','onVisitRemoved']},
@@ -99,7 +100,10 @@
     };
     const apis = {runtime};
     for (const [namespace,definition] of Object.entries(definitions)) {
-      const api = {...chrome[namespace]};
+      // Optional-grant mutation and its events have no synchronized native
+      // owner yet. Expose genuine authenticated queries and explicit errors,
+      // never a placeholder onAdded/onRemoved event or widened native grant.
+      const api = namespace === 'permissions' ? {} : {...chrome[namespace]};
       for (const method of definition.methods) api[method] = call(namespace+'.'+method);
       for (const event of definition.events) api[event] = new ExtensionEvent(namespace+'.'+event);
       apis[namespace] = api;

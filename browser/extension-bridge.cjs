@@ -189,12 +189,24 @@ class ExtensionBridge {
     if (namespace === 'events') return this.eventSubscription(context,event,name,args[0]);
     if (namespace === 'tabs') return this.tabs(context,name,args,event);
     if (namespace === 'windows') return this.windows(context,name,args);
+    if (namespace === 'permissions') return this.permissions(context,name,args);
     if (namespace === 'cookies') { this.permission(context,'cookies'); return this.cookies(context,name,args); }
     if (namespace === 'bookmarks') { this.permission(context,'bookmarks'); return this.bookmarks(context,name,args); }
     if (namespace === 'history') { this.permission(context,'history'); return this.history(context,name,args); }
     if (namespace === 'contextMenus') { this.permission(context,'contextMenus'); return this.menus.invoke(context,name,args); }
     if (namespace === 'action' || namespace === 'browserAction') return this.action(context,event,name,args);
     reject('UNSUPPORTED_API','This browser-host API is not implemented: '+method);
+  }
+  permissions(context,name,args) {
+    if (name === 'getAll') {
+      if (args.length) reject('INVALID_ARGUMENT','permissions.getAll does not accept arguments.');
+      return policy.grantedPermissions(context);
+    }
+    if (name === 'contains') {
+      if (args.length !== 1) reject('INVALID_ARGUMENT','permissions.contains requires one Permissions object.');
+      return policy.containsPermissions(context,keys(args[0],['permissions','origins']));
+    }
+    reject('UNSUPPORTED_API','Optional permission request/removal requires native grant synchronization and is not implemented. No grants were changed.');
   }
   async tabs(context,name,args,event) {
     const api = this.host.tabs;

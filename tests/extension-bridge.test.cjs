@@ -34,6 +34,31 @@ function fixture(t,{permissions=['tabs','cookies','bookmarks','contextMenus','ac
 }
 function iconCodec(){return {createFromBuffer:png=>({isEmpty:()=>false,getSize:()=>pngDimensions(png),toPNG:()=>png})};}
 const imageData=color=>({width:1,height:1,data:new Uint8ClampedArray(color)});
+test('permission queries use the authenticated identity grant and reject mutation, payload identity and revoked replies',async t=>{
+  const f=fixture(t,{permissions:['tabs','storage','<all_urls>'],hosts:[]});
+  f.contexts.get(f.sessions[0]).permissions.optional=['contextMenus'];
+  f.contexts.get(f.sessions[1]).permissions={required:['bookmarks'],hosts:['https://work.test/*']};
+  assert.deepEqual(await f.call('permissions.getAll'),{permissions:['tabs','storage'],origins:['<all_urls>']});
+  assert.equal(await f.call('permissions.contains',[{permissions:['tabs'],origins:['https://example.test/*']}]),true);
+  assert.equal(await f.call('permissions.contains',[{permissions:['contextMenus']}]),false);
+  assert.equal(await f.call('permissions.contains',[{permissions:['bookmarks']}]),false);
+  assert.equal(await f.call('permissions.contains',[{permissions:['bookmarks']}],f.event(1)),true);
+  assert.equal(await f.call('permissions.contains',[{origins:['file:///*']}]),false);
+  await assert.rejects(f.call('permissions.contains',[{identity:'work',permissions:['bookmarks']}]),{code:'UNSUPPORTED_ARGUMENT'});
+  await assert.rejects(f.call('permissions.contains',[{data_collection:['healthInfo']}]),{code:'UNSUPPORTED_ARGUMENT'});
+  for(const method of ['request','remove'])await assert.rejects(f.call('permissions.'+method,[{permissions:['contextMenus']}]),{code:'UNSUPPORTED_API'});
+  await assert.rejects(f.call('events.add',['permissions.onRemoved']),{code:'UNSUPPORTED_EVENT'});
+  const website=f.event();website.senderFrame.url='https://example.test/';
+  await assert.rejects(f.call('permissions.getAll',[],website),{code:'UNAUTHENTICATED_EXTENSION'});
+  const pending=f.call('permissions.getAll');f.revoke();
+  await assert.rejects(pending,{code:'EXTENSION_REVOKED'});
+  assert.equal(f.mutations.length,0);
+});
+test('permission query replies from a prior enrollment cannot survive re-enable',async t=>{
+  const f=fixture(t);const pending=f.call('permissions.contains',[{permissions:['tabs']}]);
+  f.contexts.set(f.sessions[0],{...f.contexts.get(f.sessions[0]),epoch:'new-enrollment'});
+  await assert.rejects(pending,{code:'EXTENSION_REVOKED'});
+});
 test('action icons load manifest defaults once and apply real global/per-tab ImageData and reset inheritance',async t=>{
   const png=Buffer.from((await rgbaPNG(imageData([100,80,60,255]))).dataUrl.split(',')[1],'base64');let reads=0;
   const f=fixture(t,{apiProfile:'firefox',defaultIcon:{16:'icons/default.png',32:'icons/default.png'},nativeImage:iconCodec(),readResource:async()=>{reads++;return png;}});

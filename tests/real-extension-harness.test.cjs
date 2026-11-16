@@ -99,6 +99,29 @@ test('actual driver click waits for an asynchronous production panel update and 
   assert.equal(window.document.getElementById('extensions').hidden, false);
 });
 
+test('real-package observers bind canonical owned directories across Windows short paths and reject foreign aliases', t => {
+  const {ownedPackageId} = require('./native/real-extension-driver.cjs');
+  const directory = temporary(t), profile = path.join(directory, 'profile'), owned = path.join(profile, 'extensions', 'packages', 'owned-id');
+  const outside = path.join(directory, 'outside', 'owned-id');
+  fs.mkdirSync(owned, {recursive: true}); fs.mkdirSync(outside, {recursive: true});
+  assert.equal(ownedPackageId(profile, owned), 'owned-id');
+  assert.equal(ownedPackageId(profile, outside), null);
+  const linked = path.join(profile, 'extensions', 'packages', 'foreign-link');
+  fs.symlinkSync(outside, linked, process.platform === 'win32' ? 'junction' : 'dir');
+  assert.equal(ownedPackageId(profile, linked), null);
+  const short = 'C:\\Users\\RUNNER~1\\profile', long = 'C:\\Users\\runneradmin\\profile', root = path.win32.join(long, 'extensions', 'packages');
+  const calls = [];
+  const filesystem = {
+    realpathSync(value) {calls.push(value); return value.replace(short, long);},
+    statSync(value) {return {isDirectory: () => true, dev: 1n, ino: value === root ? 10n : value === path.win32.join(root, 'owned-id') ? 11n : 12n};},
+  };
+  assert.equal(ownedPackageId(short, path.win32.join(root, 'owned-id'), filesystem, path.win32), 'owned-id');
+  assert.deepEqual(calls, [path.win32.join(short, 'extensions', 'packages'), path.win32.join(root, 'owned-id')]);
+  // Case-sensitive Windows directories can be distinct. Case-folding path
+  // comparison alone must not admit a different physical parent.
+  assert.equal(ownedPackageId(short, path.win32.join(root.toUpperCase(), 'owned-id'), filesystem, path.win32), null);
+});
+
 test('real-package CLI requires an explicit archive and refuses unsafe or silently ignored options', () => {
   const parsed = options(['--archive', 'corpus/darkreader.zip', '--output', 'records']);
   assert.equal(parsed.archive, path.resolve('corpus/darkreader.zip'));

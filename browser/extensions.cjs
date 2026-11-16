@@ -285,6 +285,7 @@ const DOCUMENTED_METHODS = new Set([
 const HOST_METHODS = new Set(Object.entries({
   tabs:['get','getCurrent','query','create','update','remove','move','reload','onCreated','onUpdated','onRemoved','onActivated','onMoved'],
   windows:['get','getCurrent','getLastFocused','getAll','update','onCreated','onRemoved','onFocusChanged','onBoundsChanged'],
+  permissions:['contains','getAll'],
   cookies:['get','getAll','set','remove','getAllCookieStores','onChanged'],
   bookmarks:['get','getTree','getChildren','getSubTree','getRecent','search','create','update','move','remove','removeTree','onCreated','onChanged','onMoved','onRemoved','onChildrenReordered'],
   history:['search','getVisits','addUrl','deleteUrl','deleteRange','deleteAll','onVisited','onVisitRemoved'],
@@ -300,6 +301,7 @@ function compatibility(manifest, detectedApis, electronVersion) {
     const method = bare.replace(/\.(?:addListener|removeListener|hasListener|hasListeners)$/,'');
     if (bare.startsWith('storage.sync')) add('STORAGE_SYNC_UNSUPPORTED', 'Electron 44.11.3 documents storage.sync as unsupported. No local or cloud substitute is injected.', api, 'unsupported');
     else if (bare.startsWith('storage.managed')) add('MANAGED_STORAGE_UNSUPPORTED', 'Electron 44.11.3 documents storage.managed as unsupported. Enterprise policy storage is not integrated.', api, 'unsupported');
+    else if (/^permissions\.(?:request|remove)$/.test(bare)) add('PERMISSION_MUTATION_UNSUPPORTED', 'Optional-grant mutation requires native synchronization and user-gesture admission; this method rejects explicitly without changing any grant.', api, 'unsupported');
     else if (HOST_METHODS.has(method)) add('BROWSER_HOST_SUBSET', 'The browser host implements this API for authenticated extension documents with identity and grant checks. Supported options are limited; added content-context APIs, sleeping-worker delivery and exact-package functionality still require verification.', api, 'limited');
     else if (/^windows\.(?:create|remove)$|^(?:action|browserAction)\.openPopup$/.test(bare)) add('HOST_API_UNSUPPORTED','This host method is explicitly rejected. Window creation/removal and programmatic popup opening are not implemented by this adapter.',api,'unsupported');
     else if (bare.startsWith('storage.local') || bare === 'storage.onChanged' || /^(scripting|webRequest|devtools\.(inspectedWindow|network|panels))\./.test(bare)) { /* documented subset */ }

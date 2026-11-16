@@ -16,6 +16,15 @@ function sourceFor(value) {
   return modrinth.projectSource(address.href)||{url:address.href,kind:'project',provider:'manual',endpoint:null};
 }
 function endpointsFor(source){if(source.provider==='manual')return [];if(source.provider==='modrinth-versions')return [modrinth.versionEndpoint(source)];const first=sourceFor(source.url).endpoint;return !first?[]:source.provider==='github-releases'?[first,first.replace('/releases?', '/tags?')]:[first];}
+const REVISION_FIELDS=['title','url','publishedAt','fingerprint','kind','commit','versionNumber','loaders','gameVersions','releaseType'];
+function revisionMetadata(item){return Object.fromEntries(REVISION_FIELDS.filter(key=>item[key]!==undefined).map(key=>[key,clone(item[key])]));}
+function validateRevision(revision){
+ record(revision);timestamp(revision.observedAt);timestamp(revision.supersededAt);record(revision.metadata);
+ if(Object.keys(revision.metadata).some(key=>!REVISION_FIELDS.includes(key)))throw new Error('Unsupported follow revision metadata.');
+ for(const key of ['title','publishedAt','fingerprint'])text(revision.metadata[key]);url(revision.metadata.url);
+ for(const key of REVISION_FIELDS.filter(key=>!['loaders','gameVersions'].includes(key)))if(revision.metadata[key]!==undefined)text(revision.metadata[key]);
+ for(const key of ['loaders','gameVersions'])if(revision.metadata[key]!==undefined&&(!Array.isArray(revision.metadata[key])||revision.metadata[key].some(value=>typeof value!=='string')))throw new Error('Invalid follow revision declarations.');
+}
 const empty = () => ({version:1,sources:[]});
 function decode(value) {
   record(value); if(value.version!==1 || !Array.isArray(value.sources))throw new Error('Unsupported follow document; original data preserved.');
@@ -36,7 +45,7 @@ function decode(value) {
       if(!Array.isArray(page.items))throw new Error('Invalid follow cache.');
       for(const item of page.items){record(item);text(item.id);text(item.title);text(item.publishedAt);text(item.fingerprint);const target=new URL(url(item.url));if(target.protocol!=='https:'||target.hostname!==(s.provider==='modrinth-versions'?'modrinth.com':'github.com'))throw new Error('Invalid cached update address.');if(s.provider==='modrinth-versions')modrinth.versionFields(item);}
     }
-    for(const item of s.items){record(item);if(s.provider==='modrinth-versions')modrinth.versionFields(item);if(item.presentInLastSnapshot!==undefined&&typeof item.presentInLastSnapshot!=='boolean')throw new Error('Invalid snapshot presence.');if(item.lastSeenAt!==undefined)timestamp(item.lastSeenAt);text(item.id);text(item.title);url(item.url);timestamp(item.observedAt);text(item.publishedAt);text(item.fingerprint);if(typeof item.read!=='boolean'||ids.has(item.id))throw new Error('Invalid update item.');ids.add(item.id);}
+    for(const item of s.items){record(item);if(item.revisions!==undefined){if(!Array.isArray(item.revisions))throw new Error('Invalid follow revision history.');item.revisions.forEach(validateRevision);}if(s.provider==='modrinth-versions')modrinth.versionFields(item);if(item.presentInLastSnapshot!==undefined&&typeof item.presentInLastSnapshot!=='boolean')throw new Error('Invalid snapshot presence.');if(item.lastSeenAt!==undefined)timestamp(item.lastSeenAt);text(item.id);text(item.title);url(item.url);timestamp(item.observedAt);text(item.publishedAt);text(item.fingerprint);if(typeof item.read!=='boolean'||ids.has(item.id))throw new Error('Invalid update item.');ids.add(item.id);}
   }
   return clone(value);
 }
@@ -129,7 +138,7 @@ class FollowService extends ServiceStore {
     try {
       const result=await this._collectQueued(source,controller.signal,release=>{releaseNetwork=release;});if(controller.signal.reason==='timeout')throw new Error('Source check timed out.');if(controller.signal.aborted||this._disposed)return;
       const current=this.get(owner,id),now=this._time(),items=new Map(current.items.map(i=>[i.id,{...i,presentInLastSnapshot:false}]));
-      for(const row of result.items){const old=items.get(row.id);items.set(row.id,{...row,presentInLastSnapshot:true,lastSeenAt:now,observedAt:old?.fingerprint===row.fingerprint?old.observedAt:now,read:old?.fingerprint===row.fingerprint?old.read:false});}
+      for(const row of result.items){const old=items.get(row.id),revisions=old?.revisions||[];const changed=old&&old.fingerprint!==row.fingerprint;items.set(row.id,{...row,revisions:changed?[...revisions,{observedAt:old.observedAt,supersededAt:now,metadata:revisionMetadata(old)}]:revisions,presentInLastSnapshot:true,lastSeenAt:now,observedAt:old?.fingerprint===row.fingerprint?old.observedAt:now,read:old?.fingerprint===row.fingerprint?old.read:false});}
       this._replace({...current,items:[...items.values()],cache:result.cache,...(result.modrinthProjectId?{modrinthProjectId:result.modrinthProjectId}:{}),lastAttempt:now,lastSuccess:now,notBefore:result.notBefore||0,nextCheck:Math.max(now+INTERVAL,result.notBefore||0,result.providerNotBefore||result.githubNotBefore||0),error:''},Math.max(this._document[this._cooldownField(current)]||0,result.providerNotBefore||result.githubNotBefore||0));
     }catch(error){if(!this._disposed&&(!controller.signal.aborted||controller.signal.reason==='timeout')){const current=this.get(owner,id),now=this._time();this._replace({...current,lastAttempt:now,notBefore:Math.max(current.notBefore||0,error.sourceNotBefore||0),nextCheck:Math.max(now+INTERVAL,error.retryAt||0,error.sourceNotBefore||0),error:controller.signal.reason==='timeout'?'Source check timed out; saved updates retained.':error.message},Math.max(this._document[this._cooldownField(current)]||0,error.retryAt||0));}else if(!this._disposed&&this.pending.get(id)===controller){/* Cancelled settings changes preserve the last good checkpoint. */}}
     finally{releaseNetwork?.();clearTimeout(timeout);this.pending.delete(id);if(!this._disposed)this._emit({type:'refresh-end'});}

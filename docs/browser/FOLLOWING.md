@@ -61,3 +61,11 @@ The request uses `include_changelog=false`, as recommended for version inventori
 [Modrinth’s API overview](https://docs.modrinth.com/api/) specifies relative-seconds rate-reset headers, unlike GitHub epoch resets. Modrinth’s retry/rate-limit pause is saved separately so it cannot block unrelated GitHub checks. All requests use the fixed API origin, an identifying Noxviola User-Agent, no credentials/cookies and no followed redirects. Conditional requests are used when an ETag is actually supplied; a server returning 200 again is not described as a 304 bandwidth saving.
 
 Live public smoke check resolved Sodium to `AANobbMI`, collected 272 versions, and received the identical list on a repeat 200 response. It found 13 versions declaring both Fabric and Minecraft 1.20.1, and zero declaring Forge and 1.20.1. These are returned-metadata counts, not proof of unsupported platforms or runtime compatibility. See `FOLLOWING-MODRINTH-LIVE-CHECK.json`. This test establishes no SPMovesets identity or Modrinth presence.
+
+## Observed revision history · 2026-11-16
+
+Changed fingerprints now preserve the previous supported metadata with its observation and replacement times. Unchanged checks do not append duplicate revisions. History is identity-scoped, survives restart and remains on failed checks; current read/unread behavior is unchanged. Existing saved items without history remain valid. A newly observed title, tag commit or version declaration can be compared in the native Following panel by expanding its revision history.
+
+Historical fields render only when expanded, avoiding eagerly constructing every revision's DOM nodes. Values are text, not executable markup. There is no silent revision cap. This adds durable storage cost proportional to observed changes; no measured performance speedup is claimed. Full metadata validation and atomic save behavior are retained.
+
+This is not complete history: only changes observed by this browser are captured. Source dates are distinct from observation/replacement times. Full release bodies are not retained, so a fingerprint-only change explicitly says the changed source content was not saved. Changes before this feature, between polls or created/deleted while offline cannot be reconstructed. CurseForge remains manual and its staged collector is not connected to this history store.

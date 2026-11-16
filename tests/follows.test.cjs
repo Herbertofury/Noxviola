@@ -175,3 +175,24 @@ test('CurseForge manual references remain isolated, persistent and explicitly cr
  assert.equal(s.provider,'manual');assert.equal(s.automatic,false);assert.match(service.list('personal')[0].coverage,/authorized API key/);assert.equal(service.list('work').length,0);
  assert.throws(()=>service.change('personal',s.id,{automatic:true}),/No automatic adapter/);assert.equal(reopen().list('personal')[0].provider,'manual');
 });
+
+test('observed revision history retains changes through restart without unchanged duplicates',async t=>{
+ let item=normalized();const {service,reopen,setTime}=fixture(t,{collect:async()=>({cache:{},items:[item]})});const s=add(service);
+ await service.refresh('personal',s.id);assert.deepEqual(service.get('personal',s.id).items[0].revisions,[]);
+ setTime(2000);await service.refresh('personal',s.id);assert.equal(service.get('personal',s.id).items[0].revisions.length,0);
+ item={...item,title:'Changed title',fingerprint:'two'};setTime(3000);await service.refresh('personal',s.id);
+ let saved=reopen().get('personal',s.id).items[0];assert.equal(saved.revisions.length,1);assert.equal(saved.revisions[0].metadata.title,'Release 1');assert.equal(saved.revisions[0].observedAt,1000);assert.equal(saved.revisions[0].supersededAt,3000);assert.equal(saved.read,false);
+ item={...item,fingerprint:'three'};setTime(4000);await service.refresh('personal',s.id);assert.equal(service.get('personal',s.id).items[0].revisions.length,2);assert.equal(service.list('work').length,0);
+ service.collect=async()=>{throw new Error('offline');};await service.refresh('personal',s.id);assert.equal(service.get('personal',s.id).items[0].revisions.length,2);
+});
+test('malformed revision history enters recovery rather than silently accepting unsafe metadata',async t=>{
+ const {service,file}=fixture(t,{collect:async()=>({cache:{},items:[normalized()]})});const s=add(service);await service.refresh('personal',s.id);const data=JSON.parse(fs.readFileSync(file,'utf8'));
+ data.sources[0].items[0].revisions=[{observedAt:1000,supersededAt:2000,metadata:{title:'old',url:'javascript:alert(1)',publishedAt:'',fingerprint:'old'}}];assert.throws(()=>decode(data),/HTTP/);
+ data.sources[0].items[0].revisions='invalid';assert.throws(()=>decode(data),/revision history/);
+});
+
+test('revision history preserves provider declarations and tags without altering current metadata',async t=>{
+ let item={...normalized(),kind:'tag',commit:'a'.repeat(40)};const {service,setTime}=fixture(t,{collect:async()=>({cache:{},items:[item]})});const s=add(service);await service.refresh('personal',s.id);
+ item={...item,commit:'b'.repeat(40),fingerprint:'moved'};setTime(2000);await service.refresh('personal',s.id);const saved=service.get('personal',s.id).items[0];assert.equal(saved.commit,'b'.repeat(40));assert.equal(saved.revisions[0].metadata.commit,'a'.repeat(40));
+ const old=saved.revisions[0].metadata;assert.equal(old.revisions,undefined);assert.equal(old.read,undefined);assert.equal(old.observedAt,undefined);
+});

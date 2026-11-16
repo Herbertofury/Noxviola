@@ -383,3 +383,11 @@ test('Modrinth following shows same-version declarations and saves identity-scop
  await painted(h,'follow-items');assert.match(h.$('follow-items').textContent,/0 versions in the last successful snapshot match both saved filters/);assert.match(h.$('follow-items').textContent,/Loaders: forge · Minecraft: 1.19.2/);assert.match(h.$('follow-items').textContent,/Loaders: fabric · Minecraft: 1.20.1/);
  const form=h.$('follow-items').querySelector('form'),inputs=form.querySelectorAll('input');h.input(inputs[0],'fabric');h.submit(form);await tick();assert.deepEqual(h.calls.at(-1),{name:'follow-change',value:{id:'mod',identity:'work',compatibility:{loader:'fabric',gameVersion:'1.20.1'}}});
 });
+
+test('following revision differences render safely on demand, without duplicate expansion',async t=>{
+ const h=await harness(t,{initial:state({panel:'following'})});const item={id:'one',title:'Current',url:'https://github.com/example/project/releases/tag/v1',fingerprint:'two',read:false,observedAt:2000,publishedAt:'2026-11-16',revisions:[{observedAt:1000,supersededAt:2000,metadata:{title:'<img src=x onerror=alert(1)>',url:'https://github.com/example/project/releases/tag/v1',publishedAt:'2026-11-16',fingerprint:'one'}}]};
+ h.emit('onFollows',{identity:'personal',items:[{id:'repo',identity:'personal',name:'Project',kind:'project',url:'https://github.com/example/project',provider:'github-releases',automatic:false,paused:false,lastSuccess:2000,error:'',items:[item]}]});await painted(h,'follow-items');
+ const history=h.$('follow-items').querySelector('.follow-history');assert.ok(history);assert.equal(history.querySelectorAll('.follow-revision').length,0);history.open=true;history.dispatchEvent(new h.window.Event('toggle'));
+ assert.equal(history.querySelectorAll('.follow-revision').length,1);assert.match(history.textContent,/title:.*Current/);assert.equal(history.querySelector('img'),null);assert.match(history.textContent,/Changes between checks/);
+ history.open=false;history.dispatchEvent(new h.window.Event('toggle'));history.open=true;history.dispatchEvent(new h.window.Event('toggle'));assert.equal(history.querySelectorAll('.follow-revision').length,1);
+});

@@ -853,7 +853,21 @@ function renderFollows(){
     const updates=node('details');updates.open=source.items.some(item=>!item.read);updates.append(node('summary',`${source.items.filter(i=>!i.read).length} unread · ${source.items.length} saved updates`));
     const list=node('div',undefined,'follow-updates');
     for(const item of [...source.items].sort((a,b)=>b.observedAt-a.observedAt)){
-      const row=node('div',undefined,'follow-update');row.append(node('span',item.read?'Read':'New','follow-badge'),node('strong',item.title),node('small',item.publishedAt?`Source date: ${item.publishedAt}`:item.kind==='tag'?'Tag date is not provided by the source API.':'Source date unavailable'),node('small',`Observed on this device: ${new Date(item.observedAt).toLocaleString()}`),...(item.kind==='modrinth-version'?[node('small',`Loaders: ${item.loaders.join(', ')||'not declared'} · Minecraft: ${item.gameVersions.join(', ')||'not declared'}`),node('small',`Version: ${item.versionNumber} · ${item.releaseType}`)]:[]),...(item.commit?[node('small',`Commit: ${item.commit}`)]:[]),...(item.presentInLastSnapshot===false?[node('small','Not returned in last successful snapshot; saved record retained.')]:[]),action('Open update','follow-open',{...key,itemId:item.id}));list.append(row);
+      const row=node('div',undefined,'follow-update');row.append(node('span',item.read?'Read':'New','follow-badge'),node('strong',item.title),node('small',item.publishedAt?`Source date: ${item.publishedAt}`:item.kind==='tag'?'Tag date is not provided by the source API.':'Source date unavailable'),node('small',`Observed on this device: ${new Date(item.observedAt).toLocaleString()}`),...(item.kind==='modrinth-version'?[node('small',`Loaders: ${item.loaders.join(', ')||'not declared'} · Minecraft: ${item.gameVersions.join(', ')||'not declared'}`),node('small',`Version: ${item.versionNumber} · ${item.releaseType}`)]:[]),...(item.commit?[node('small',`Commit: ${item.commit}`)]:[]),...(item.presentInLastSnapshot===false?[node('small','Not returned in last successful snapshot; saved record retained.')]:[]),action('Open update','follow-open',{...key,itemId:item.id}));
+      if(item.revisions?.length){
+        const history=node('details',undefined,'follow-history');history.append(node('summary',`${item.revisions.length} previously observed revisions`));
+        history.ontoggle=()=>{if(!history.open||history.dataset.loaded)return;history.dataset.loaded='true';
+          for(let index=item.revisions.length-1;index>=0;index--){const revision=item.revisions[index],previous=revision.metadata,next=item.revisions[index+1]?.metadata||item,entry=node('div',undefined,'follow-revision');
+            entry.append(node('strong',previous.title),node('small',`Observed ${new Date(revision.observedAt).toLocaleString()} · replaced ${new Date(revision.supersededAt).toLocaleString()}`));
+            const keys=[...new Set([...Object.keys(previous),...Object.keys(next)])].filter(key=>!['fingerprint','id','read','observedAt','lastSeenAt','presentInLastSnapshot','revisions'].includes(key));let changes=0;
+            for(const key of keys)if(JSON.stringify(previous[key])!==JSON.stringify(next[key])){changes++;entry.append(node('p',`${key}: ${JSON.stringify(previous[key])??'not provided'} → ${JSON.stringify(next[key])??'not provided'}`));}
+            if(!changes)entry.append(node('p','Provider fingerprint changed; the changed source content was not retained.'));
+            history.append(entry);
+          }
+          history.append(node('p','Only versions observed on this device are shown. Changes between checks and full release-note history are not captured.','subtle'));
+        };row.append(history);
+      }
+      list.append(row);
     }
     if(!source.items.length)list.append(node('p',source.lastSuccess?'No items returned by the last successful check. This does not establish that no other activity exists.':'Check this source to load its supported updates.','subtle'));
     updates.append(list);card.append(updates);return card;

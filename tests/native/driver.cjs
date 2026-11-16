@@ -964,6 +964,21 @@ async function firstLaunch() {
     for(const id of [ids[0],ids[2],ids[3],ids[4]])await command('close',id);
     await command('workspace-remove',workspace.id);
   });
+  await check('the real tab-search window filters, closes and restores a tab', async () => {
+    const previous=(await state()).activeId,url=`${context.origin}/page?tabSearch=unique-fixture`,id=await command('new',url);await site(url);
+    await window.webContents.executeJavaScript("document.getElementById('tab-search-toggle').click()");
+    const popup=await until(()=>BrowserWindow.getAllWindows().find(item=>item!==window&&!item.isDestroyed()&&item.webContents.getURL().includes('tab-search.html')),'the actual tab-search window');
+    assert.equal(popup.webContents.getLastWebPreferences().sandbox,true);
+    await until(()=>popup.webContents.executeJavaScript("Boolean(document.querySelector('#open .row'))"),'the rendered tab search list');
+    await popup.webContents.executeJavaScript("const q=document.getElementById('query');q.value='tabSearch=unique-fixture';q.dispatchEvent(new Event('input',{bubbles:true}));");
+    assert.equal(await popup.webContents.executeJavaScript("document.querySelectorAll('#open .row').length"),1);
+    await popup.webContents.executeJavaScript("document.querySelector('#open .close').click()");
+    await until(async()=>!(await state()).tabs.some(tab=>tab.id===id),'the tab closed through the dropdown');
+    await until(()=>popup.webContents.executeJavaScript("Boolean(document.querySelector('#closed .open-tab'))"),'the recently closed result');
+    await popup.webContents.executeJavaScript("document.querySelector('#closed .open-tab').click()");
+    await until(async()=>(await state()).tabs.some(tab=>tab.id===id),'the original tab restored through the dropdown');
+    await command('activate',previous);await command('close',id);
+  });
   await check('actual DownloadItem completion, pause/resume and cancellation are reflected by browser commands', async () => {
     const view = await activate(expected.personalTab);
     const completed = await selectDownload(view, '/download?identity=personal', 'complete-personal.txt');

@@ -4,7 +4,29 @@
 
 The browser is experimental source. **No production release is qualified.** GitHub Actions may publish temporary, unsigned **UNVERIFIED preview packages**; those are not GitHub Releases or proof of native functionality/security. The previous sandbox-enabled native launch failed with a process-socket permission denial, and that denied route is not retried by packaging jobs.
 
-### Latest fully verified preview: 50431f79
+### Latest fully verified preview: 99942809
+
+[Core run 43782744635](https://github.com/Herbertofury/Noxviola/actions/runs/43782744635) passed at `999428099f5d59d91f7c437ae6eace2cdbe0264a`, tree `f4e8f803698ba2125e8d8a964a675446aa102843`: **302 contracts / 76 syntax**, source **3/18/10** and ordinary packaged **11/6** per platform. Independent readback verified all **66 exact raw Git inputs**, all **73 Linux / 74 Windows** distribution entries and every one of **48 ASAR members**. These exact previews use Electron **44.11.3**; the development **45.3.2 candidate remains pending**.
+
+| Exact tested inner preview archive | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `Noxviola-PREVIEW-win32-x64-999428099f5d.zip` | 158,613,749 | `a22fea1ca0f85f1879be33c20a675968de7abeb94cf8b3ad4b1fe43c359494ad` |
+| `Noxviola-PREVIEW-linux-x64-999428099f5d.tar.gz` | 123,503,268 | `1ac73f611be74ec29539fb96f61f5100fae553cac0a509d654630a6e737932cc` |
+
+The outer Actions ZIPs contain the inner preview and its distribution receipt; they are separate files with different digests:
+
+| Original outer portable artifact | Bytes | SHA-256 |
+| --- | ---: | --- |
+| [Windows portable 14188269280](https://github.com/Herbertofury/Noxviola/actions/runs/43782744635/artifacts/14188269280) | 158,626,795 | `9b8bdb6b8c1b16820a931331fcb083e4994857b4968405a553bfe527ad433bea` |
+| [Linux portable 14189201144](https://github.com/Herbertofury/Noxviola/actions/runs/43782744635/artifacts/14189201144) | 123,515,852 | `635fd0019544a3d7b1d70b6fa95231c5b40f12f86f37f9d68d51992b37fbb78b` |
+
+The source manifest is `43f3a149d6f30cb1b141d10b32b1de307e1233a49a1b70d005c3de1a3887546b`; both application manifests are `cd0dc48b474130d4dc6b1fc6cb52976b55d047a5b7db5a6c0a1aa7753357777d`, and complete ASAR bytes match at `c3b80cc90cbd036c661d5269cbb307c28859921c3312b6e6b8922ceacd3448d8`. Complete OS distributions remain different. `99942809-independent-validation.json` is **137,134 bytes**, SHA-256 `f6ec978cce64ad5c7f7c418d357ce4720efaee5f2f6a5083973598d90c938b20`; [the global ledger receipt](../browser-capabilities.md#verified-global-core-checkpoint-at-99942809) records the native artifact digests and full limits.
+
+Both new actual source PDFs received separate exact text/link/visual readback in `pdf-qa-99942809/pdf-content-validation.json`, **5,274 bytes**, SHA-256 `8b0bd829246da14bbbc22bc6ad40a7837afcab93c2813a078e65d4f33fdbae9a`. The core result retains generated-fixture, source-only page-tool/download, supplied-picker and hosted-platform limits. It does not qualify physical OS gestures, arbitrary pages, owner Windows 11, universal extensions or a production release.
+
+The separate [real-package run 43782744653](https://github.com/Herbertofury/Noxviola/actions/runs/43782744653) **failed actual initialization/page darkening** on both hosts after the light baseline, reviewed installation and background startup passed. The unchanged package raised null `applyToListedOnly` during `UserStorage.migrateSiteListsV2`; popup/Settings/restart workflows remain unqualified. [Pinned 45.3.2 documentation](https://github.com/electron/electron/blob/v45.3.2/docs/api/extensions.md) supplies the native sync-storage mechanism absent from 44.11.3, but candidate storage behavior, original-package functionality and a genuine 44-to-45 profile upgrade still require their own actual receipts. Local sync storage does not mean cross-device cloud sync. Every prior failure and all twelve open master gates remain preserved.
+
+### Historical fully verified preview: 50431f79
 
 [Core run 43782023018](https://github.com/Herbertofury/Noxviola/actions/runs/43782023018) passed at `50431f79ff05322e6128b0d7262d22d6f25f19b8`, tree `45f7265afa3b98989d5e62b9ab4cc06eeeb5ebaa`: **301 contracts / 76 syntax**, source **3/18/10** and ordinary packaged **11/6** per platform. Independent readback verified all 66 exact raw Git inputs, all 73 Linux/74 Windows distribution entries and every one of 48 ASAR members.
 
@@ -43,7 +65,7 @@ The original CI PDF-reader gap is preserved. A separate subsequent readback of b
 
 ### Core and real-package results remain separate
 
-`50431f79ff05322e6128b0d7262d22d6f25f19b8`, tree `45f7265afa3b98989d5e62b9ab4cc06eeeb5ebaa`, is a separately published required-grant permission-query/presentation continuation. Its exact isolated snapshot and both hosted core logs passed **301 contracts and 76 syntax checks**; independent core artifact qualification is complete, while the real-package inspection failed. The ff preview hashes above still refer only to ff; the exact 504 archives are separately recorded at the top. Original ae00/0c/f76 real-extension failures and the f47 Find failure remain preserved, and all G001–G012 gates remain open.
+`50431f79ff05322e6128b0d7262d22d6f25f19b8`, tree `45f7265afa3b98989d5e62b9ab4cc06eeeb5ebaa`, is a separately published required-grant permission-query/presentation continuation. Its exact isolated snapshot and both hosted core logs passed **301 contracts and 76 syntax checks**; independent core artifact qualification is complete, while the real-package inspection failed. The ff preview hashes above still refer only to ff; the exact 504 archives are separately recorded in their historical section above. Original ae00/0c/f76 real-extension failures and the f47 Find failure remain preserved, and all G001–G012 gates remain open.
 
 ### Historical fully verified preview: 0c25987e
 
@@ -100,7 +122,7 @@ npm run check
 npm run package:preview
 ```
 
-The official `@electron/packager` **20.3.0** downloads pinned Electron **44.11.3** as needed. Packaging does not execute the browser. Output is under `dist-preview/` for the host platform/architecture, with a source/dependency content identity so a later preview does not overwrite a different earlier build. `-- --platform win32 --arch x64` explicitly produces a Windows x64 preview, including when packaging from Linux.
+The official `@electron/packager` **20.3.0** downloads the exact locked Electron version from `package.json` as needed. The current development candidate is **45.3.2**; the fully verified 999 previews above remain pinned to **44.11.3** and do not qualify a new candidate build. Packaging does not execute the browser. Output is under `dist-preview/` for the host platform/architecture, with a source/dependency content identity so a later preview does not overwrite a different earlier build. `-- --platform win32 --arch x64` explicitly produces a Windows x64 preview, including when packaging from Linux.
 
 For source development or native acceptance, provision the distribution
 explicitly after `npm ci --ignore-scripts`:

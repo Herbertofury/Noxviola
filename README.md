@@ -14,7 +14,7 @@ No production release is qualified. A workflow link or package build is not evid
 
 ## Run and verify the source
 
-Use a Node version matching `package.json`: **22.22.2 or newer within Node 22, 24.15.0 or newer within Node 24, or Node 26+**. The lockfile pins Electron **44.11.3**, the preview packager and test dependencies.
+Use a Node version matching `package.json`: **22.22.2 or newer within Node 22, 24.15.0 or newer within Node 24, or Node 26+**. The lockfile pins the Electron **45.3.2 candidate**, the preview packager and test dependencies. Its native extension `storage.sync` is a separate local store with quotas, without cross-device synchronization. The candidate must pass the source, packaged, upgrade-preservation and unchanged real-extension gates before promotion; earlier hosted receipts retain their original runtime versions. See the [version-specific runtime evidence](docs/browser/EXTENSION-ARCHITECTURE.md#version-specific-runtime-evidence).
 
 ```sh
 npm ci --ignore-scripts
@@ -28,7 +28,7 @@ npm start
 `setup:electron` runs the official installer bundled in the pinned Electron
 package; it downloads and verifies the distribution without launching it.
 `check:electron` checks the installed version and executable file without
-execution. Electron 44.11.3 has no npm postinstall hook, so `npm ci` alone does
+execution. The pinned Electron 45.3.2 package has no npm postinstall hook, so `npm ci` alone does
 not provision the binary. Keep this setup explicit before source launch or the
 native acceptance gate. Portable tests and packaging do not require this step.
 
@@ -36,24 +36,28 @@ The native gate is separate from portable tests and packaging:
 
 ```sh
 npm run test:native
+# Hosted upgrade gate: verify the previous official runtime without launching it,
+# then use it only for the generated seed before the current app and restart.
+node scripts/setup-legacy-electron.cjs --receipt native-results/legacy-runtime.json
+npm run test:native -- --legacy-runtime-receipt native-results/legacy-runtime.json
 npm run package:preview
 ```
 
-`test:native` uses sandboxed Electron, a fresh synthetic profile and local fixtures. A separate process first seeds site data through the original identity storage route; two actual Noxviola processes then exercise readback, browsing and restart. Exit 0 means the recorded fixture workflows passed, exit 1 means failure and exit 2 means the environment blocked execution. It never disables the sandbox or substitutes a mock for native success. The current workspace lacks a supported desktop display, so native acceptance remains blocked here. Actual hosted results and their limits are recorded in the [continuation checkpoint](docs/browser/CHECKPOINT-2026-11-15.md). The earlier socket-denied launch route is preserved and has not been bypassed.
+`test:native` uses sandboxed Electron, a fresh synthetic profile and local fixtures. A separate process first seeds site data through the original identity storage route; two actual Noxviola processes then exercise readback, browsing and restart. Without a legacy receipt this uses one engine version and establishes no cross-engine upgrade. The hosted workflow also verifies the exact official 44.11.3 archive and complete extracted runtime, then uses that executable only for the seed before the pinned candidate's two source processes. Exit 0 means the recorded fixture workflows passed, exit 1 means failure and exit 2 means the environment blocked execution. It never disables the sandbox or substitutes a mock for native success. Local native acceptance remains blocked here; actual hosted results and their limits are recorded in the [continuation checkpoint](docs/browser/CHECKPOINT-2026-11-15.md). The earlier socket-denied launch route is preserved and has not been bypassed.
 
-**Verified hosted checkpoint:** source [`0c25987e`](https://github.com/Herbertofury/Noxviola/commit/0c25987e7e14cdc78790d8a9423962346b8fa3a9) passed the [Windows/Linux native workflow](https://github.com/Herbertofury/Noxviola/actions/runs/43780308365), including the original-factory seed, two source-app processes, two ordinary packaged processes, public RFC/MDN HTTPS cases, native OS close/save and complete portable archive verification. Its [contract run](https://github.com/Herbertofury/Noxviola/actions/runs/43780308394) covers 269 portable tests and 71 syntax checks. Earlier failed and passed receipts are preserved in the [continuation checkpoint](docs/browser/CHECKPOINT-2026-11-15.md). The new durable download-history and page-tools checks require their own later native result; real third-party extension functionality, broad Internet/account compatibility, native OS dialogs and all complete product gates remain open.
+**Verified hosted baseline:** source [`99942809`](https://github.com/Herbertofury/Noxviola/commit/999428099f5d59d91f7c437ae6eace2cdbe0264a), under Electron 44.11.3, passed the [Windows/Linux core workflow](https://github.com/Herbertofury/Noxviola/actions/runs/43782744635): 302 portable tests, 76 syntax checks, original-factory seed, two source-app processes, two ordinary packaged processes, public RFC/MDN HTTPS cases, native OS close/save and complete portable archive verification. Actual download-history persistence and identity-scoped clearing, Find traversal, zoom restart and source-page PDF/PNG export passed, with separate exact-PDF visual/text/link verification. All four archives, 66 raw-Git inputs, complete inner distributions and 48 ASAR members were independently checked. The [unchanged Dark Reader run](https://github.com/Herbertofury/Noxviola/actions/runs/43782744653) failed at native sync-storage initialization; that is preserved as the reason for the 45.3.2 candidate, whose new gates remain pending. Earlier failures and successes remain in the [continuation checkpoint](docs/browser/CHECKPOINT-2026-11-15.md). Real third-party extension functionality, broad Internet/account compatibility, physical OS dialogs and all complete product gates remain open.
 
 ## Workflows present in source
 
 | Area | Current implementation | Remaining boundary |
 | --- | --- | --- |
-| Browsing | Address/search, navigation, stop/reload, find, zoom, duplicate/close/reopen tabs, configurable horizontal/vertical layout and two-page split. Native generated-site navigation, history, 16 live tabs, split bounds and bounded public RFC/MDN HTTPS cases passed. | Broader site/account compatibility, focus/resize/accessibility and owner-device acceptance; new native page-tool checks remain pending. |
+| Browsing | Address/search, navigation, stop/reload, find, zoom, duplicate/close/reopen tabs, configurable horizontal/vertical layout and two-page split. Native generated-site navigation, history, 16 live tabs, split bounds, actual Find/zoom and source-page PDF/PNG exports passed, alongside bounded public RFC/MDN HTTPS cases. | Broader site/account compatibility, focus/resize/accessibility, arbitrary page-export fidelity, physical picker interaction and owner-device acceptance. |
 | Identities | Named persistent identities, identity-bound tabs and side-by-side identities. Native cookie, localStorage, IndexedDB, cache and service-worker separation/readback passed. | Authenticated accounts, arbitrary historical profiles/filesystems and broader isolation/security acceptance. |
 | Sessions | Complete ordered tab metadata, duplicate URLs, deferred inactive-tab loading, atomic checkpoints, explicit recovery and save-failure close handling. Native normal-close and restart preservation passed. | Forced crash/power loss, failing shutdown and long-session acceptance. |
 | Favorites vault | Website/image/video/creator/character references, collections, names, notes, favorite, search, edit, reversible archive, export and reviewed collision-safe JSON import. | Richer bookmark/media workflows, encryption and optional sync remain separate features. |
 | Account atlas | Site origins, labels/handles, identity associations, tracking markers, edit/archive and open in the selected identity. | It is plaintext metadata, not a password manager, login or autofill implementation. |
 | Site permissions | Explicit prompts, document-only or durable decisions, separate camera/microphone grants, identity/requesting/embedding origin scope, review/revoke/reset and recovery. | Device/display pickers, extension-origin grants, OS behavior and native ongoing-capture revocation. |
-| Downloads | Native destination chooser, identity-tagged progress, pause/resume/cancel, completed-file reveal and close handling. New [durable history](docs/browser/DOWNLOADS.md) preserves records and files, supports explicit recovery and identity-scoped metadata clearing, and waits for real terminal cancellation before close. | Existing native transfer controls/bytes passed; new history/restart coverage is pending. Native OS chooser interaction, cross-process resume and terminal retry remain open. |
+| Downloads | Native destination chooser, identity-tagged progress, pause/resume/cancel, completed-file reveal and close handling. [Durable history](docs/browser/DOWNLOADS.md) preserves records and files, supports explicit recovery and identity-scoped metadata clearing, and waits for real terminal cancellation before close. Actual files, history, restart and identity-scoped clearing passed on both hosted platforms. | Physical OS chooser interaction, cross-process resume and terminal retry remain open. The app-wide list is identity-tagged and does not claim confidentiality between identities. |
 | Extensions | Inspected local unpacked/ZIP/XPI imports, explicit permission/identity consent, persistent lifecycle, authenticated canonical host APIs, actual action PNG/ImageData icons and reviewed Chromium/Firefox profiles. Real renderer installation, MV3 content/storage and MV2 background fixtures passed lifecycle/restart/uninstall. | Publisher signatures, CRX, verified updates, MV3 workers, complete API semantics and real cross-browser extension functionality. The separate unchanged Dark Reader gate is still failing. |
 | Local spelling | Independent checking preference across the shell and identity Sessions, preserved across restart, with native correction suggestions. Source controls and Session state passed on both hosted platforms. | Dictionary-download consent is unresolved: turning checking off does not block the engine's dictionary downloads. OS-specific correction interaction remains separately unqualified. |
 
@@ -67,7 +71,7 @@ A maintained `electron-chrome-extensions` candidate was inspected rather than re
 
 ## Complete feature target, honest progress
 
-The [canonical capability JSON](browser/capabilities.json) currently expands **183 behavior records and 135 sources**, plus discovery queues. It includes unique browser variants, dependencies, ownership, privacy/performance implications and acceptance procedures. This is an initial documented inventory, not an exhaustive audit or a feature cap. The user's installed Windows browser versions and settings remain uninspected. All master-goal gates G001–G012 remain open.
+The [canonical capability JSON](browser/capabilities.json) currently expands **183 behavior records and 139 sources**, plus discovery queues. It includes unique browser variants, dependencies, ownership, privacy/performance implications and acceptance procedures. This is an initial documented inventory, not an exhaustive audit or a feature cap. The user's installed Windows browser versions and settings remain uninspected. All master-goal gates G001–G012 remain open.
 
 There is no claim that this preview is faster, smaller, more secure or more capable than the reference browsers. Whole-process performance and zero-first-party-telemetry claims need real workload and network evidence. Optional services, themes and future AI features must remain independently controlled; features may not be removed merely to improve a benchmark.
 

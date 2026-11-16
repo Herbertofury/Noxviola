@@ -254,7 +254,7 @@ test('observed request summaries retain origin, path and parameter names without
 
 test('real-source manifest covers the separate runner as well as recursive package gate inputs', t => {
   const directory = temporary(t);
-  const names = ['browser/main.cjs', 'package.json', 'package-lock.json', 'scripts/native-smoke.cjs', 'scripts/package-preview.cjs',
+  const names = ['browser/main.cjs', 'package.json', 'package-lock.json', 'scripts/native-smoke.cjs', 'scripts/setup-legacy-electron.cjs', 'scripts/package-preview.cjs',
     'scripts/real-extension-smoke.cjs', 'scripts/fetch-extension-corpus.cjs', '.github/workflows/browser-extensions.yml',
     'tests/native/real-extension-driver.cjs', 'tests/native/corpus/release.json', 'tests/native/fixtures/light.html'];
   for (const name of names) { const file = path.join(directory, name); fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, name); }

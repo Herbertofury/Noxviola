@@ -66,7 +66,7 @@ function sourceEvidence(root = ROOT) {
       files.push({ path: relative, bytes: bytes.length, sha256: crypto.createHash('sha256').update(bytes).digest('hex') });
     } else throw new Error(`Unexpected special file in native acceptance inputs: ${relative}`);
   }
-  for (const relative of ['browser', 'package.json', 'package-lock.json', 'scripts/native-smoke.cjs', 'scripts/package-preview.cjs', 'tests/native']) record(relative);
+  for (const relative of ['browser', 'package.json', 'package-lock.json', 'scripts/native-smoke.cjs', 'scripts/setup-legacy-electron.cjs', 'scripts/package-preview.cjs', 'tests/native']) record(relative);
   files.sort((left, right) => left.path.localeCompare(right.path));
   let commit = null;
   let dirty = null;
@@ -123,7 +123,7 @@ async function runPhase(executable, context, phase) {
 }
 
 function nativeOptions(argv = process.argv.slice(2)) {
-  const result = { output: path.join(ROOT, 'native-results'), packageReceipt: null, publicHttps: false };
+  const result = { output: path.join(ROOT, 'native-results'), packageReceipt: null, legacyRuntimeReceipt: null, publicHttps: false };
   const seen = new Set();
   for (let index = 0; index < argv.length; index++) {
     const option = argv[index];
@@ -131,22 +131,37 @@ function nativeOptions(argv = process.argv.slice(2)) {
     if (seen.has(option)) throw new Error(`Repeated native-gate argument: ${option}`);
     seen.add(option);
     if (option === '--public-https') result.publicHttps = true;
-    else if (['--output', '--package-receipt'].includes(option) && argv[index + 1] && !argv[index + 1].startsWith('--')) {
-      result[option === '--output' ? 'output' : 'packageReceipt'] = path.resolve(argv[++index]);
+    else if (['--output', '--package-receipt', '--legacy-runtime-receipt'].includes(option) && argv[index + 1] && !argv[index + 1].startsWith('--')) {
+      const key = { '--output': 'output', '--package-receipt': 'packageReceipt', '--legacy-runtime-receipt': 'legacyRuntimeReceipt' }[option];
+      result[key] = path.resolve(argv[++index]);
     } else throw new Error(`Unknown or incomplete native-gate argument: ${option}`);
   }
   if (result.publicHttps && !result.packageReceipt) throw new Error('--public-https requires the packaged executable gate.');
+  if (result.legacyRuntimeReceipt && result.packageReceipt) throw new Error('--legacy-runtime-receipt requires the source-app gate, without --package-receipt.');
   return result;
+}
+
+function runtimeTransition(seed, phases, legacyRuntime = null, readerVersion = require('../package.json').devDependencies.electron) {
+  const writerVersion = legacyRuntime?.version || readerVersion;
+  if (seed?.versions?.electron !== writerVersion || phases.length !== 2 ||
+      phases.some(phase => phase?.versions?.electron !== readerVersion)) {
+    throw new Error('Observed writer, reader and restart versions must match the independently admitted runtime transition.');
+  }
+  return {
+    writer: seed.versions, reader: phases[0].versions, restart: phases[1].versions,
+    crossVersion: writerVersion !== readerVersion,
+    scope: 'Generated personal-identity web stores and cookie lifetimes through the original partition factory, current application and normal restart; no arbitrary owner-profile or extension-data migration claim.',
+  };
 }
 
 async function main(argv = process.argv.slice(2)) {
   const options = nativeOptions(argv);
   if (!options) {
-    console.log('node scripts/native-smoke.cjs [--output DIRECTORY] [--package-receipt FILE] [--public-https]\nWithout a package receipt, runs the deep actual source-app fixture gate. With a receipt from package:preview, launches the exact packaged executable through its unchanged production entry. --public-https adds two declared public pages to the packaged gate. Exit 0 = recorded workflows passed; 1 = failure; 2 = environment blocked. Never disables the sandbox.');
+    console.log('node scripts/native-smoke.cjs [--output DIRECTORY] [--legacy-runtime-receipt FILE | --package-receipt FILE] [--public-https]\nWithout a package receipt, runs the deep actual source-app fixture gate. --legacy-runtime-receipt admits the exact official previous engine solely for its generated store seed, followed by the current pinned source app and restart. Without it the seed uses the current engine and proves no cross-version upgrade. With a receipt from package:preview, launches the exact packaged executable through its unchanged production entry. --public-https adds two declared public pages to the packaged gate. Exit 0 = recorded workflows passed; 1 = failure; 2 = environment blocked. Never disables the sandbox.');
     return 0;
   }
   let { output } = options;
-  const { packageReceipt, publicHttps } = options;
+  const { packageReceipt, legacyRuntimeReceipt, publicHttps } = options;
   fs.mkdirSync(output, { recursive: true });
   output = fs.mkdtempSync(path.join(output, 'run-'));
   console.log(`Native evidence directory: ${output}`);
@@ -163,6 +178,7 @@ async function main(argv = process.argv.slice(2)) {
   let fixture;
   let packaged;
   let packagedSource;
+  let legacyRuntime;
   try {
     const reason = preflight();
     if (reason) { report.reason = reason; console.error(`BLOCKED: ${reason}`); return 2; }
@@ -178,11 +194,19 @@ async function main(argv = process.argv.slice(2)) {
       executable = packaged.executable;
     } else {
       try { executable = electronExecutable(); } catch (error) { report.reason = error.message; console.error(`BLOCKED: ${report.reason}`); return 2; }
+      if (legacyRuntimeReceipt) {
+        legacyRuntime = await require('./setup-legacy-electron.cjs').verifyLegacyRuntime(legacyRuntimeReceipt);
+        report.legacyRuntime = { ...legacyRuntime, stage: 'Verified provisioning receipt before the seed process was launched' };
+      }
     }
     fixture = createFixtureServer();
     let origin;
     try { origin = await fixture.listen(); } catch (error) { report.reason = `Loopback fixture server unavailable: ${error.message}`; console.error(`BLOCKED: ${report.reason}`); return 2; }
     context = createContext(origin, output);
+    if (legacyRuntime) {
+      context.legacyRuntime = legacyRuntime;
+      fs.writeFileSync(context.configFile, JSON.stringify(context), { mode: 0o600 });
+    }
     if (packaged) {
       packagedSource = packaged;
       // A package under the checkout could accidentally resolve a missing module
@@ -199,7 +223,7 @@ async function main(argv = process.argv.slice(2)) {
     report.runtimeAttempted = true;
     report.status = 'failed';
     if (!packaged) {
-      report.legacySeed = await runPhase(executable, context, 'legacy-seed');
+      report.legacySeed = await runPhase(legacyRuntime?.executable || executable, context, 'legacy-seed');
       report.runtimeStarted ||= report.legacySeed.runtimeReady;
     }
     for (const phase of [1, 2]) {
@@ -212,6 +236,7 @@ async function main(argv = process.argv.slice(2)) {
       report.phases.push(completed);
       report.runtimeStarted ||= completed.runtimeReady;
     }
+    if (!packaged) report.runtimeTransition = runtimeTransition(report.legacySeed, report.phases, legacyRuntime);
     report.sourceAfter = sourceEvidence();
     if (report.sourceAfter.manifestSha256 !== report.source.manifestSha256) throw new Error('Application or native fixture sources changed during execution; the run cannot qualify a single source snapshot.');
     if (packaged) {
@@ -257,4 +282,4 @@ async function main(argv = process.argv.slice(2)) {
 }
 
 if (require.main === module) main().then(code => { process.exitCode = code; }).catch(error => { console.error(error); process.exitCode = 1; });
-module.exports = { preflight, createContext, readContext, sourceEvidence, electronExecutable, nativeOptions, main };
+module.exports = { preflight, createContext, readContext, sourceEvidence, electronExecutable, nativeOptions, runtimeTransition, main };

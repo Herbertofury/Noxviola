@@ -9,7 +9,9 @@ const {app, BrowserWindow, session} = require('electron');
 const {readContext, preflight, sourceEvidence} = require('../../scripts/native-smoke.cjs');
 const context = readContext(process.argv[2]);
 assert.equal(preflight(), null);
-assert.equal(process.versions.electron, require('../../package.json').devDependencies.electron, 'The legacy seed must use the exact pinned runtime');
+const expectedVersion = context.legacyRuntime?.version || require('../../package.json').devDependencies.electron;
+if (context.legacyRuntime) assert.equal(expectedVersion, require('./legacy-runtime.json').version, 'Only the independently verified official previous runtime may seed a cross-version transition');
+assert.equal(process.versions.electron, expectedVersion, 'The legacy seed must use the exact admitted writer runtime');
 for (const name of ['no-sandbox', 'disable-setuid-sandbox', 'disable-seccomp-filter-sandbox', 'disable-gpu-sandbox', 'disable-web-security']) {
   assert.equal(app.commandLine.hasSwitch(name), false, 'Refusing unsafe Chromium switch ' + name);
 }
@@ -31,6 +33,8 @@ const result = {
   passed:false, runtimeReady:false, sandboxForced:true, fixtureOnly:true,
   platform:process.platform, arch:process.arch,
   versions:{electron:process.versions.electron, chrome:process.versions.chrome, node:process.versions.node},
+  admittedWriterVersion:expectedVersion,
+  separatelyVerifiedLegacyRuntime:!!context.legacyRuntime,
   source:{commit:source.commit, dirty:source.dirty, manifestSha256:source.manifestSha256},
   fixture:{marker:context.marker, token:context.token, origin:context.origin, profile:context.profile, sessionData},
   identity:IDENTITY, value:VALUE, factory:'fromPartition', partition:PARTITION,

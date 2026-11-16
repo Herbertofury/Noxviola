@@ -3,7 +3,7 @@
   "name": "Noxviola synthetic host bridge fixture",
   "version": "1.1.0",
   "description": "Generated acceptance fixture for real browser-host API routing; not a marketplace compatibility claim.",
-  "permissions": ["tabs", "bookmarks", "cookies", "contextMenus", "http://127.0.0.1/*"],
+  "permissions": ["tabs", "bookmarks", "cookies", "contextMenus", "storage", "http://127.0.0.1/*"],
   "background": {"scripts": ["background.js"], "persistent": true},
   "browser_action": {"default_title": "Bridge fixture", "default_icon": {"16": "icons/default16.png", "32": "icons/default32.png"}},
   "content_scripts": [{"matches": ["http://127.0.0.1/*"], "js": ["content.js"], "run_at": "document_idle"}]

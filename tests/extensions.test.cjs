@@ -7,7 +7,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const {EventEmitter} = require('node:events');
 const {crc32, deflateRawSync} = require('node:zlib');
-const {ExtensionManager, parseJson} = require('../browser/extensions.cjs');
+const {ExtensionManager, inspectTree, parseJson} = require('../browser/extensions.cjs');
 
 // These are lifecycle contract tests, not an Electron compatibility claim.
 // Runtime fixture coverage is maintained separately by the native test runner.
@@ -43,12 +43,12 @@ function fakeSessions() {
   }
   return {sessions, calls, controls, getSession};
 }
-async function setup(t) {
+async function setup(t, electronVersion = '44.11.3') {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nox-extensions-'));
   t.after(() => fs.rm(root, {recursive: true, force: true}));
   const fake = fakeSessions();
   const directory = path.join(root, 'manager');
-  const options = {directory, getSession: fake.getSession, getIdentities: () => ['personal', 'work'], electronVersion: '44.11.3'};
+  const options = {directory, getSession: fake.getSession, getIdentities: () => ['personal', 'work'], electronVersion};
   const manager = new ExtensionManager(options);
   await manager.open();
   return {root, directory, manager, fake, options};
@@ -401,6 +401,87 @@ test('unsupported and unknown APIs are concrete diagnostics, not a package allow
   const item = await manager.install(preview.token, {identities: ['personal'], permissionsAccepted: true});
   assert.equal(item.compatibility.functionalVerification, 'not-tested');
   assert.equal(item.identities[0].status, 'loaded');
+});
+
+test('legacy44 storage diagnostics retain their exact unsupported evidence without namespace false matches', async t => {
+  const {manager, root, fake} = await setup(t);
+  const preview = await manager.preview(await fixture(root, {}, {
+    'content.js': 'chrome.storage.sync.get(null); browser.storage.managed.get(null); chrome.storage.syncProxy.get(null);',
+  }));
+  const report = preview.compatibility;
+  assert.equal(report.electronVersion, '44.11.3');
+  assert.equal(report.documentationVersion, '44.11.3');
+  assert.equal(report.functionalVerification, 'not-tested');
+  for (const [api, code] of [['chrome.storage.sync.get', 'STORAGE_SYNC_UNSUPPORTED'], ['browser.storage.managed.get', 'MANAGED_STORAGE_UNSUPPORTED']]) {
+    const issue = report.issues.find(item => item.api === api);
+    assert.equal(issue.code, code); assert.equal(issue.status, 'unsupported');
+    assert.match(issue.detail, /Electron 44\.11\.3/);
+  }
+  assert.equal(report.issues.find(item => item.api === 'chrome.storage.syncProxy.get').code, 'API_NOT_VERIFIED');
+  assert.ok(report.sources.every(url => url.includes('/v44.11.3/')));
+  assert.equal(fake.calls.length, 0, 'Static evidence must not execute the package');
+});
+
+test('candidate45 storage diagnostics disclose native separate sync and empty read-only managed without a functionality verdict', async t => {
+  const {manager, root} = await setup(t, '45.3.2');
+  const preview = await manager.preview(await fixture(root, {}, {
+    'content.js': 'chrome.storage.sync.get(null); browser.storage.sync.set({a:1}); chrome.storage.managed.get(null); browser.storage.managed.set({policy:true});',
+  }));
+  const report = preview.compatibility;
+  assert.equal(report.documentationVersion, '45.3.2');
+  for (const api of ['chrome.storage.sync.get', 'browser.storage.sync.set']) {
+    const issue = report.issues.find(item => item.api === api);
+    assert.equal(issue.code, 'STORAGE_SYNC_LOCAL_ONLY'); assert.equal(issue.status, 'limited');
+    assert.match(issue.detail, /separate on-disk area/); assert.match(issue.detail, /quotas/);
+    assert.match(issue.detail, /does not synchronize across devices/);
+    assert.match(issue.detail, /not an alias for storage\.local/);
+  }
+  const managedRead = report.issues.find(item => item.api === 'chrome.storage.managed.get');
+  assert.equal(managedRead.code, 'MANAGED_STORAGE_EMPTY_READ_ONLY'); assert.equal(managedRead.status, 'limited');
+  assert.match(managedRead.detail, /empty, read-only/); assert.match(managedRead.detail, /no enterprise policy provider/);
+  assert.equal(report.issues.find(item => item.api === 'browser.storage.managed.set').status, 'unsupported');
+  assert.ok(report.sources.every(url => url.includes('/v45.3.2/')));
+  const item = await manager.install(preview.token, {identities: ['personal'], permissionsAccepted: true});
+  assert.equal(item.identities[0].status, 'loaded');
+  assert.equal(item.compatibility.status, 'limited');
+  assert.equal(item.compatibility.functionalVerification, 'not-tested', 'A fake lifecycle adapter establishes no native storage result');
+});
+
+test('unreviewed and absent runtimes do not inherit another release storage claims', async t => {
+  const {root, fake} = await setup(t);
+  const source = await fixture(root, {}, {'content.js': 'chrome.storage.sync.get(null); browser.storage.managed.get(null);'});
+  for (const version of [undefined, '45.3.2-beta.1', '99.0.0']) {
+    const {compatibility: report} = await inspectTree(source, version);
+    assert.equal(report.electronVersion, version || 'not-running-in-electron');
+    assert.equal(report.documentationVersion, null);
+    assert.deepEqual(report.sources, []);
+    assert.equal(report.issues.length, 2);
+    assert.ok(report.issues.every(issue => issue.code === 'STORAGE_RUNTIME_NOT_VERIFIED' && issue.status === 'unknown'));
+    assert.equal(report.functionalVerification, 'not-tested');
+  }
+  assert.equal(fake.calls.length, 0);
+});
+
+test('verified restore refreshes runtime diagnostics while preserving installation evidence and registry bytes', async t => {
+  const {manager, root, directory, options} = await setup(t);
+  const source = await fixture(root, {}, {'content.js': 'chrome.storage.sync.get(null);'});
+  const installed = await install(manager, source);
+  assert.equal(installed.compatibility.electronVersion, '44.11.3');
+  await manager.dispose();
+  const registryPath = path.join(directory, 'registry.json'), before = await fs.readFile(registryPath);
+  const restarted = new ExtensionManager({...options, electronVersion: '45.3.2'});
+  await restarted.open();
+  assert.equal(restarted.list()[0].compatibility.electronVersion, '44.11.3', 'Uninspected saved evidence retains its original runtime');
+  await restarted.restoreIdentity('personal');
+  const current = restarted.list()[0];
+  assert.equal(current.compatibility.electronVersion, '45.3.2');
+  assert.equal(current.compatibility.issues[0].code, 'STORAGE_SYNC_LOCAL_ONLY');
+  assert.equal(current.compatibility.functionalVerification, 'not-tested');
+  assert.equal(current.packageDigest, installed.packageDigest);
+  assert.deepEqual(current.identities.map(({identity, enabled, allowFileAccess, acceptedAt}) => ({identity, enabled, allowFileAccess, acceptedAt})), installed.identities.map(({identity, enabled, allowFileAccess, acceptedAt}) => ({identity, enabled, allowFileAccess, acceptedAt})));
+  assert.deepEqual(await fs.readFile(registryPath), before);
+  assert.equal(JSON.parse(before).items[0].compatibility.electronVersion, '44.11.3');
+  await restarted.dispose();
 });
 
 test('ZIP and XPI preserve bytes, disclose signature uncertainty and require additional XPI acceptance', async t => {

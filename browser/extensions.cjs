@@ -10,8 +10,9 @@ const {Transform} = require('node:stream');
 const {pipeline} = require('node:stream/promises');
 const {crc32} = require('node:zlib');
 
-const SUPPORT_URL = 'https://github.com/electron/electron/blob/v44.11.3/docs/api/extensions.md';
-const LIFECYCLE_URL = 'https://github.com/electron/electron/blob/v44.11.3/docs/api/extensions-api.md';
+// Documentation evidence is version-bound, not a package admission allowlist.
+// An unreviewed engine must not inherit another release's storage claims.
+const STORAGE_EVIDENCE = new Map([['44.11.3', 'unsupported'], ['45.3.2', 'native-local']]);
 const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const HASH = /^[0-9a-f]{64}$/;
 // Verification inventories stay in main-process memory. They are not registry
@@ -295,12 +296,23 @@ const HOST_METHODS = new Set(Object.entries({
 }).flatMap(([namespace,methods]) => methods.map(name => namespace+'.'+name)));
 function compatibility(manifest, detectedApis, electronVersion) {
   const issues = [];
+  const storageEvidence = STORAGE_EVIDENCE.get(electronVersion);
   const add = (code, detail, api, status = 'unknown') => issues.push({code, status, detail, ...(api ? {api} : {})});
   for (const api of detectedApis) {
     const bare = api.replace(/^(chrome|browser)\./, '');
     const method = bare.replace(/\.(?:addListener|removeListener|hasListener|hasListeners)$/,'');
-    if (bare.startsWith('storage.sync')) add('STORAGE_SYNC_UNSUPPORTED', 'Electron 44.11.3 documents storage.sync as unsupported. No local or cloud substitute is injected.', api, 'unsupported');
-    else if (bare.startsWith('storage.managed')) add('MANAGED_STORAGE_UNSUPPORTED', 'Electron 44.11.3 documents storage.managed as unsupported. Enterprise policy storage is not integrated.', api, 'unsupported');
+    const storageArea = /^storage\.(sync|managed)(?:\.|$)/.exec(bare)?.[1];
+    if (storageArea) {
+      if (storageEvidence === 'unsupported') {
+        add(storageArea === 'sync' ? 'STORAGE_SYNC_UNSUPPORTED' : 'MANAGED_STORAGE_UNSUPPORTED', `Electron ${electronVersion} documents storage.${storageArea} as unsupported. No substitute storage area or cloud/policy provider is injected.`, api, 'unsupported');
+      } else if (storageEvidence === 'native-local' && storageArea === 'sync') {
+        add('STORAGE_SYNC_LOCAL_ONLY', `Electron ${electronVersion} supplies native storage.sync as a separate on-disk area with Chrome sync quotas. It does not synchronize across devices and is not an alias for storage.local. Exact-package functionality remains unverified.`, api, 'limited');
+      } else if (storageEvidence === 'native-local') {
+        add('MANAGED_STORAGE_EMPTY_READ_ONLY', `Electron ${electronVersion} supplies native storage.managed as an empty, read-only area. There is no enterprise policy provider; writes fail.`, api, /^storage\.managed\.(?:set|remove|clear)$/.test(bare) ? 'unsupported' : 'limited');
+      } else {
+        add('STORAGE_RUNTIME_NOT_VERIFIED', `Native storage.${storageArea} behavior has not been reviewed for ${electronVersion ? `Electron ${electronVersion}` : 'a running Electron version'}. No substitute storage or functionality claim is supplied.`, api);
+      }
+    }
     else if (/^permissions\.(?:request|remove)$/.test(bare)) add('PERMISSION_MUTATION_UNSUPPORTED', 'Optional-grant mutation requires native synchronization and user-gesture admission; this method rejects explicitly without changing any grant.', api, 'unsupported');
     else if (HOST_METHODS.has(method)) add('BROWSER_HOST_SUBSET', 'The browser host implements this API for authenticated extension documents with identity and grant checks. Supported options are limited; added content-context APIs, sleeping-worker delivery and exact-package functionality still require verification.', api, 'limited');
     else if (/^windows\.(?:create|remove)$|^(?:action|browserAction)\.openPopup$/.test(bare)) add('HOST_API_UNSUPPORTED','This host method is explicitly rejected. Window creation/removal and programmatic popup opening are not implemented by this adapter.',api,'unsupported');
@@ -327,10 +339,11 @@ function compatibility(manifest, detectedApis, electronVersion) {
     functionalVerification: 'not-tested',
     runtime: 'electron-session-extensions-with-authenticated-browser-host',
     electronVersion: electronVersion || 'not-running-in-electron',
+    documentationVersion: storageEvidence ? electronVersion : null,
     detectedApis,
     detection: 'Static dotted API references only; computed calls, aliases and runtime dependencies may be missed. Package bytes are unchanged. Authenticated extension documents receive a limited host adapter and Mozilla Promise facade; installation never establishes functional compatibility.',
     issues,
-    sources: [SUPPORT_URL, LIFECYCLE_URL],
+    sources: storageEvidence ? ['extensions.md', 'extensions-api.md'].map(file => `https://github.com/electron/electron/blob/v${electronVersion}/docs/api/${file}`) : [],
   };
 }
 
@@ -429,6 +442,7 @@ class ExtensionManager {
     this.loadExtension = loadExtension;
     this.electronVersion = electronVersion;
     this._state = {version: 1, items: []};
+    this._currentCompatibility = new Map();
     this._disk = null;
     this._records = new Map();
     this._runtime = new Map();
@@ -637,6 +651,9 @@ class ExtensionManager {
   list() {
     return this._state.items.map(item => {
       const result = clone(item);
+      // Preserve installation-time evidence on disk. A verified restore can
+      // report the current engine without rewriting the accepted checkpoint.
+      if (this._currentCompatibility.has(item.id)) result.compatibility = clone(this._currentCompatibility.get(item.id));
       result.apiProfile=item.apiProfile || 'chromium';
       result.identities = item.identities.map(grant => ({
         ...clone(grant), status: grant.enabled ? 'not-loaded' : 'disabled', runtimeId: null, error: null,
@@ -759,6 +776,7 @@ class ExtensionManager {
       }
       const inspection = verifiedInspection || await inspectTree(packagePath, this.electronVersion);
       if (inspection.packageDigest !== item.packageDigest) fail('INSTALLED_PACKAGE_CHANGED', 'Installed bytes differ from the package whose permissions were accepted. The extension was not loaded.');
+      this._currentCompatibility.set(item.id, inspection.compatibility);
       const expectedId = item.sourceIdentity?.startsWith('chromium-key:') ? item.sourceIdentity.slice('chromium-key:'.length, 'chromium-key:'.length + 32).replace(/[0-9a-f]/g, char => String.fromCharCode(97 + parseInt(char, 16))) : null;
       if (expectedId && adapter.getExtension(expectedId)) fail('RUNTIME_ID_CONFLICT', 'An extension with this publisher identity is already running outside this manager. It was not replaced.');
       previousIds = new Set(adapter.getAllExtensions().map(extension => extension.id));
@@ -877,6 +895,7 @@ class ExtensionManager {
       await fsp.rm(path.join(this.packagesPath, id), {recursive: true, force: true});
       await this._save({...this._state, items: this._state.items.filter(candidate => candidate.id !== id)});
       for (const grant of item.identities) this._runtime.delete(this._key(id, grant.identity));
+      this._currentCompatibility.delete(id);
       return {id, uninstalled: true, dataRemoved: false, detail: 'Owned code and enrollment removed. Chromium extension storage was retained in its original identity; data erasure is not implemented.'};
     });
   }
@@ -896,6 +915,7 @@ class ExtensionManager {
       this._observers.clear();
       this._disposed = true;
       this._runtimeObservers.clear();
+      this._currentCompatibility.clear();
       if (failures.length) throw new AggregateError(failures, 'Some extension runtimes did not confirm unloading.');
     });
   }

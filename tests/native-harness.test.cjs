@@ -30,12 +30,12 @@ test('native fixture validation never accepts an unrelated profile or non-loopba
 test('native source receipt includes nested assets, exact dependencies and fixture bytes', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'noxviola-provenance-'));
   try {
-    for (const name of ['browser/main.cjs', 'browser/assets/icon.png', 'package.json', 'package-lock.json', 'scripts/native-smoke.cjs', 'scripts/package-preview.cjs', 'tests/native/driver.cjs', 'tests/native/fixtures/extension/content.js']) {
+    for (const name of ['browser/main.cjs', 'browser/assets/icon.png', 'package.json', 'package-lock.json', 'scripts/native-smoke.cjs', 'scripts/setup-legacy-electron.cjs', 'scripts/package-preview.cjs', 'tests/native/driver.cjs', 'tests/native/fixtures/extension/content.js']) {
       fs.mkdirSync(path.dirname(path.join(root, name)), { recursive: true });
       fs.writeFileSync(path.join(root, name), `fixture: ${name}`);
     }
     const before = sourceEvidence(root);
-    assert.equal(before.files.length, 8);
+    assert.equal(before.files.length, 9);
     assert.ok(before.files.some(file => file.path === 'browser/assets/icon.png'));
     assert.ok(before.files.some(file => file.path === 'package-lock.json'));
     const fixture = 'tests/native/fixtures/extension/content.js';
@@ -63,9 +63,34 @@ test('native command arguments cannot silently drop an HTTPS request or consume 
   const value = nativeOptions(['--package-receipt', 'native-results/package.json', '--public-https']);
   assert.equal(value.publicHttps, true);
   assert.equal(value.packageReceipt, path.resolve('native-results/package.json'));
-  for (const args of [['--public-https'], ['--output'], ['--output', '--public-https'], ['--package-receipt', '--output'], ['--no-sandbox'], ['--output', 'one', '--output', 'two']]) {
+  assert.equal(value.legacyRuntimeReceipt, null);
+  const legacy = nativeOptions(['--legacy-runtime-receipt', 'native-results/legacy-runtime.json']);
+  assert.equal(legacy.legacyRuntimeReceipt, path.resolve('native-results/legacy-runtime.json'));
+  assert.equal(legacy.packageReceipt, null);
+  for (const args of [['--public-https'], ['--output'], ['--output', '--public-https'], ['--package-receipt', '--output'], ['--no-sandbox'], ['--output', 'one', '--output', 'two'], ['--legacy-runtime-receipt'], ['--legacy-runtime-receipt', '--output'], ['--legacy-runtime-receipt', 'one', '--legacy-runtime-receipt', 'two'], ['--legacy-runtime-receipt', 'one', '--package-receipt', 'two']]) {
     assert.throws(() => nativeOptions(args), /requires|incomplete|Repeated/);
   }
+});
+
+test('runtime transition evidence requires the actual admitted writer and both pinned readers', () => {
+  const { runtimeTransition } = require('../scripts/native-smoke.cjs');
+  const versions = version => ({ versions: { electron: version, chrome: 'recorded-native-version', node: 'recorded-native-version' } });
+  const writer = versions('44.11.3');
+  const readers = [versions('45.3.2'), versions('45.3.2')];
+  const transition = runtimeTransition(writer, readers, { version: '44.11.3' }, '45.3.2');
+  assert.equal(transition.crossVersion, true);
+  assert.deepEqual(transition.writer, writer.versions);
+  assert.deepEqual(transition.reader, readers[0].versions);
+  assert.deepEqual(transition.restart, readers[1].versions);
+  assert.equal(runtimeTransition(readers[0], readers, null, '45.3.2').crossVersion, false);
+  for (const [seed, phases, admitted] of [
+    [readers[0], readers, { version: '44.11.3' }],
+    [writer, [readers[0], writer], { version: '44.11.3' }],
+    [writer, [writer, readers[1]], { version: '44.11.3' }],
+    [writer, [readers[0]], { version: '44.11.3' }],
+    [writer, readers, null],
+    [{}, readers, { version: '44.11.3' }],
+  ]) assert.throws(() => runtimeTransition(seed, phases, admitted, '45.3.2'), /Observed writer, reader and restart versions/);
 });
 
 test('packaged CDP refuses remote, authenticated and unrelated debugging endpoints', () => {

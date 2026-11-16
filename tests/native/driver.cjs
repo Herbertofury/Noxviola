@@ -12,6 +12,7 @@ const { createIdentitySessionResolver, identityStoragePaths } = require('../../b
 const { DOWNLOAD } = require('./fixture-server.cjs');
 const { assertOnlySpellingChanged } = require('./preferences-evidence.cjs');
 const { createPageTools } = require('./page-tools.cjs');
+const { createExtensionStorage } = require('./extension-storage.cjs');
 const bridgeManifest = require('./fixtures/extension-bridge/manifest.json');
 const BRIDGE_CHECKS = ['chrome-callback-query', 'browser-promise-query', 'first-tab-event', 'canonical-tabs', 'native-message-ids', 'bookmark-service', 'cookie-host-and-identity', 'foreign-tab-denied', 'callback-last-error', 'promise-rejection', 'action-state', 'action-icons', 'cleanup'];
 const BRIDGE_ICON_STAGES = [
@@ -466,7 +467,8 @@ async function verifyLegacyStorage(view, identity) {
   assert.equal(seed.value, 'legacy-personal');
   assert.equal(seed.factory, 'fromPartition');
   assert.equal(seed.partition, 'persist:noxviola-identity-personal');
-  assert.equal(seed.versions.electron, process.versions.electron);
+  const expectedSeedVersion = context.legacyRuntime?.version || process.versions.electron;
+  assert.equal(seed.versions.electron, expectedSeedVersion, 'The seed must run under the exact independently admitted writer runtime');
   const original = identityStoragePaths(originalSessionData, identity).original;
   assert.equal(seed.storage.configured, original);
   assert.equal(seed.storage.original, original);
@@ -483,10 +485,12 @@ async function verifyLegacyStorage(view, identity) {
   } else assert.equal(current.resolved, seed.storage.resolved, 'The legacy directory must retain its exact canonical path');
   result.legacyUpgrade = {
     passed: true, identity, value: seed.value, source: seed.source,
+    seedVersions: seed.versions, readerVersions: result.versions,
+    crossVersion: seed.versions.electron !== process.versions.electron,
     fixtureBindingVerified: true, observedBeforeFirstFixtureStoreOverwrite: true,
     fromFactory: seed.factory, toFactory: current.factory,
     original: seed.storage, current, retainedStores: retained,
-    scope: 'The generated Personal identity web stores survive the original factory close and production reopen; no legacy extension or arbitrary-profile migration claim',
+    scope: 'Only the generated Personal identity web stores, written by the recorded seed runtime, are verified before overwrite in the recorded production reader runtime at the same physical directory. This does not qualify legacy extensions or arbitrary existing profiles.',
   };
 }
 async function extensionData(view, field = 'noxviolaExtension') {
@@ -1058,6 +1062,9 @@ async function firstLaunch() {
     await activate(expected.personalTab);
     await captureMetrics('native-host-bridge-enabled-and-functionally-verified');
   });
+  await check('native extension local and sync storage separate namespaces and identities, emit real changes and reject quota writes atomically', async () => {
+    expected.extensionStorage = await createExtensionStorage({ context, result, backgroundPages, partitionFor }).firstLaunch(expected);
+  });
   await check('actual library IPC edits, previews, cancels, merges and exports complete synthetic metadata', async () => {
     await window.webContents.executeJavaScript('window.__noxviolaNativeVault = null; void window.browser.onVault(value => { window.__noxviolaNativeVault = value; });');
     const libraryState = () => window.webContents.executeJavaScript('window.__noxviolaNativeVault');
@@ -1198,6 +1205,9 @@ async function secondLaunch() {
       assert.equal(grant.status, 'loaded');
     }
     await runBridgeFixture(expected, 'phase2-restarted');
+  });
+  await check('both native extension storage namespaces preserve complete isolated values after a normal process restart', async () => {
+    await createExtensionStorage({ context, result, backgroundPages, partitionFor }).afterRestart(expected, expected.extensionStorage);
   });
   await check('library edits and merged metadata survive a real process restart', async () => {
     await window.webContents.executeJavaScript('window.__noxviolaNativeVault = null; void window.browser.onVault(value => { window.__noxviolaNativeVault = value; });');

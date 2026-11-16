@@ -9,6 +9,7 @@ on:
       - 'tests/native/**'
       - 'tests/real-extension-harness.test.cjs'
       - 'scripts/native-smoke.cjs'
+      - 'scripts/setup-legacy-electron.cjs'
       - 'scripts/real-extension-smoke.cjs'
       - 'scripts/fetch-extension-corpus.cjs'
       - 'package*.json'

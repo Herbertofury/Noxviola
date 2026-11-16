@@ -34,6 +34,74 @@ function fixture(t,{permissions=['tabs','cookies','bookmarks','contextMenus','ac
 }
 function iconCodec(){return {createFromBuffer:png=>({isEmpty:()=>false,getSize:()=>pngDimensions(png),toPNG:()=>png})};}
 const imageData=color=>({width:1,height:1,data:new Uint8ClampedArray(color)});
+function senderFixture(t) {
+  const f=fixture(t),sources=new Map();
+  f.host.messageSource=nativeId=>sources.get(nativeId);
+  f.map=(direction,value,event=f.personal)=>{f.ipc.listeners(MAP_CHANNEL)[0](event,direction,value);return event.returnValue;};
+  f.document=({nativeId=404,index=0,type='window',owned=true,enroll=true,url='chrome-extension://'+EXT+'/popup.html'}={})=>{
+    const event=f.event(index);event.senderFrame.url=url;
+    Object.assign(event.sender,{id:nativeId,mainFrame:event.senderFrame,getType:()=>type});
+    const context=f.contexts.get(f.sessions[index]);
+    const source={contents:event.sender,owner:owned?{id:context.id,identity:context.identity,runtimeId:context.runtimeId,epoch:context.epoch,session:context.session,contents:event.sender}:null};
+    sources.set(nativeId,source);
+    if(enroll)assert.equal(f.map('enroll',undefined,event).ok,true);
+    return {event,source,details:{nativeId,frameId:0,senderId:EXT,senderUrl:url}};
+  };
+  return f;
+}
+test('message sender classification keeps canonical browser tabs and admits only native enrolled extension windows or backgrounds',t=>{
+  const f=senderFixture(t);
+  for(const options of [{nativeId:404},{nativeId:405,url:'chrome-extension://'+EXT+'/options.html'},{nativeId:406,type:'backgroundPage',owned:false}]){
+    const {details}=f.document(options);
+    assert.deepEqual(f.map('messageSender',details),{ok:true,value:{kind:'extension-document'}});
+    assert.equal(f.map('browserId',details.nativeId).ok,false,'Strict tab APIs must still reject an extension window.');
+  }
+  const canonical=f.document({nativeId:110});f.tabs.get(10).url=canonical.details.senderUrl;
+  assert.deepEqual(f.map('messageSender',canonical.details),{ok:true,value:{kind:'tab',id:10}},'An extension document in a canonical tab remains a tab.');
+  assert.deepEqual(f.map('nativeId',10),{ok:true,value:110});
+  assert.equal(f.map('messageSender',{nativeId:120,frameId:0,senderId:EXT,senderUrl:'chrome-extension://'+EXT+'/popup.html'}).ok,false);
+  assert.equal(f.mutations.length,0);
+});
+test('message sender ownership cannot be established by forged fields, unknown objects, other identities or child-frame containers',t=>{
+  const f=senderFixture(t),good=f.document();
+  const denied=details=>assert.equal(f.map('messageSender',details).ok,false);
+  denied({...good.details,nativeId:999});
+  denied({...good.details,senderId:OTHER});
+  denied({...good.details,senderUrl:'chrome-extension://'+EXT+'/different-document.html'});
+  denied({...good.details,identity:'work'});
+  for(const frameId of [undefined,-1,1,7])denied({...good.details,frameId});
+  const foreign=f.document({nativeId:407,index:1});denied(foreign.details);
+  const unowned=f.document({nativeId:408,owned:false});denied(unowned.details);
+  const unbound=f.document({nativeId:409,enroll:false});denied(unbound.details);
+  const previous=good.event.senderFrame.url;
+  for(const url of ['https://allowed.test/','chrome-extension://'+OTHER+'/popup.html','about:blank']){
+    good.event.senderFrame.url=url;denied({...good.details,senderUrl:url});
+  }
+  good.event.senderFrame.url=previous;
+  good.event.senderFrame.detached=true;denied(good.details);good.event.senderFrame.detached=false;
+  good.event.sender.isDestroyed=()=>true;denied(good.details);
+});
+test('message source enrollment rejects stale windows and draining backgrounds after disable or re-enable',t=>{
+  for(const kind of ['window','backgroundPage']){
+    const f=senderFixture(t),old=f.document({type:kind,owned:kind==='window'});
+    const oldReceiver=f.personal;assert.equal(f.map('enroll',undefined,oldReceiver).ok,true);
+    const prior=f.contexts.get(f.sessions[0]);f.contexts.set(f.sessions[0],{...prior,epoch:'epoch-2'});
+    const newReceiver=f.event();
+    assert.equal(f.map('messageSender',old.details,newReceiver).ok,false,'An old source frame must not adopt the new enrollment.');
+    const fresh=f.document({nativeId:405,type:kind,owned:kind==='window'});
+    assert.equal(f.map('messageSender',fresh.details,oldReceiver).ok,false,'An old recipient must not obtain a new-enrollment result.');
+    assert.deepEqual(f.map('messageSender',fresh.details,newReceiver),{ok:true,value:{kind:'extension-document'}});
+    f.revoke();assert.equal(f.map('messageSender',fresh.details,newReceiver).ok,false);
+  }
+});
+test('registered window ownership independently binds exact WebContents, package, identity, runtime, Session and epoch',t=>{
+  const f=senderFixture(t),{source,details}=f.document(),owner={...source.owner};
+  for(const [key,value] of [['contents',{...source.contents}],['id','other-package'],['identity','work'],['runtimeId',OTHER],['epoch','old-epoch'],['session',f.sessions[1]]]){
+    source.owner={...owner,[key]:value};assert.equal(f.map('messageSender',details).ok,false,key+' must match the current native enrollment.');
+  }
+  source.owner=owner;assert.equal(f.map('messageSender',details).ok,true);
+  source.contents.id=999;assert.equal(f.map('messageSender',details).ok,false);
+});
 test('permission queries use the authenticated identity grant and reject mutation, payload identity and revoked replies',async t=>{
   const f=fixture(t,{permissions:['tabs','storage','<all_urls>'],hosts:[]});
   f.contexts.get(f.sessions[0]).permissions.optional=['contextMenus'];

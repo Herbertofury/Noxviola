@@ -270,6 +270,11 @@ function extensionHost() {
     return value;
   }
   return {
+    messageSource:nativeId=>{
+      const contents=webContents.fromId(nativeId);
+      if(!contents||contents.isDestroyed())return null;
+      return {contents,owner:extensionWindows.get(BrowserWindow.fromWebContents(contents))||null};
+    },
     tabs:{
       list:identity=>tabs.filter(tab=>tab.identity===identity).map(tabDescriptor),
       get:(identity,id)=>tabDescriptor(runtimeTab(identity,id)),
@@ -346,9 +351,11 @@ function openExtensionURL(identity,runtimeId,url,kind='popup',id) {
   const allowed=new URL(url);
   if(!item||allowed.protocol!=='chrome-extension:'||allowed.hostname!==runtimeId||allowed.port||allowed.username||allowed.password)throw new Error('The extension page is not currently authorized in this identity.');
   id ||= item.id;
+  const partition=identitySession(identity),context=extensions.runtimeContext(partition,runtimeId);
+  if(!context||context.id!==id)throw new Error('The extension page has no current runtime enrollment.');
   const popup = new BrowserWindow({parent:win,title:'Noxviola extension',width:kind === 'popup' ? 460 : 900,height:kind === 'popup' ? 600 : 700,
-    webPreferences:{session:identitySession(identity),nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true}});
-  extensionWindows.set(popup,{id,identity}); popup.once('closed',()=>extensionWindows.delete(popup));
+    webPreferences:{session:partition,nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true}});
+  extensionWindows.set(popup,{id,identity,runtimeId,epoch:context.epoch,session:partition,contents:popup.webContents}); popup.once('closed',()=>extensionWindows.delete(popup));
   popup.webContents.setWindowOpenHandler(({url:target}) => { if (httpUrl(target)) eventAction(() => newTab(target,identity)); return {action:'deny'}; });
   const stayInExtension = (event,target) => {
     let parsed;

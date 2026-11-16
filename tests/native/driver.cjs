@@ -1162,10 +1162,16 @@ async function secondLaunch() {
     await activate(expected.spellcheckTab);
     await assertSpellcheck('disabled-after-real-process-restart', expected.spellcheckEnabled, [expected.personalIdentity, expected.secondIdentity, expected.spellcheckIdentity]);
     await command('settings');
-    const choice = await window.webContents.executeJavaScript(`(() => {
-      const field=document.getElementById('settings-form').elements.namedItem('spellcheckEnabled');
-      return {checked:field.checked,visible:Boolean(field.getClientRects().length),disabled:field.disabled};
-    })()`);
+    // The command receipt precedes publish()'s deferred state event. Observe
+    // the actual rendered control after the one open action; do not wait for
+    // a particular checked value or repeat the action to manufacture a pass.
+    const choice = await until(async () => {
+      const observed = await window.webContents.executeJavaScript(`(() => {
+        const field=document.getElementById('settings-form').elements.namedItem('spellcheckEnabled');
+        return {checked:field.checked,visible:Boolean(field.getClientRects().length),disabled:field.disabled};
+      })()`);
+      return observed.visible && !observed.disabled ? observed : null;
+    }, 'the restored spelling control is actually visible and enabled');
     assert.deepEqual(choice, { checked: false, visible: true, disabled: false });
     result.spellcheck.restoredControl = choice;
     await command('panel-close');

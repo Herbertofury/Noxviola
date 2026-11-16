@@ -8,16 +8,20 @@ const {webcrypto,createHash} = require('node:crypto');
 const source = fs.readFileSync(require.resolve('../browser/extension-api.preload.cjs'),'utf8');
 const EXT = 'a'.repeat(32);
 function nativeEvent() { const listeners = new Set();return {addListener:fn=>listeners.add(fn),removeListener:fn=>listeners.delete(fn),hasListener:fn=>listeners.has(fn),emit(...args){return [...listeners].map(fn=>fn(...args));}}; }
-function fixture({address='chrome-extension://'+EXT+'/popup.html',contextIsolated=true,invoke=async()=>({ok:true,value:undefined}),subscribe=()=>({ok:true})}={}) {
+function fixture({address='chrome-extension://'+EXT+'/popup.html',contextIsolated=true,hasDocument=true,invoke=async()=>({ok:true,value:undefined}),subscribe=()=>({ok:true}),map}={}) {
   const calls=[], mappings=[], subscriptions=[], nativeCalls=[], errors=[], contextBridgeCalls=[];
   const ipcRenderer=Object.assign(new EventEmitter(),{invoke:async(method,...args)=>{calls.push([method,...args]);return invoke(...args);},sendSync:(channel,direction,id)=>{
     if(channel==='noxviola-extension:subscription'){subscriptions.push([direction,id]);return subscribe(direction,id);}
-    mappings.push([direction,id]);return id===11?{ok:false,error:{message:'No native context'}}:{ok:true,value:direction==='nativeId'?id+100:id-100};
+    mappings.push([direction,id]);
+    if(map)return map(direction,id);
+    if(direction==='enroll')return {ok:true};
+    if(direction==='messageSender')return {ok:true,value:{kind:'tab',id:id.nativeId-100}};
+    return id===11?{ok:false,error:{message:'No native context'}}:{ok:true,value:direction==='nativeId'?id+100:id-100};
   }});
   const nativeRuntime={id:EXT,getManifest:()=>({permissions:['tabs','contextMenus']}),onMessage:nativeEvent(),onConnect:nativeEvent(),getURL:value=>'chrome-extension://'+EXT+'/'+value};
   const nativePort={name:'real-port',sender:{tab:{id:110,url:'https://allowed.test/'}},postMessage:value=>nativeCalls.push(['port.postMessage',value]),disconnect:()=>nativeCalls.push(['port.disconnect']),onMessage:nativeEvent(),onDisconnect:nativeEvent()};
   const main=vm.createContext({crypto:webcrypto,chrome:{runtime:nativeRuntime,tabs:{sendMessage:(...args)=>{nativeCalls.push(['sendMessage',...args]);if(typeof args.at(-1)==='function'){args.at(-1)('native reply');return;}return Promise.resolve('native reply');},executeScript:(id,details,callback)=>{nativeCalls.push(['tabs.executeScript',id,details]);callback(['actual native result']);},connect:(...args)=>{nativeCalls.push(['connect',...args]);return nativePort;}},scripting:{executeScript:details=>{nativeCalls.push(['executeScript',details]);return Promise.resolve([{result:true}]);}}},console:{error:error=>errors.push(error.message),log(){},warn(){}}});
-  main.location={href:address};main.URL=URL;
+  main.location={href:address};main.URL=URL;if(hasDocument)main.document={baseURI:address};
   let required=0;
   const contextBridge={exposeInMainWorld:(key,value)=>{assert.equal(contextIsolated,true,'Native contextBridge rejects non-isolated contexts.');contextBridgeCalls.push('expose');Object.defineProperty(main,key,{value,configurable:true});},executeInMainWorld:({func})=>{assert.equal(contextIsolated,true);contextBridgeCalls.push('execute');return vm.runInContext('('+func.toString()+')()',main);}};
   const executionContext=contextIsolated?vm.createContext({location:{href:address},console:main.console}):main;
@@ -88,7 +92,49 @@ test('native tab messaging and scripting translate stable IDs without creating l
   await f.chrome.scripting.executeScript({target:{tabId:10},func:()=>true});assert.equal(f.nativeCalls[1][1].target.tabId,110);
   assert.throws(()=>f.chrome.tabs.sendMessage(11,{hello:true}),/No native context/);assert.equal(f.nativeCalls.length,2);
   let sender;f.chrome.runtime.onMessage.addListener((_message,value)=>{sender=value;return true;});
-  assert.deepEqual(f.nativeRuntime.onMessage.emit('message',{tab:{id:110,url:'https://allowed.test/'}},()=>{}),[true]);assert.equal(sender.tab.id,10);
+  assert.deepEqual(f.nativeRuntime.onMessage.emit('message',{tab:{id:110,url:'https://allowed.test/'},frameId:7,documentId:'real-child-document'},()=>{}),[true]);
+  assert.equal(sender.tab.id,10);assert.equal(sender.tab.url,'https://allowed.test/');assert.equal(sender.frameId,7);assert.equal(sender.documentId,'real-child-document');
+});
+test('native extension-window messages omit only tab-only fields after authenticated classification and retain replies and Port semantics',async()=>{
+  for(const contextIsolated of [true,false]){
+    const f=fixture({contextIsolated,map:(direction)=>direction==='enroll'?{ok:true}:{ok:true,value:{kind:'extension-document'}}});
+    assert.deepEqual(f.mappings,[['enroll',undefined]]);
+    const original=Object.freeze({id:EXT,url:'chrome-extension://'+EXT+'/popup.html',origin:'chrome-extension://'+EXT,
+      documentId:'native-document-uuid',documentLifecycle:'active',frameId:0,tab:Object.freeze({id:404,title:'Actual popup'}),tlsChannelId:''});
+    let observed,response;
+    f.chrome.runtime.onMessage.addListener((_message,sender,reply)=>{observed=sender;reply({accepted:true});return true;});
+    assert.deepEqual(f.nativeRuntime.onMessage.emit('one message',original,value=>{response=value;}),[true]);
+    assert.equal(response.accepted,true);assert.equal(Object.hasOwn(observed,'tab'),false);assert.equal(Object.hasOwn(observed,'frameId'),false);
+    assert.deepEqual(JSON.parse(JSON.stringify(observed)),{id:EXT,url:original.url,origin:original.origin,documentId:original.documentId,documentLifecycle:'active',tlsChannelId:''});
+    assert.equal(original.tab.id,404);assert.equal(original.frameId,0);
+    assert.deepEqual(JSON.parse(JSON.stringify(f.mappings.at(-1))),['messageSender',{nativeId:404,frameId:0,senderId:EXT,senderUrl:original.url}]);
+    f.nativePort.sender=original;let port;
+    f.chrome.runtime.onConnect.addListener(value=>{port=value;return 'listener return';});
+    assert.deepEqual(f.nativeRuntime.onConnect.emit(f.nativePort),['listener return']);
+    assert.equal(Object.hasOwn(port.sender,'tab'),false);assert.equal(port.sender.documentId,original.documentId);
+    let disconnect;const listener=value=>{disconnect=value;};port.onDisconnect.addListener(listener);
+    f.nativePort.onDisconnect.emit(f.nativePort);assert.equal(disconnect,port);
+    port.onDisconnect.removeListener(listener);assert.equal(port.onDisconnect.hasListener(listener),false);
+    port.postMessage('reply');port.disconnect();assert.deepEqual(f.nativeCalls,[['port.postMessage','reply'],['port.disconnect']]);
+  }
+});
+test('native sender translation preserves existing no-tab objects and never converts failed or unknown classification into success',()=>{
+  const f=fixture({map:direction=>direction==='enroll'?{ok:true}:{ok:false,error:{code:'MESSAGE_SOURCE_UNAUTHENTICATED',message:'Unknown native source'}}});
+  let calls=0,received;f.chrome.runtime.onMessage.addListener((_message,sender)=>{calls++;received=sender;});
+  const noTab={id:EXT,url:'chrome-extension://'+EXT+'/worker.js',documentId:'native-worker'};
+  f.nativeRuntime.onMessage.emit('no tab',noTab,()=>{});assert.equal(received,noTab);assert.equal(f.mappings.length,1);
+  assert.throws(()=>f.nativeRuntime.onMessage.emit('forged tab',{...noTab,tab:{id:404},frameId:0},()=>{}),error=>error.code==='MESSAGE_SOURCE_UNAUTHENTICATED');
+  assert.equal(calls,1);
+  const invalid=fixture({map:direction=>direction==='enroll'?{ok:true}:{ok:true,value:null}});
+  invalid.chrome.runtime.onMessage.addListener(()=>assert.fail('Invalid source must not reach the extension listener.'));
+  assert.throws(()=>invalid.nativeRuntime.onMessage.emit('invalid',{tab:{id:404}},()=>{}),/classification is invalid/);
+});
+test('document enrollment fails closed before installing added APIs while a worker with no document keeps its existing path',()=>{
+  for(const contextIsolated of [true,false]){
+    assert.throws(()=>fixture({contextIsolated,map:()=>({ok:false,error:{message:'Previous enrollment'}})}),/Previous enrollment/);
+    const worker=fixture({contextIsolated,hasDocument:false,map:()=>assert.fail('A worker is not a native frame enrollment.')});
+    assert.equal(typeof worker.chrome.tabs.create,'function');assert.equal(worker.mappings.length,0);
+  }
 });
 test('native Port semantics retain functions and listener identities while translating sender tab IDs',()=>{
   const f=fixture(),port=f.chrome.tabs.connect(10,{name:'port'});assert.equal(port.sender.tab.id,10);assert.equal(f.nativeCalls[0][1],110);

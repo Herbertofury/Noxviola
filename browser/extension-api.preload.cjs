@@ -66,7 +66,18 @@
       hasListeners() { return !!this.listeners.size; }
     }
     const map = (direction,value) => unwrap(transport.map(direction,value));
-    const sender = value => !value?.tab ? value : {...value,tab:{...value.tab,id:map('browserId',value.tab.id)}};
+    // Native document enrollment is pinned before extension scripts can send
+    // messages. Workers without a document retain their existing native path.
+    if (typeof globalThis.document === 'object') map('enroll');
+    const sender = value => {
+      if (!value?.tab) return value;
+      const source = map('messageSender',{nativeId:value.tab.id,frameId:value.frameId,senderId:value.id,senderUrl:value.url});
+      if (source?.kind === 'tab' && Number.isSafeInteger(source.id) && source.id >= 0) return {...value,tab:{...value.tab,id:source.id}};
+      if (source?.kind !== 'extension-document') throw new Error('The native message source classification is invalid.');
+      // Chrome exposes tab and its frameId only for a browser-tab sender.
+      // Preserve every other native field and never substitute the active tab.
+      const result = {...value}; delete result.tab; delete result.frameId; return result;
+    };
     function nativeEvent(event,translate) {
       const wrappers = new Map();
       return {

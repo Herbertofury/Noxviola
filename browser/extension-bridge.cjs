@@ -76,6 +76,13 @@ class ExtensionBridge {
     this.mapId = (event, direction, value) => {
       try {
         const context = this.authenticate(event);
+        // Pin an actual native document to its enrollment before its first
+        // message. A draining old background must not adopt a later grant.
+        if (direction === 'enroll') { event.returnValue = {ok:true}; return; }
+        if (direction === 'messageSender') {
+          event.returnValue = {ok:true,value:this.messageSender(context,value)};
+          return;
+        }
         if (!['nativeId','browserId'].includes(direction) || typeof host.tabs[direction] !== 'function') reject('UNSUPPORTED_API','Native tab-ID translation is unavailable.');
         const mapped = host.tabs[direction](context.identity,id(value));
         if (!Number.isSafeInteger(mapped) || mapped < 0) reject('TAB_CONTEXT_UNAVAILABLE','The tab has no live native context in this identity.');
@@ -173,6 +180,41 @@ class ExtensionBridge {
   }
   current(context) { const now = this.manager.runtimeContext(context.session,context.runtimeId); return !this.disposed && now?.epoch === context.epoch; }
   requireCurrent(context) { if (!this.current(context)) reject('EXTENSION_REVOKED','The extension grant changed while this operation was running.'); }
+  messageSender(context,value) {
+    const details = keys(value,['nativeId','frameId','senderId','senderUrl']);
+    const nativeId = id(details.nativeId);
+    // Electron 45's MaybeGetTabInfo labels every WebContents as a tab. Keep
+    // canonical browser tabs first, including an extension document in a tab.
+    const browserId = this.host.tabs.browserId?.(context.identity,nativeId);
+    if (Number.isSafeInteger(browserId) && browserId >= 0) return {kind:'tab',id:browserId};
+    const source = this.host.messageSource?.(nativeId), contents = source?.contents;
+    if (!contents || contents.isDestroyed() || contents.id !== nativeId || contents.session !== context.session) {
+      reject('MESSAGE_SOURCE_UNAVAILABLE','The message source has no live native context in this identity.');
+    }
+    // A native tab describes the top-level container, not the actual child
+    // frame. Do not mistake web content inside an extension window for the
+    // window's own document; unsupported/unknown frames remain rejected.
+    if (details.frameId !== 0) reject('MESSAGE_FRAME_UNAVAILABLE','Only an authenticated extension main-frame message can omit its native tab.');
+    const frame = contents.mainFrame;
+    if (!frame || frame.detached || frame.isDestroyed?.()) reject('MESSAGE_SOURCE_UNAVAILABLE','The message source document is no longer available.');
+    const principal = extensionOrigin(frame.url), binding = this.bindings.get(frame);
+    const current = principal && this.manager.runtimeContext(contents.session,principal);
+    if (principal !== context.runtimeId || !current || current.id !== context.id || current.identity !== context.identity || current.epoch !== context.epoch ||
+        !binding || binding.session !== context.session || binding.runtimeId !== principal || binding.epoch !== current.epoch) {
+      reject('MESSAGE_SOURCE_UNAUTHENTICATED','The message source is not a current document of this extension enrollment.');
+    }
+    // Native sender fields may corroborate native ownership, never establish it.
+    if (details.senderId !== principal || details.senderUrl !== frame.url) reject('MESSAGE_SOURCE_MISMATCH','The message sender does not match its committed native document.');
+    const owner = source.owner;
+    if (owner) {
+      if (owner.contents !== contents || owner.id !== current.id || owner.identity !== current.identity || owner.runtimeId !== principal || owner.epoch !== current.epoch || owner.session !== contents.session) {
+        reject('MESSAGE_SOURCE_UNAUTHENTICATED','The extension window belongs to a different enrollment.');
+      }
+    } else if (contents.getType() !== 'backgroundPage') {
+      reject('MESSAGE_SOURCE_UNAUTHENTICATED','This native context is not an owned extension window or background document.');
+    }
+    return {kind:'extension-document'};
+  }
   permission(context,name) { if (!policy.hasPermission(context,name)) reject('PERMISSION_DENIED','The extension has no accepted '+name+' permission.'); }
   tab(context,tab) { return policy.tabFor(context,tab,(owner,value) => this.activeGrants.get(owner.identity+'\0'+owner.id)?.get(value.id) === this.origin(value.url)); }
   origin(address) { try { return new URL(address).origin; } catch { return null; } }

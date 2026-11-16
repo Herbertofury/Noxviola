@@ -15,7 +15,7 @@ const descriptor = require('./native/legacy-runtime.json');
 const sha256 = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 
 function temporary(t, prefix = 'noxviola-legacy-contract-') {
-  const directory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
+  const directory = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   return directory;
 }

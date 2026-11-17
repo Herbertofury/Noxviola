@@ -1,7 +1,9 @@
 """Operate one real native file picker belonging to the launched fixture PID.
 
 Windows: built-in UI Automation ValuePattern/InvokePattern. Linux: AT-SPI and,
-only when the location field is hidden, Ctrl+L sent to the exact owned X11 window.
+when the location field is hidden, Ctrl+L sent to the exact owned X11 window.
+If AT-SPI has no applications, a separately reported targeted X11 keyboard route
+uses the real GTK picker without claiming accessibility qualification.
 No global input, clipboard, dialog replacement, overwrite approval or app killing.
 English Windows/GTK fixture images are supported. Portals owned by another PID,
 ambiguous controls, unavailable accessibility and unsupported platforms fail closed.
@@ -73,6 +75,57 @@ def reveal_location(pid, title, deadline):
         raise RuntimeError("Owned picker changed before its location shortcut")
     run(["xdotool", "key", "--window", xid, "ctrl+l"])
     return xid
+
+
+def x11_picker(args, deadline):
+    """Native GTK keyboard route only when AT-SPI has no registered applications."""
+    def run(parts, check=True):
+        return subprocess.run(["xdotool", *parts], check=check, capture_output=True,
+                              text=True, timeout=max(.05, deadline-time.monotonic()))
+
+    matches = run(x11_search_arguments(args.pid, args.title)[1:], check=False)
+    if matches.returncode == 1 and not matches.stdout.strip():
+        return None
+    matches.check_returncode()
+    ids = matches.stdout.strip().splitlines()
+    if len(ids) != 1 or not ids[0].isdigit():
+        raise RuntimeError("Expected one exact owned X11 picker for keyboard route")
+    xid = ids[0]
+
+    def verify():
+        if time.monotonic() >= deadline:
+            raise TimeoutError("Owned X11 picker keyboard route timed out")
+        if (run(["getwindowpid", xid]).stdout.strip() != str(args.pid)
+                or run(["getwindowname", xid]).stdout.strip() != args.title):
+            raise RuntimeError("Owned X11 picker changed before keyboard input")
+        # Recheck uniqueness as well as the retained handle before each input.
+        current = run(x11_search_arguments(args.pid, args.title)[1:]).stdout.strip().splitlines()
+        if current != [xid]:
+            raise RuntimeError("Owned X11 picker became ambiguous before keyboard input")
+
+    if args.cancel:
+        verify()
+        run(["key", "--window", xid, "Escape"])
+    else:
+        verify()
+        run(["key", "--window", xid, "ctrl+l"])
+        verify()
+        run(["key", "--window", xid, "ctrl+a"])
+        verify()
+        run(["type", "--window", xid, "--delay", "0", "--", args.file])
+        verify()
+        run(["key", "--window", xid, "Return"])
+    while time.monotonic() < deadline:
+        current = run(x11_search_arguments(args.pid, args.title)[1:], check=False)
+        if current.returncode == 1 and not current.stdout.strip():
+            return {"pid": args.pid, "title": args.title, "action": "cancel" if args.cancel else "submit",
+                    "delivery": "X11 targeted GTK keyboard", "window": xid, "dialogDismissed": True,
+                    "accessibilityQualified": False, "accessibilityGap": "AT-SPI application registry empty"}
+        current.check_returncode()
+        if current.stdout.strip().splitlines() != [xid]:
+            raise RuntimeError("Owned picker changed during keyboard completion")
+        time.sleep(.05)
+    raise TimeoutError("Owned X11 picker did not dismiss; no secondary prompt or overwrite is approved")
 
 
 def linux_picker(args):
@@ -181,6 +234,11 @@ def linux_picker(args):
     diagnostics()
     picked = None
     while time.monotonic() < deadline:
+        desktop.clear_cache()
+        if desktop.get_child_count() == 0:
+            keyboard_result = x11_picker(args, deadline)
+            if keyboard_result:
+                return keyboard_result
         picked = owned()
         if picked:
             break
@@ -303,6 +361,20 @@ function Dialog {
   if ($found.Count -eq 1) { return $found[0] }
   return $null
 }
+function OwnedButtonDiagnostics($d) {
+  $condition = New-Object System.Windows.Automation.PropertyCondition($A::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button)
+  $raw = $d.FindAll($T::Descendants, $condition)
+  $buttons = New-Object System.Collections.ArrayList
+  $until = [DateTime]::UtcNow.AddMilliseconds(700)
+  for ($i=0; $i -lt $raw.Count -and $i -lt 32 -and [DateTime]::UtcNow -lt $until; $i++) {
+    $button = $raw[$i]
+    if ($button.Current.ProcessId -ne [int]$r.pid) { continue }
+    $name = [string]$button.Current.Name
+    if ($name.Length -gt 96) { $name=$name.Substring(0,96) }
+    [void]$buttons.Add(@{name=$name;pid=$button.Current.ProcessId;enabled=$button.Current.IsEnabled;offscreen=$button.Current.IsOffscreen})
+  }
+  [Console]::Error.WriteLine((@{diagnostic='owned-picker-buttons';pid=[int]$r.pid;rawCount=$raw.Count;buttons=@($buttons)} | ConvertTo-Json -Depth 5 -Compress))
+}
 function Descendants($d, $type) {
   $condition = New-Object System.Windows.Automation.PropertyCondition($A::ControlTypeProperty, $type)
   return @($d.FindAll($T::Descendants, $condition) | Where-Object { $_.Current.ProcessId -eq [int]$r.pid -and -not $_.Current.IsOffscreen -and $_.Current.IsEnabled })
@@ -340,7 +412,7 @@ while ([DateTime]::UtcNow -lt $deadline) {
   $names = if ($r.cancel) { @('Cancel') } else { @('Open','Save') }
   if ($firstActionCheck) { Phase 'before-button-enumeration' }
   $buttons = @(Descendants $d ([System.Windows.Automation.ControlType]::Button) | Where-Object { $_.Current.Name.Replace('&','') -in $names })
-  if ($firstActionCheck) { Phase 'after-button-enumeration'; $firstActionCheck=$false }
+  if ($firstActionCheck) { Phase 'after-button-enumeration'; OwnedButtonDiagnostics $d; $firstActionCheck=$false }
   if ($buttons.Count -gt 1) { throw 'Ambiguous native picker action' }
   if ($buttons.Count -eq 1) {$button=$buttons[0];break}
   Start-Sleep -Milliseconds 50

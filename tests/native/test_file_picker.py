@@ -5,6 +5,10 @@ from pathlib import Path
 import os
 import sys
 import unittest
+from unittest.mock import patch
+from types import SimpleNamespace
+import subprocess
+import time
 sys.dont_write_bytecode = True
 spec = importlib.util.spec_from_file_location("file_picker", Path(__file__).with_name("file-picker.py"))
 picker = importlib.util.module_from_spec(spec)
@@ -70,6 +74,56 @@ class FilePickerContracts(unittest.TestCase):
         for forbidden in ['"key"', 'set_text_contents', 'do_action']:
             self.assertNotIn(forbidden, block)
 
+    def test_x11_fallback_targets_only_verified_owned_window(self):
+        for cancel in (True, False):
+            commands = []
+            submitted = False
+            args = SimpleNamespace(pid=314, title='Exact picker', file=os.path.abspath('fixture.noxlibrary'), cancel=cancel)
+            def run(cmd, **kwargs):
+                nonlocal submitted
+                commands.append(cmd)
+                if cmd[1] == 'search':
+                    return subprocess.CompletedProcess(cmd, 1 if submitted else 0, '' if submitted else '123\n', '')
+                if cmd[1] == 'getwindowpid':
+                    return subprocess.CompletedProcess(cmd, 0, '314\n', '')
+                if cmd[1] == 'getwindowname':
+                    return subprocess.CompletedProcess(cmd, 0, 'Exact picker\n', '')
+                self.assertEqual(cmd[2:4], ['--window', '123'])
+                if cmd[-1] in ('Escape', 'Return'): submitted = True
+                return subprocess.CompletedProcess(cmd, 0, '', '')
+            with patch.object(picker.subprocess, 'run', side_effect=run):
+                result = picker.x11_picker(args, time.monotonic()+10)
+            self.assertFalse(result['accessibilityQualified'])
+            self.assertTrue(result['dialogDismissed'])
+            inputs = [cmd for cmd in commands if cmd[1] in ('key', 'type')]
+            self.assertEqual(len(inputs), 1 if cancel else 4)
+            for command in inputs:
+                index = commands.index(command)
+                self.assertEqual([cmd[1] for cmd in commands[index-3:index]], ['getwindowpid','getwindowname','search'])
+
+    def test_x11_fallback_rejects_changed_owner_before_input(self):
+        commands = []
+        def run(cmd, **kwargs):
+            commands.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0, '123\n' if cmd[1] == 'search' else '999\n', '')
+        args = SimpleNamespace(pid=314, title='Exact picker', file=None, cancel=True)
+        with patch.object(picker.subprocess, 'run', side_effect=run):
+            with self.assertRaisesRegex(RuntimeError, 'changed before'):
+                picker.x11_picker(args, time.monotonic()+10)
+        self.assertFalse(any(cmd[1] in ('key','type') for cmd in commands))
+        source = inspect.getsource(picker.linux_picker)
+        self.assertIn('if desktop.get_child_count() == 0:', source)
+
+    def test_windows_button_diagnostics_are_owned_readonly_and_bounded(self):
+        block = picker.WINDOWS_SCRIPT.split('function OwnedButtonDiagnostics($d) {', 1)[1].split('function Descendants', 1)[0]
+        self.assertIn('$i -lt 32', block)
+        self.assertIn('AddMilliseconds(700)', block)
+        self.assertLess(block.index('ProcessId -ne [int]$r.pid'), block.index('$button.Current.Name'))
+        self.assertIn('IsEnabled', block)
+        self.assertIn('IsOffscreen', block)
+        for forbidden in ['Invoke()', 'SetValue(', 'SendKeys', 'SendInput']:
+            self.assertNotIn(forbidden, block)
+
     def test_windows_phase_diagnostics_bracket_native_operations(self):
         script = picker.WINDOWS_SCRIPT
         for before, operation, after in [
@@ -80,7 +134,7 @@ class FilePickerContracts(unittest.TestCase):
             self.assertLess(script.index(operation), script.index(after))
 
     def test_windows_nested_picker_keeps_exact_owner_and_title(self):
-        block = picker.WINDOWS_SCRIPT.split('function Dialog {', 1)[1].split('function Descendants', 1)[0]
+        block = picker.WINDOWS_SCRIPT.split('function Dialog {', 1)[1].split('function OwnedButtonDiagnostics', 1)[0]
         self.assertIn('$A::ProcessIdProperty, [int]$r.pid', block)
         self.assertIn('[System.Windows.Automation.ControlType]::Window', block)
         self.assertIn('$element.Current.Name -ceq [string]$r.title', block)

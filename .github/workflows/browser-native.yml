@@ -46,6 +46,9 @@ jobs:
         run: npm run setup:electron
       - name: Verify installed Electron files without launching the engine
         run: npm run check:electron
+      - run: rustup toolchain install stable --profile minimal
+      - run: npm run build:collections
+      - run: cargo test --locked --manifest-path native/tab-collections/Cargo.toml
       - run: npm test
       - run: npm run check
       - name: Verify the official previous runtime for the generated upgrade seed

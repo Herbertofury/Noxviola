@@ -79,7 +79,7 @@ test('actual driver click waits for an asynchronous production panel update and 
   // HTML, renderer state transition, control and command handler execute.
   window.HTMLElement.prototype.getClientRects = function () { return this.closest('[hidden]') ? [] : [{}]; };
   window.HTMLElement.prototype.scrollIntoView = function () {};
-  window.eval(renderer);
+  window.eval(fs.readFileSync(path.join(__dirname,'../browser/tab-collections-ui.js'),'utf8')); window.eval(renderer);
   await new Promise(resolve => setImmediate(resolve));
   window.document.querySelector('nav button[data-command="extensions"]').click();
   const contents = { executeJavaScript: async code => window.eval(code) };

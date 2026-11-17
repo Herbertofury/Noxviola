@@ -5,3 +5,6 @@ browser-session*.json
 private-accounts*.json
 dist-preview/
 native-results/
+
+/browser/bin/
+/native/tab-collections/target/

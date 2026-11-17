@@ -10,6 +10,7 @@ const preferenceStore = require('./preferences.cjs');
 const {ResourceMonitor} = require('./resources.cjs');
 const {SpellcheckService} = require('./spellcheck.cjs');
 const {HistoryService} = require('./history.cjs');
+const {TabCollections} = require('./tab-collections.cjs');
 const {FollowService} = require('./follows.cjs');
 const {BookmarkService,rootIds:bookmarkRootIds} = require('./bookmarks.cjs');
 const {WorkspaceService} = require('./workspaces.cjs');
@@ -38,6 +39,7 @@ let vaultFile, vaultDocument = {version:1, items:[]}, vaultError = '', vaultReco
 let accountFile, accounts = [], accountError = '', accountRecovery = null;
 let permissionOpening = null, extensionBusy = false;
 let resolveIdentitySession, history, bookmarks, workspaces, follows, followTimer, resourceMonitor, extensionBridge, spellcheck;
+let collections;
 let activeWorkspaceId = 'default', nextRuntimeTabId = 1, preferencePreview = null;
 let sidebarProgress=0,sidebarRailProgress=0,sidebarTimer=null;
 const runtimeTabs = new Map(), nativeTabs = new Map(), sessionTargets = new Map(), workspaceLastTabs = new Map(), browserEvents = new EventEmitter();
@@ -214,6 +216,7 @@ function ensureView(tab) {
   wc.on('will-navigate', (event,url) => { if (!tabNavigationAllowed(tab,url)) event.preventDefault(); });
   wc.on('will-redirect', (event,url) => { if (!tabNavigationAllowed(tab,url)) event.preventDefault(); });
   wc.on('did-start-navigation', (_event,_url,isSameDocument,isMainFrame) => {
+    if(isMainFrame)tab.collectionNavigationRevision=(tab.collectionNavigationRevision||0)+1;
     if (isMainFrame && !isSameDocument) {tab.faviconRevision++;if(tab.favicon){tab.favicon='';publish(false);}}
   });
   wc.on('page-favicon-updated', (_event, urls) => {
@@ -522,7 +525,7 @@ function buildMenu() {
   const invoke=(name,value)=>runBrowserOperation(name,value).catch(error=>{notice(error.message);layout();publish(false);});
   const entries=preferenceStore.shortcutList(preferences).map(item=>({label:item.label,...(item.accelerator?{accelerator:item.accelerator}:{}),click:()=>invoke(item.id==='close'&&panel?'panel-close':item.id,item.id==='close'?activeId:undefined)}));
   Menu.setApplicationMenu(Menu.buildFromTemplate([{label:'Browser',submenu:[...entries,{type:'separator'},
-    {label:'Following · creators and projects',click:()=>invoke('following')},{label:'Workspaces and tab groups',click:()=>invoke('workspaces')},{label:'Save page as PDF',click:()=>invoke('save-pdf')},
+    {label:'Tab collections',click:()=>invoke('collections')},{label:'Following · creators and projects',click:()=>invoke('following')},{label:'Workspaces and tab groups',click:()=>invoke('workspaces')},{label:'Save page as PDF',click:()=>invoke('save-pdf')},
     {label:'Save visible screenshot',click:()=>invoke('save-screenshot')},{label:'Resource monitor',click:()=>invoke('resources')},
     {label:'Customize',click:()=>invoke('settings')},{type:'separator'},{role:'quit'}]}]));
 }
@@ -530,6 +533,31 @@ async function perform(name, value) {
   const wc = active()?.view?.webContents;
   switch (name) {
     case 'state': return stateView();
+    case 'collection-query': {
+      if(!value||!['groups','tabs','update','health'].includes(value.op)||!profiles.some(p=>p.id===value.identity))throw new Error('Invalid collection request.');
+      return collections.request(value);
+    }
+    case 'collection-save': {
+      if(value?.identity!==currentIdentity)throw new Error('Identity changed. Review the collection before saving.');
+      const identity=currentIdentity,selected=visibleTabs().filter(t=>t.identity===identity&&httpUrl(t.url)&&(!t.saved.pinned||value.includePinned===true));
+      const checkpoints=new Map(selected.map(t=>[t.id,{revision:t.collectionNavigationRevision||0,saved:JSON.stringify(savedTab(t))}]));
+      const records=selected.map(t=>({id:t.id,url:t.url,title:t.title||t.url,pinned:!!t.saved.pinned}));
+      const result=await collections.request({op:'save',identity,title:String(value.title||'Saved tabs'),created:Date.now(),tabs:records});
+      let closedCount=0;
+      if(value.close===true&&!closing)for(const old of records){const tab=tabs.find(t=>t.id===old.id);if(tab&&tab.identity===identity&&tab.url===old.url&&JSON.stringify(savedTab(tab))===checkpoints.get(old.id).saved&&(tab.collectionNavigationRevision||0)===checkpoints.get(old.id).revision){closeTab(tab.id);closedCount++;}}
+      return {...result,closed:closedCount};
+    }
+    case 'collection-open': {
+      if(currentIdentity!==value?.identity||!profiles.some(p=>p.id===value?.identity))throw new Error('Collection identity changed. Review before opening.');
+      const item=await collections.request({op:'get',identity:value.identity,id:value.id});
+      if(currentIdentity!==value.identity)throw new Error('Identity changed while loading the saved tab.');
+      return newTab(item.url,value.identity,{id:crypto.randomUUID(),url:item.url,title:item.title,pinned:item.pinned,identity:value.identity,workspaceId:activeWorkspaceId});
+    }
+    case 'collection-import': {
+      if(value?.identity!==currentIdentity||typeof value.text!=='string')throw new Error('Review the import identity.');
+      const records=value.text.split(/\r?\n/).filter(line=>line.trim()).map(line=>{const split=line.indexOf(' | ');return {url:(split<0?line:line.slice(0,split)).trim(),title:(split<0?line:line.slice(split+3)).trim()};});
+      return collections.request({op:'save',identity:currentIdentity,title:String(value.title||'Imported tabs'),created:Date.now(),tabs:records});
+    }
     case 'tab-preview': if (value?.open) {void tabPreview.show(String(value.id||''),value.position).catch(()=>notice('Tab preview is unavailable.'));} else tabPreview.hide(); break;
     case 'search-tabs': {const width=win.getContentSize()[0],right=preferences.tabSearchPosition==='right',anchor=value?.anchor||{x:right?width-180:38,y:0,width:28,height:34,align:right?'right':'left'};tabPreview.hide();tabSearch.show(anchor);break;}
     case 'sidebar-toggle':changeSidebar({sidebarVisible:!preferences.sidebarVisible});break;
@@ -631,7 +659,7 @@ async function perform(name, value) {
     case 'settings-import-apply':if(!preferencePreview)throw new Error('Review a preference preset first.');if(preferencePreview.baseline!==JSON.stringify(preferences))throw new Error('Preferences changed after this review. Inspect the preset again.');await savePreferences(preferencePreview.preferences);send('settings-preview',null);break;
     case 'settings-import-cancel':preferencePreview=null;send('settings-preview',null);break;
     case 'save-session': writer.request(snapshot()); await writer.flush(); notice('Session saved.'); break;
-    case 'following':case 'tools':case 'vault':case 'accounts':case 'extensions':case 'downloads':case 'permissions':case 'settings':case 'capabilities':case 'bookmarks':case 'history':case 'workspaces':case 'resources':setPanel(name);break;
+    case 'collections':case 'following':case 'tools':case 'vault':case 'accounts':case 'extensions':case 'downloads':case 'permissions':case 'settings':case 'capabilities':case 'bookmarks':case 'history':case 'workspaces':case 'resources':setPanel(name);break;
     case 'resource-sample':return resourceMonitor.sample();
     case 'history-query':return history.query(currentIdentity,value||{});
     case 'history-settings':{const {identity=currentIdentity,...changes}=value||{};history.configure(identity,changes);publishHistory();break;}
@@ -807,7 +835,7 @@ async function requestClose() {
   }
   closeExtensionWindows();sidebarWeb.destroy();
   try { if (!extensionError) await extensions.dispose(); } catch (error) { notice(error.message); }
-  try{await extensionBridge?.dispose();}catch(error){notice(`Extension host cleanup: ${error.message}`);}clearInterval(followTimer);follows?.dispose();history?.dispose();bookmarks?.dispose();workspaces?.dispose();
+  try{await extensionBridge?.dispose();}catch(error){notice(`Extension host cleanup: ${error.message}`);}collections?.close();clearInterval(followTimer);follows?.dispose();history?.dispose();bookmarks?.dispose();workspaces?.dispose();
   permissions.dispose(); downloads.dispose(); await writer.close().catch(() => {});
   allowClose = true; win.close();
 }
@@ -831,6 +859,7 @@ async function start() {
   vaultFile = path.join(dataDirectory,'private-vault.json'); accountFile = path.join(dataDirectory,'private-accounts.json');
   try { const opened = vaultStore.inspect(vaultFile); if (opened.status === 'recovery') {vaultRecovery = opened;vaultError = 'The library needs explicit recovery before editing.';} else vaultDocument = opened.value; } catch (error) {vaultError = error.message;}
   try { const opened = accountStore.inspect(accountFile); if (opened.status === 'recovery') {accountRecovery = opened;accountError = 'The account inventory needs explicit recovery before editing.';} else accounts = opened.value.accounts; } catch (error) {accountError = error.message;}
+  collections=new TabCollections({file:path.join(dataDirectory,'tab-collections.sqlite')});
   follows=new FollowService({file:path.join(dataDirectory,'browser-follows.json'),getIdentities:()=>profiles.map(profile=>profile.id),onChange:publishFollows});
   history=new HistoryService({file:path.join(dataDirectory,'browser-history.json'),getIdentities:()=>profiles.map(profile=>profile.id),onChange:publishHistory});
   bookmarks=new BookmarkService({file:path.join(dataDirectory,'browser-bookmarks.json'),getIdentities:()=>profiles.map(profile=>profile.id),onChange:publishBookmarks});

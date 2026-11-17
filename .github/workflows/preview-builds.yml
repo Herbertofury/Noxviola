@@ -21,6 +21,9 @@ jobs:
         with:
           node-version: '22'
       - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: rustup toolchain install stable --profile minimal
+      - run: npm run build:collections
+      - run: cargo test --locked --manifest-path native/tab-collections/Cargo.toml
       - run: npm test
       - run: npm run check
       - run: npm run package:preview

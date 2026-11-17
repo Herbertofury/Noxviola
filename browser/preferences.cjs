@@ -35,7 +35,7 @@ const ENUMS = Object.freeze({
   sidebarSide:['left','right'],
 });
 const DEFAULTS = Object.freeze({searchEngine:'duckduckgo',tabLayout:'horizontal',theme:'dark',accent:'violet',density:'comfortable',tabSearchPosition:'left',tabSearchStyle:'detailed',
-  sidebarVisible:true,sidebarExpanded:false,sidebarRailExpanded:false,sidebarShowWorkspaces:true,sidebarSide:'left',sidebarWidth:320,sidebarActive:'bookmarks',sidebarApps:[],sidebarTools:[{id:'tabs',visible:true},{id:'bookmarks',visible:true},{id:'history',visible:true},{id:'downloads',visible:true}],
+  sidebarVisible:true,sidebarExpanded:false,sidebarRailExpanded:false,sidebarShowWorkspaces:true,sidebarSide:'left',sidebarWidth:320,sidebarActive:'bookmarks',sidebarApps:[],sidebarTools:[{id:'tabs',visible:true},{id:'collections',visible:true},{id:'bookmarks',visible:true},{id:'history',visible:true},{id:'downloads',visible:true}],
   homePage:'about:blank',customSearchURL:'https://duckduckgo.com/?q={searchTerms}',showBookmarksBar:false,spellcheckEnabled:true,
   toolbar:{library:true,extensions:true,split:true,home:true},shortcuts:{}});
 const PREFERENCE_KEYS = Object.freeze(Object.keys(DEFAULTS));
@@ -106,11 +106,12 @@ function preferences(raw={}, {strict=true,platform=process.platform}={}) {
   if(result.sidebarTools===undefined)result.sidebarTools=DEFAULTS.sidebarTools.map(item=>({...item}));
   if(!Array.isArray(result.sidebarTools))fail('Saved sidebar tools must be an array.');
   const toolIds=new Set();result.sidebarTools=result.sidebarTools.map(item=>{
-    if(!object(item)||!['tabs','bookmarks','history','downloads'].includes(item.id)||toolIds.has(item.id)||typeof item.visible!=='boolean')fail('A saved sidebar tool is invalid; its original data was preserved.');
+    if(!object(item)||!['tabs','collections','bookmarks','history','downloads'].includes(item.id)||toolIds.has(item.id)||typeof item.visible!=='boolean')fail('A saved sidebar tool is invalid; its original data was preserved.');
     toolIds.add(item.id);return {...item};
   });
+  if(!toolIds.has('collections'))result.sidebarTools.push({id:'collections',visible:true});
   if(result.sidebarActive===undefined)result.sidebarActive=DEFAULTS.sidebarActive;
-  if(typeof result.sidebarActive!=='string'||(!['bookmarks','history','downloads','tabs'].includes(result.sidebarActive)&&!(result.sidebarActive.startsWith('app:')&&appIds.has(result.sidebarActive.slice(4)))))fail('The saved sidebar panel is not available; its original data was preserved.');
+  if(typeof result.sidebarActive!=='string'||(!['bookmarks','history','downloads','tabs','collections'].includes(result.sidebarActive)&&!(result.sidebarActive.startsWith('app:')&&appIds.has(result.sidebarActive.slice(4)))))fail('The saved sidebar panel is not available; its original data was preserved.');
   for(const name of ['toolbar','shortcuts'])if(result[name]!==undefined&&!object(result[name]))fail(`Saved ${name} preferences must be an object.`);
   result.toolbar={...DEFAULTS.toolbar,...result.toolbar};
   for(const name of Object.keys(DEFAULTS.toolbar))if(typeof result.toolbar[name]!=='boolean')fail('Toolbar visibility settings must be true or false.');

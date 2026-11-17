@@ -71,6 +71,7 @@ Search by capability ID or name. The application exposes the same JSON in its ex
 | bookmark-tree | Bookmark folders and tags | library | partial | Extend the passing nested create/edit/move/restart workflow with native recovery/failure cases, complete tag controls and HTML/JSON interchange over the same canonical store. |
 | reading-list | Read-later tracking | library | absent | Add independent reading state and supported offline capture only when requested. |
 | collections-legacy | Rich research collections (historical Edge variant) | library | partial | Improve the existing vault for rich references; record Edge Collections as retired from149. |
+| premium-tab-collections | Premium OneTab-style sidebar and full library | library | partial | Complete full parity and native acceptance in TAB-COLLECTIONS.md; initial Rust SQLite slice is not completion. |
 | pinboards | Visual pinboards | library | absent | Provide a board view of the existing vault rather than a second store. |
 | history-manager | Searchable browsing history | library | partial | Extend the passing commit/query/restart workflow with native range/delete/clear/recovery, explicit retention behavior and measured large-history cost. |
 | account-atlas | Metadata-only account atlas | library | implemented-unverified | Preserve the existing metadata boundary and separately evaluate credential-manager integration. |

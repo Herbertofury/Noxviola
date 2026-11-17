@@ -4174,6 +4174,14 @@
       "accessedAt": "2026-11-16",
       "kind": "primary-api-documentation",
       "versionScope": "The query reports the user-controlled per-extension Allow access to File URLs setting. It does not grant file access, replace host-pattern admission or establish arbitrary-file access."
+    },
+    {
+      "id": "tab-collections-scope",
+      "url": "../docs/browser/TAB-COLLECTIONS.md",
+      "title": "Tab collection parity scope and measured implementation",
+      "accessedAt": "2026-11-17",
+      "kind": "local-source-and-test-evidence",
+      "versionScope": "Initial Rust SQLite implementation, incomplete parity"
     }
   ],
   "capabilities": [
@@ -28398,6 +28406,71 @@
       "nextAction": "Compare explicit samples with the actual process tree on both platforms and measure overhead before adding controls or performance claims.",
       "priority": "P1",
       "updatedAt": "2026-11-15"
+    },
+    {
+      "id": "premium-tab-collections",
+      "name": "Premium OneTab-style sidebar and full library",
+      "category": "library",
+      "behavior": "Collect and restore tabs without eagerly loading a massive saved library; complete OneTab/comparable parity remains the target.",
+      "variants": [],
+      "sourceIds": [
+        "tab-collections-scope"
+      ],
+      "configuration": {
+        "knownOptions": [
+          "save tabs",
+          "save then close",
+          "include pinned",
+          "identity-scoped groups",
+          "token-prefix search",
+          "star",
+          "lock",
+          "archive and unarchive",
+          "OneTab text import"
+        ],
+        "coverage": "partial",
+        "remaining": "Full parity checklist and native acceptance in TAB-COLLECTIONS.md"
+      },
+      "dependencies": [
+        "bundled Rust SQLite helper",
+        "trusted browser shell IPC"
+      ],
+      "noxviola": {
+        "status": "partial",
+        "codeOwner": "Rust tab collections and browser adapters",
+        "paths": [
+          "native/tab-collections/src/main.rs",
+          "browser/tab-collections.cjs",
+          "browser/tab-collections-ui.js",
+          "browser/main.cjs"
+        ],
+        "integrationStrategy": "Independent Rust helper with indexed pages and thin existing-shell adapters.",
+        "note": "URL/title/pin archive only; no full session-context or all-feature parity claim."
+      },
+      "performance": "Synthetic million-tab receipt, bounded page/IPC/DOM; not unlimited-scale or native UX qualification.",
+      "privacy": "Local-only plaintext URL metadata, identity isolation and Unix private permissions; no silent sharing or remote fetching.",
+      "acceptanceTests": [
+        {
+          "id": "tab-collections-native-parity",
+          "procedure": "Exercise native sidebar/fullview, durable capture and large-library restore; complete the documented parity matrix.",
+          "result": "not-run",
+          "evidence": []
+        }
+      ],
+      "evidence": {
+        "level": "source-and-portable-helper-tests",
+        "referenceSources": [
+          "tab-collections-scope"
+        ],
+        "installedBrowserAudit": "not-run",
+        "nativeRuntime": "blocked-locally-no-display"
+      },
+      "improvements": [
+        "Complete uncapped streaming imports and cancelable lazy bulk restore without expanding renderer memory with the whole library."
+      ],
+      "nextAction": "Complete remaining parity and hosted/native acceptance; do not close goal on this initial slice.",
+      "priority": "P1",
+      "updatedAt": "2026-11-17"
     }
   ],
   "discoveryQueue": [

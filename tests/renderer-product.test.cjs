@@ -55,7 +55,7 @@ async function harness(t, {initial = state(), command = async () => undefined} =
     return copy(name === 'state' ? initial : await command(name,copy(value)));
   }};
   for (const name of subscriptions) api[name] = listener => { listeners.set(name,listener); return () => listeners.delete(name); };
-  window.browser = Object.freeze(api); window.eval(source); await tick();
+  window.browser = Object.freeze(api); window.eval(fs.readFileSync(path.join(__dirname,'../browser/tab-collections-ui.js'),'utf8')); window.eval(source); await tick();
   t.after(() => { window.close(); assert.deepEqual(errors,[],'production renderer must not throw DOM errors'); });
   let current = initial;
   function emit(name, value) {
@@ -329,7 +329,7 @@ test('DOM product: preference controls preserve a dirty draft and apply committe
   assert.equal(h.document.body.dataset.theme,'dark','typing a draft does not claim a saved theme');
   h.submit(form); await tick();
   const expected = {searchEngine:'custom',tabLayout:'vertical',tabSearchPosition:'right',tabSearchStyle:'compact',theme:'light',accent:'teal',density:'compact',
-    sidebarVisible:true,sidebarRailExpanded:true,sidebarShowWorkspaces:false,sidebarSide:'left',sidebarWidth:320,sidebarApps:[],sidebarTools:[{id:'tabs',visible:true},{id:'bookmarks',visible:true},{id:'history',visible:true},{id:'downloads',visible:true}],
+    sidebarVisible:true,sidebarRailExpanded:true,sidebarShowWorkspaces:false,sidebarSide:'left',sidebarWidth:320,sidebarApps:[],sidebarTools:[{id:'tabs',visible:true},{id:'collections',visible:true},{id:'bookmarks',visible:true},{id:'history',visible:true},{id:'downloads',visible:true}],
     homePage:'https://home.example/',customSearchURL:'https://search.example/?q={searchTerms}',showBookmarksBar:true,spellcheckEnabled:false,
     toolbar:{home:false,library:true,extensions:false,split:true},shortcuts:{new:'Ctrl+Shift+N','focus-address':''}};
   assert.deepEqual(h.calls.find(call => call.name === 'settings-save').value,expected);

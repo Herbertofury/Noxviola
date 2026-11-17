@@ -2923,7 +2923,7 @@
     ],
     "sidebarCheckpoint": {
       "date": "2026-11-16",
-      "scope": "Partial sidebar foundation: launcher and panel state, position, width, built-in tabs/bookmarks/history/downloads, optional user-supplied websites, and selected identity sessions. Full Opera GX and Firefox sidebar parity remains open.",
+      "scope": "Partial sidebar implementation: saved launcher and panel state, position, width, pinning, workspaces, browser panels, identity-scoped account metadata, manager shortcuts and user-supplied websites. Searchable settings and tab context actions are implemented. Full Opera GX and Firefox sidebar parity remains open.",
       "referenceEvidence": "docs/browser/SIDEBAR-REFERENCE-2026-11-16.md",
       "nativeEvidence": "https://drive.google.com/file/d/1wRPy5HzD2U_UGnAroIL99lr_pRFt-3-z/view",
       "limitations": [
@@ -14556,7 +14556,7 @@
           "browser/sidebar-web-panel.cjs"
         ],
         "integrationStrategy": "Use canonical services and existing durable storage; keep independent preferences and identity ownership explicit, preserve unknown metadata and require explicit recovery.",
-        "note": "A configurable sidebar launcher and resizable left/right panel now coexist with vertical tabs and split views. Full toolbar/sidebar arrangements, drag reordering across categories, hover modes and accessibility acceptance remain open."
+        "note": "A configurable launcher and resizable panel coexist with vertical tabs and nested split panes. Identity-scoped account metadata, canonical manager shortcuts, persistent pin behavior, reference Firefox timing, and searchable categorized settings have synthetic native tests. Full toolbar/sidebar arrangements, drag reordering across categories, hover modes, password management, extension sidebars and accessibility acceptance remain open."
       },
       "performance": "Disabled modules must create no ongoing work; pause decorative media when hidden.",
       "privacy": "Keep customization local; downloaded assets require provenance and permission.",

@@ -35,7 +35,7 @@ const ENUMS = Object.freeze({
   sidebarSide:['left','right'],
 });
 const DEFAULTS = Object.freeze({searchEngine:'duckduckgo',tabLayout:'horizontal',theme:'dark',accent:'violet',density:'comfortable',tabSearchPosition:'left',tabSearchStyle:'detailed',
-  sidebarVisible:true,sidebarExpanded:false,sidebarPanelPinned:true,sidebarRailExpanded:false,sidebarShowWorkspaces:true,sidebarSide:'left',sidebarWidth:320,sidebarActive:'bookmarks',sidebarApps:[],sidebarTools:[{id:'tabs',visible:true},{id:'bookmarks',visible:true},{id:'history',visible:true},{id:'downloads',visible:true},{id:'accounts',visible:true}],
+  sidebarVisible:true,sidebarExpanded:false,sidebarPanelPinned:true,sidebarRailExpanded:false,sidebarShowWorkspaces:true,sidebarSide:'left',sidebarWidth:320,sidebarActive:'bookmarks',sidebarApps:[],sidebarTools:[{id:'tabs',visible:true},{id:'bookmarks',visible:true},{id:'history',visible:true},{id:'downloads',visible:true},{id:'accounts',visible:true},{id:'extensions',visible:true},{id:'settings',visible:true},{id:'vault',visible:true},{id:'following',visible:false},{id:'resources',visible:false},{id:'start',visible:false}],
   homePage:'about:blank',customSearchURL:'https://duckduckgo.com/?q={searchTerms}',showBookmarksBar:false,spellcheckEnabled:true,
   toolbar:{library:true,extensions:true,split:true,home:true},shortcuts:{}});
 const PREFERENCE_KEYS = Object.freeze(Object.keys(DEFAULTS));
@@ -106,10 +106,10 @@ function preferences(raw={}, {strict=true,platform=process.platform}={}) {
   if(result.sidebarTools===undefined)result.sidebarTools=DEFAULTS.sidebarTools.map(item=>({...item}));
   if(!Array.isArray(result.sidebarTools))fail('Saved sidebar tools must be an array.');
   const toolIds=new Set();result.sidebarTools=result.sidebarTools.map(item=>{
-    if(!object(item)||!['tabs','bookmarks','history','downloads','accounts'].includes(item.id)||toolIds.has(item.id)||typeof item.visible!=='boolean')fail('A saved sidebar tool is invalid; its original data was preserved.');
+    if(!object(item)||!DEFAULTS.sidebarTools.some(tool=>tool.id===item.id)||toolIds.has(item.id)||typeof item.visible!=='boolean')fail('A saved sidebar tool is invalid; its original data was preserved.');
     toolIds.add(item.id);return {...item};
   });
-  if(!toolIds.has('accounts'))result.sidebarTools.push({id:'accounts',visible:true});
+  for(const tool of DEFAULTS.sidebarTools)if(!toolIds.has(tool.id))result.sidebarTools.push({...tool});
   if(result.sidebarActive===undefined)result.sidebarActive=DEFAULTS.sidebarActive;
   if(typeof result.sidebarActive!=='string'||(!['bookmarks','history','downloads','tabs','accounts'].includes(result.sidebarActive)&&!(result.sidebarActive.startsWith('app:')&&appIds.has(result.sidebarActive.slice(4)))))fail('The saved sidebar panel is not available; its original data was preserved.');
   for(const name of ['toolbar','shortcuts'])if(result[name]!==undefined&&!object(result[name]))fail(`Saved ${name} preferences must be an object.`);

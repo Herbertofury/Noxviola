@@ -136,11 +136,16 @@ test('DOM: workspace launcher follows canonical workspace updates without replac
 test('DOM: sidebar tool visibility and ordering are saved through the real settings form',async t=>{
   const h=await harness(t,{initial:state({panel:'settings'})});
   const rows=()=>[...h.document.querySelectorAll('.sidebar-tool-row')];
-  assert.equal(rows().length,5);const history=rows().find(row=>row.textContent.includes('History'));
+  assert.equal(rows().length,11);const history=rows().find(row=>row.textContent.includes('History'));
   const checkbox=history.querySelector('input');checkbox.checked=false;checkbox.dispatchEvent(new h.window.Event('change',{bubbles:true}));
   history.querySelector('[aria-label="Move History up"]').click();await tick();
   h.submit(h.$('settings-form'));await tick();const saved=h.calls.find(call=>call.name==='settings-save').value.sidebarTools;
-  assert.deepEqual(saved.map(item=>item.id),['tabs','history','bookmarks','downloads','accounts']);assert.equal(saved.find(item=>item.id==='history').visible,false);
+  assert.deepEqual(saved.map(item=>item.id),['tabs','history','bookmarks','downloads','accounts','extensions','settings','vault','following','resources','start']);assert.equal(saved.find(item=>item.id==='history').visible,false);
+});
+test('DOM: sidebar manager shortcuts invoke canonical managers and customization selects sidebar settings',async t=>{
+ const h=await harness(t,{initial:state({panel:'settings'})});h.document.querySelector('[data-sidebar=extensions]').click();await tick();assert.equal(h.calls.at(-1).name,'extensions');
+ h.document.querySelector('[data-sidebar=settings]').click();await tick();assert.equal(h.calls.at(-1).name,'settings');h.$('sidebar-manage').click();assert.equal(h.document.querySelector('[data-settings-filter=sidebar]').getAttribute('aria-pressed'),'true');
+ assert.equal(h.document.querySelector('[data-sidebar=following]').hidden,true);
 });
 function findButton(root, label) {
   const found = [...root.querySelectorAll('button')].find(button => button.textContent === label);

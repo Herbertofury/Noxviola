@@ -1043,6 +1043,14 @@ async function firstLaunch() {
       await command('panel-close');
     }finally{if(captured)captured.closePopup(window);Menu.buildFromTemplate=original;}
   });
+  await check('configurable sidebar shortcuts open the canonical browser managers',async()=>{
+    const saved=(await state()).preferences.sidebarTools;await command('settings-save',{sidebarTools:saved.map(item=>({...item,visible:true}))});
+    for(const id of ['extensions','settings','vault','following','resources']){
+      await until(()=>window.webContents.executeJavaScript(`Boolean(document.querySelector('[data-sidebar=${id}]')&&!document.querySelector('[data-sidebar=${id}]').hidden)`),'visible sidebar manager shortcut');
+      await window.webContents.executeJavaScript(`document.querySelector('[data-sidebar=${id}]').click()`);await until(async()=>(await state()).panel===id,`the real ${id} manager`);await command('panel-close');
+    }
+    const before=(await state()).activeId;await window.webContents.executeJavaScript("document.querySelector('[data-sidebar=start]').click()");const fresh=await until(async()=>{const s=await state();return s.activeId!==before?s.tabs.find(tab=>tab.id===s.activeId):null;},'local new tab from sidebar');assert.equal(fresh.url,'about:blank');await command('close',fresh.id);await command('settings-save',{sidebarTools:saved});
+  });
   await check('actual DownloadItem completion, pause/resume and cancellation are reflected by browser commands', async () => {
     const view = await activate(expected.personalTab);
     const completed = await selectDownload(view, '/download?identity=personal', 'complete-personal.txt');

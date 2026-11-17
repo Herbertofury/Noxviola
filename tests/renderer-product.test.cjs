@@ -330,7 +330,7 @@ test('DOM product: preference controls preserve a dirty draft and apply committe
   assert.equal(h.document.body.dataset.theme,'dark','typing a draft does not claim a saved theme');
   h.submit(form); await tick();
   const expected = {searchEngine:'custom',tabLayout:'vertical',tabSearchPosition:'right',tabSearchStyle:'compact',theme:'light',accent:'teal',density:'compact',
-    sidebarVisible:true,sidebarPanelPinned:false,sidebarRailExpanded:true,sidebarShowWorkspaces:false,sidebarSide:'left',sidebarWidth:320,sidebarApps:[],sidebarTools:[{id:'tabs',visible:true},{id:'bookmarks',visible:true},{id:'history',visible:true},{id:'downloads',visible:true},{id:'accounts',visible:true}],
+    sidebarVisible:true,sidebarPanelPinned:false,sidebarRailExpanded:true,sidebarShowWorkspaces:false,sidebarSide:'left',sidebarWidth:320,sidebarApps:[],sidebarTools:[{id:'tabs',visible:true},{id:'bookmarks',visible:true},{id:'history',visible:true},{id:'downloads',visible:true},{id:'accounts',visible:true},{id:'extensions',visible:true},{id:'settings',visible:true},{id:'vault',visible:true},{id:'following',visible:false},{id:'resources',visible:false},{id:'start',visible:false}],
     homePage:'https://home.example/',customSearchURL:'https://search.example/?q={searchTerms}',showBookmarksBar:true,spellcheckEnabled:false,
     toolbar:{home:false,library:true,extensions:false,split:true},shortcuts:{new:'Ctrl+Shift+N','focus-address':''}};
   assert.deepEqual(h.calls.find(call => call.name === 'settings-save').value,expected);

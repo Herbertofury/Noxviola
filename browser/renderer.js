@@ -19,7 +19,8 @@ let lastProfiles = '', lastSettings = '', lastSaveError = '', addressDirty = fal
 const tabNodes = new Map(), groupNodes=new Map(), painting = new WeakMap();
 let hideTabPreview = () => {};
 let revealedTabKey = '';
-const SIDEBAR_TOOLS=[['tabs','Open tabs'],['bookmarks','Bookmarks'],['history','History'],['downloads','Downloads'],['accounts','Accounts & identities']];
+const SIDEBAR_TOOLS=[['tabs','Open tabs'],['bookmarks','Bookmarks'],['history','History'],['downloads','Downloads'],['accounts','Accounts & identities'],['extensions','Extensions','extensions'],['settings','Settings','settings'],['vault','Library','vault'],['following','Following','following',false],['resources','Resource monitor','resources',false],['start','New tab','new',false]];
+const defaultSidebarTools=()=>SIDEBAR_TOOLS.map(([id,,,visible])=>({id,visible:visible!==false}));
 const SIDEBAR_WEBSITES=[['ChatGPT','https://chatgpt.com/'],['Gemini','https://gemini.google.com/'],['Discord','https://discord.com/app'],['WhatsApp','https://web.whatsapp.com/'],['Telegram','https://web.telegram.org/'],['Instagram','https://www.instagram.com/'],['X','https://x.com/'],['Bluesky','https://bsky.app/'],['TikTok','https://www.tiktok.com/'],['Spotify','https://open.spotify.com/'],['Twitch','https://www.twitch.tv/'],['YouTube','https://www.youtube.com/'],['Gmail','https://mail.google.com/'],['Google Calendar','https://calendar.google.com/']];
 let sidebarData={},sidebarWebState={},sidebarRequest=0,sidebarDraftApps=[],sidebarDraftTools=[],sidebarAppsKey='';
 const sidebarWorkspaceNodes=new Map();
@@ -184,7 +185,7 @@ function updateSidebarGeometry(g){
   $('sidebar-rail').hidden=!g.rail;$('sidebar-panel').hidden=!g.panel;
 }
 function renderSidebarChrome(){
-  const pref=currentState.preferences,active=pref.sidebarActive||'bookmarks',apps=pref.sidebarApps||[],tools=pref.sidebarTools||SIDEBAR_TOOLS.map(([id])=>({id,visible:true})),web=active.startsWith('app:');
+  const pref=currentState.preferences,active=pref.sidebarActive||'bookmarks',apps=pref.sidebarApps||[],tools=pref.sidebarTools||defaultSidebarTools(),web=active.startsWith('app:');
   document.body.dataset.sidebarSide=pref.sidebarSide||'left';
   document.body.dataset.sidebarRailExpanded=String(Boolean(pref.sidebarRailExpanded));
   const expand=$('sidebar-rail-expand'),expandLabel=pref.sidebarRailExpanded?'Collapse sidebar':'Expand sidebar';expand.title=expandLabel;expand.setAttribute('aria-label',expandLabel);expand.setAttribute('aria-pressed',String(Boolean(pref.sidebarRailExpanded)));
@@ -196,7 +197,7 @@ function renderSidebarChrome(){
     control.title=item.name;control.setAttribute('aria-label',`Switch to workspace ${item.name}`);control.setAttribute('aria-pressed',String(item.id===(currentState.activeWorkspaceId||'default')));control.dataset.workspaceColor=item.color||'purple';const mark=item.name.trim().slice(0,2).toLocaleUpperCase();if(control.firstElementChild.textContent!==mark)control.firstElementChild.textContent=mark;
     if(workspaceList.children[index]!==control)workspaceList.insertBefore(control,workspaceList.children[index]||null);
   });
-  for(const button of $('sidebar-rail').querySelectorAll('[data-sidebar]')){const index=tools.findIndex(item=>item.id===button.dataset.sidebar);button.hidden=index<0||!tools[index].visible;button.style.order=String(index<0?tools.length:index);button.setAttribute('aria-pressed',String(Boolean(pref.sidebarVisible!==false&&pref.sidebarExpanded&&button.dataset.sidebar===active)));}
+  for(const button of $('sidebar-rail').querySelectorAll('[data-sidebar]')){const index=tools.findIndex(item=>item.id===button.dataset.sidebar),command=SIDEBAR_TOOLS.find(([id])=>id===button.dataset.sidebar)?.[2];button.hidden=index<0||!tools[index].visible;button.style.order=String(index<0?tools.length:index);button.setAttribute('aria-pressed',String(command?currentState.panel===command:Boolean(pref.sidebarVisible!==false&&pref.sidebarExpanded&&button.dataset.sidebar===active)));}
   $('sidebar-apps').style.order=String(tools.length+1);
   const container=$('sidebar-apps'),appsKey=JSON.stringify(apps.map(item=>[item.id,item.name]));
   if(appsKey!==sidebarAppsKey){container.replaceChildren(...apps.map(item=>{
@@ -265,8 +266,8 @@ function renderSidebarToolEditor(){
   }));
 }
 api.onPaneLayout?.(value=>{paneGeometry=value;renderPanes();});api.onSidebarLayout?.(updateSidebarGeometry);api.onSidebarWebState?.(value=>{sidebarWebState=value||{};renderSidebarChrome();});
-$('sidebar-toggle').onclick=()=>run('sidebar-toggle');$('sidebar-rail-expand').onclick=()=>run('sidebar-rail-expand');$('sidebar-workspace-manage').onclick=()=>run('workspaces');$('sidebar-pin').onclick=()=>run('sidebar-pin');$('sidebar-close').onclick=()=>run('sidebar-close');$('sidebar-manage').onclick=()=>run('settings');
-for(const control of $('sidebar-rail').querySelectorAll('[data-sidebar]'))control.onclick=()=>run('sidebar-select',control.dataset.sidebar);
+$('sidebar-toggle').onclick=()=>run('sidebar-toggle');$('sidebar-rail-expand').onclick=()=>run('sidebar-rail-expand');$('sidebar-workspace-manage').onclick=()=>run('workspaces');$('sidebar-pin').onclick=()=>run('sidebar-pin');$('sidebar-close').onclick=()=>run('sidebar-close');$('sidebar-manage').onclick=()=>{settingsCategory='sidebar';$('settings-search').value='';applySettingsSearch();if(currentState.panel!=='settings')return run('settings');};
+for(const control of $('sidebar-rail').querySelectorAll('[data-sidebar]'))control.onclick=()=>{const command=SIDEBAR_TOOLS.find(([id])=>id===control.dataset.sidebar)?.[2];return command?run(command):run('sidebar-select',control.dataset.sidebar);};
 $('sidebar-search').oninput=renderSidebarItems;
 $('sidebar-account-identity').onchange=event=>run('identity-switch',event.currentTarget.value);$('sidebar-account-manage').onclick=()=>run('accounts');
 $('sidebar-back').onclick=()=>run('sidebar-web-back');$('sidebar-forward').onclick=()=>run('sidebar-web-forward');$('sidebar-reload').onclick=()=>run('sidebar-web-reload');$('sidebar-mute').onclick=()=>run('sidebar-web-mute',!sidebarWebState.muted);$('sidebar-unload').onclick=()=>run('sidebar-web-unload');
@@ -285,7 +286,7 @@ $('sidebar-app-add').onclick=()=>{
   sidebarDraftApps.push({id:crypto.randomUUID(),name,url:parsed.href});$('sidebar-app-name').value='';$('sidebar-app-url').value='';settingsDirty=true;renderSidebarAppEditor();
 };
 function renderPreferenceForm(state) {
-  const form=$('settings-form'),values={theme:'dark',accent:'violet',density:'comfortable',tabSearchPosition:'left',tabSearchStyle:'detailed',sidebarSide:'left',sidebarWidth:320,sidebarApps:[],sidebarTools:SIDEBAR_TOOLS.map(([id])=>({id,visible:true})),homePage:'about:blank',customSearchURL:'https://duckduckgo.com/?q={searchTerms}',...state.preferences};
+  const form=$('settings-form'),values={theme:'dark',accent:'violet',density:'comfortable',tabSearchPosition:'left',tabSearchStyle:'detailed',sidebarSide:'left',sidebarWidth:320,sidebarApps:[],sidebarTools:defaultSidebarTools(),homePage:'about:blank',customSearchURL:'https://duckduckgo.com/?q={searchTerms}',...state.preferences};
   editForm(form,values,['searchEngine','tabLayout','tabSearchPosition','tabSearchStyle','theme','accent','density','sidebarSide','sidebarWidth','homePage','customSearchURL']);
   form.elements.namedItem('sidebarVisible').checked=values.sidebarVisible!==false;
   form.elements.namedItem('sidebarRailExpanded').checked=Boolean(values.sidebarRailExpanded);

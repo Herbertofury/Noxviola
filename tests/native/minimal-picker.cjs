@@ -5,7 +5,7 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
 const {spawn,execFile}=require('node:child_process'),{promisify}=require('node:util');
 const execute=promisify(execFile);
 const title='Export all saved collections for this identity; choose a NEW filename';
-const modes=['save-first','cancel-then-save'];
+const modes=['save-first','cancel-then-save',...(process.platform==='linux'?['close-then-save']:[])];
 async function launch(){
  const root=fs.mkdtempSync(path.resolve('native-picker-minimal-'));
  const results=[];const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;
@@ -41,7 +41,7 @@ async function fixture(){
    const index=report.operations.length,dir=path.join(root,'dialog-'+index);fs.mkdirSync(dir);
    const requested=path.join(root,'selected-'+index+'.noxlibrary');assert.equal(fs.existsSync(requested),false);
    const entry={cancel,requested,started:Date.now()};report.operations.push(entry);save();
-   const args=['-B',path.join(__dirname,'file-picker.py'),'--pid',String(process.pid),'--title',title,'--evidence-dir',dir,...(cancel?['--cancel']:['--file',requested])];
+   const args=['-B',path.join(__dirname,'file-picker.py'),'--pid',String(process.pid),'--title',title,'--evidence-dir',dir,...(cancel?['--cancel',...(mode==='close-then-save'?['--cancel-method','window-close']:[])]:['--file',requested])];
    const helper=execute('python',args,{encoding:'utf8',windowsHide:true,timeout:25000}).then(r=>{entry.helper={stdout:r.stdout,stderr:r.stderr};return r;},error=>{entry.helperError={message:error.message,stdout:error.stdout,stderr:error.stderr};save();if(!win.isDestroyed())win.destroy();return null;});
    // Only native options used by production; no mocked response or custom handler.
    const selected=await dialog.showSaveDialog(win,{title,defaultPath:'noxviola-library-personal.noxlibrary',filters:[{name:'Noxviola library-only backup (plaintext URLs)',extensions:['noxlibrary']}]});
@@ -51,7 +51,7 @@ async function fixture(){
    else {assert.equal(selected.canceled,false);assert.equal(selected.filePath,requested,'Native committed path must exactly equal requested path');}
    entry.passed=true;save();
   }
-  if(mode==='cancel-then-save')await choose(true);
+  if(mode!=='save-first')await choose(true);
   await choose(false);report.passed=true;
  }catch(error){report.passed=false;report.error=error.stack;}
  finally{report.finished=Date.now();save();if(win&&!win.isDestroyed())win.destroy();app.exit(report.passed?0:1);}

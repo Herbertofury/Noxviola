@@ -2,9 +2,9 @@ name: Isolated native picker reproduction
 on:
   push:
     branches: [browser/tab-collections-20261117]
-    paths: ['tests/native/minimal-picker.cjs', 'tests/native/file-picker.py', '.github/workflows/native-picker-reproduction.yml']
+    paths: ['tests/native/minimal-picker.cjs', 'tests/native/file-picker.py', 'tests/native/window-close.py', '.github/workflows/native-picker-reproduction.yml']
   pull_request:
-    paths: ['tests/native/minimal-picker.cjs', 'tests/native/file-picker.py', '.github/workflows/native-picker-reproduction.yml']
+    paths: ['tests/native/minimal-picker.cjs', 'tests/native/file-picker.py', 'tests/native/window-close.py', '.github/workflows/native-picker-reproduction.yml']
   workflow_dispatch:
 permissions:
   contents: read

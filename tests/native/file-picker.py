@@ -131,7 +131,7 @@ def x11_picker(args, deadline):
                                          '-event', 'keyboard', '-event', 'structure', '-event', 'focus'],
                                         stdout=event_log, stderr=subprocess.STDOUT)
         capture('opened')
-        # GTK must process its initial focus and activation guard before synthetic keys.
+        # Allow GTK initial focus processing before synthetic keys; this is not proof of readiness.
         # XSendEvent completion is not GTK event-loop completion (captured fixture evidence).
         time.sleep(.6)
         accept_key = None
@@ -146,7 +146,14 @@ def x11_picker(args, deadline):
                 raise RuntimeError("No explicitly known GTK accept mnemonic for this picker")
         if args.cancel:
             verify()
-            run(["key", "--window", xid, "Escape"])
+            if getattr(args, 'cancel_method', 'escape') == 'window-close':
+                import importlib.util
+                spec = importlib.util.spec_from_file_location('owned_window_close', Path(__file__).with_name('window-close.py'))
+                closer = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(closer)
+                closer.close_x11(args.pid, title=args.title)
+            else:
+                run(["key", "--window", xid, "Escape"])
         else:
             verify()
             run(["key", "--window", xid, "ctrl+l"])
@@ -165,7 +172,7 @@ def x11_picker(args, deadline):
             current = run(x11_search_arguments(args.pid, args.title)[1:], check=False)
             if current.returncode == 1 and not current.stdout.strip():
                 return {"pid": args.pid, "title": args.title, "action": "cancel" if args.cancel else "submit",
-                        "delivery": "X11 targeted GTK keyboard", "window": xid, "dialogDismissed": True,
+                        "delivery": "X11 WM_DELETE_WINDOW" if args.cancel and getattr(args, "cancel_method", "escape") == "window-close" else "X11 targeted GTK keyboard", "window": xid, "dialogDismissed": True,
                         "accessibilityQualified": False, "accessibilityGap": "AT-SPI application registry empty"}
             current.check_returncode()
             if current.stdout.strip().splitlines() != [xid]:
@@ -309,6 +316,8 @@ def linux_picker(args):
                 queue.extend((obj.get_child_at_index(i), depth+1) for i in range(obj.get_child_count()) if obj.get_child_at_index(i))
         return result
 
+    if getattr(args, "cancel_method", "escape") == "window-close" and desktop.get_child_count() != 0:
+        raise RuntimeError("Diagnostic window-close comparison requires the X11 backend; AT-SPI is active")
     diagnostics()
     picked = None
     while time.monotonic() < deadline:
@@ -319,6 +328,8 @@ def linux_picker(args):
                 return keyboard_result
         picked = owned()
         if picked:
+            if getattr(args, "cancel_method", "escape") == "window-close":
+                raise RuntimeError("Diagnostic window-close cannot switch to AT-SPI cancellation")
             break
         time.sleep(.05)
     if not picked:
@@ -559,11 +570,14 @@ def main():
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--file")
     group.add_argument("--cancel", action="store_true")
+    parser.add_argument("--cancel-method", choices=["escape", "window-close"], default="escape", help="Diagnostic Linux cancellation comparison")
     parser.add_argument("--timeout", type=float, default=15)
     parser.add_argument("--evidence-dir", help="Existing synthetic fixture directory for owned-dialog screenshots")
     parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     validate(args.pid, args.title, args.file, args.cancel, args.timeout)
+    if args.cancel_method != "escape" and (not args.cancel or not sys.platform.startswith("linux")):
+        raise ValueError("Diagnostic window-close requires Linux cancellation")
     if args.evidence_dir and (not os.path.isabs(args.evidence_dir) or not Path(args.evidence_dir).is_dir()):
         raise ValueError("Existing absolute synthetic evidence directory required")
     if not args.worker:

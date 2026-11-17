@@ -24,6 +24,15 @@ class WindowCloseContracts(unittest.TestCase):
             with self.assertRaises(ValueError):
                 close.select_window([main], pid)
 
+    def test_optional_title_never_selects_the_main_or_foreign_window(self):
+        dialog = {"id": 17, "pid": 314, "visible": True, "topLevel": True, "title": "Picker"}
+        main = {**dialog, "id": 18, "title": "Main"}
+        foreign = {**dialog, "id": 19, "pid": 315}
+        self.assertIs(close.select_window([main, foreign, dialog], 314, "Picker"), dialog)
+        for candidates in [[main, foreign], [dialog, {**dialog, "id": 20}]]:
+            with self.assertRaises(RuntimeError):
+                close.select_window(candidates, 314, "Picker")
+
     def test_windows_uses_vetoable_close_not_destroy_quit_or_broadcast(self):
         self.assertEqual(close.windows_message(), {"message": 0x10, "wParam": 0,
                          "lParam": 0, "flags": 2, "timeoutMs": 5000})

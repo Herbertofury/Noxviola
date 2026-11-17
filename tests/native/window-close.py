@@ -13,11 +13,11 @@ import json
 import sys
 
 
-def select_window(candidates, pid):
+def select_window(candidates, pid, title=None):
     if type(pid) is not int or pid <= 0:
         raise ValueError("An exact positive launched process ID is required")
     owned = [item for item in candidates if item["pid"] == pid and
-             item["visible"] and item["topLevel"]]
+             item["visible"] and item["topLevel"] and (title is None or item.get("title") == title)]
     if len(owned) != 1:
         raise RuntimeError(f"Expected one visible top-level window for owned PID {pid}; found {len(owned)}")
     return owned[0]
@@ -122,7 +122,7 @@ class XError(c.Structure):
                 ("minor_code", c.c_ubyte)]
 
 
-def close_x11(pid):
+def close_x11(pid, title=None):
     library = ctypes.util.find_library("X11")
     if not library:
         raise RuntimeError("The runner has no X11 client library for its ordinary window close protocol")
@@ -215,18 +215,18 @@ def close_x11(pid):
             attributes = WindowAttributes()
             if not x.XGetWindowAttributes(display, window, c.byref(attributes)):
                 raise RuntimeError("The owned X11 window disappeared during inspection")
-            title = property_value(window, "_NET_WM_NAME", 8) or b""
+            window_title = property_value(window, "_NET_WM_NAME", 8) or b""
             candidates.append({"id": window, "pid": pid,
                                "visible": attributes.map_state == 2,
                                "topLevel": attributes.window_class == 1 and not attributes.override_redirect,
-                               "title": title.decode("utf-8", errors="replace")})
-        selected = select_window(candidates, pid)
+                               "title": window_title.decode("utf-8", errors="replace")})
+        selected = select_window(candidates, pid, title)
         protocols, delete = atom("WM_PROTOCOLS"), atom("WM_DELETE_WINDOW")
         supported = property_value(selected["id"], "WM_PROTOCOLS", 32) or []
         if delete not in supported or not delete:
             raise RuntimeError("The owned window does not advertise WM_DELETE_WINDOW")
         attributes = WindowAttributes()
-        if property_value(selected["id"], "_NET_WM_PID", 32) != [pid] or not x.XGetWindowAttributes(display, selected["id"], c.byref(attributes)) or attributes.map_state != 2:
+        if (title is not None and property_value(selected["id"], "_NET_WM_NAME", 8) != title.encode("utf-8")) or property_value(selected["id"], "_NET_WM_PID", 32) != [pid] or not x.XGetWindowAttributes(display, selected["id"], c.byref(attributes)) or attributes.map_state != 2:
             raise RuntimeError("The selected owned X11 window changed before its close request")
         message = x11_message(protocols, delete)
         event = XEvent()

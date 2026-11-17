@@ -1370,7 +1370,15 @@ async function secondLaunch() {
     const restored = await state();
     assert.deepEqual(restored.tabs.map(({ id, url, identity }) => ({ id, url, identity })), expected.tabs);
     assert.deepEqual(restored.profiles, expected.profiles);
-    assert.equal(restored.activeId, expected.activeId);assert.deepEqual(restored.paneTree,expected.paneTree);assert.deepEqual(restored.paneGeometry.panes.map(p=>p.tabId),expected.wholeGroup.ids);assert.equal(restored.paneGeometry.panes.length,5);await until(()=>views().filter(v=>v.getVisible()).length===5,'restored whole-group native surfaces');await command('split');
+    assert.equal(restored.activeId, expected.activeId);assert.deepEqual(restored.paneTree,expected.paneTree);assert.deepEqual(restored.paneGeometry.panes.map(p=>p.tabId),expected.wholeGroup.ids);assert.equal(restored.paneGeometry.panes.length,5);await until(()=>views().filter(v=>v.getVisible()).length===5,'restored whole-group native surfaces');
+    const other=restored.tabs.find(tab=>tab.id!==restored.activeId&&restored.paneGeometry.panes.some(pane=>pane.tabId===tab.id));
+    const otherView=await until(()=>views().find(view=>view.getVisible()&&view.webContents.getURL()===other.url),'another restored native pane');
+    otherView.webContents.focus();
+    assert.equal((await state()).activeId,expected.activeId,'Native focus alone must preserve the restored selection');
+    otherView.webContents.sendInputEvent({type:'mouseDown',x:12,y:12,button:'left',clickCount:1});
+    otherView.webContents.sendInputEvent({type:'mouseUp',x:12,y:12,button:'left',clickCount:1});
+    await until(async()=>(await state()).activeId===other.id,'real pointer interaction selects another restored pane');
+    await command('split');
     const personal = await activate(expected.personalTab);
     await assertCookieLifetimes(expected.personalIdentity, 'personal', 'after-restart', {sessionCookieExpected: false});
     assertIdentity(await identityData(personal), 'personal', {sessionCookieExpected: false});

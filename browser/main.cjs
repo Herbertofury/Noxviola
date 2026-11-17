@@ -269,9 +269,20 @@ function ensureView(tab) {
   tab.view = view; tab.initializing = true; win.contentView.addChildView(view);
   const wc = view.webContents;
   gxStyles.attach(wc);
-  wc.on('before-mouse-event',(_event,input)=>{if(input.type==='mouseUp'&&input.button==='left')scheduleSidebarDismiss(tab,view);});
-  wc.on('before-input-event',(_event,input)=>{if(input.type==='keyDown'&&!input.isAutoRepeat&&!input.control&&!input.meta&&!input.alt&&input.key&&!['Shift','Control','Meta','Alt','Escape'].includes(input.key))scheduleSidebarDismiss(tab,view);});
-wc.on('focus',()=>{if(activeId!==tab.id&&paneLayout.ids(paneTree).includes(tab.id))activate(tab.id);});
+  // The window manager can focus a child as views attach on startup. Only an
+  // interaction with a visible pane may select it and change the identity.
+  const selectInteractedPane=()=>{
+    if(!closing&&!panel&&tab.view===view&&activeId!==tab.id&&paneLayout.ids(paneTree).includes(tab.id))activate(tab.id);
+  };
+  wc.on('before-mouse-event',(_event,input)=>{
+    if(input.type==='mouseDown')selectInteractedPane();
+    if(input.type==='mouseUp'&&input.button==='left')scheduleSidebarDismiss(tab,view);
+  });
+  wc.on('before-input-event',(_event,input)=>{
+    if(input.type!=='keyDown')return;
+    selectInteractedPane();
+    if(!input.isAutoRepeat&&!input.control&&!input.meta&&!input.alt&&input.key&&!['Shift','Control','Meta','Alt','Escape'].includes(input.key))scheduleSidebarDismiss(tab,view);
+  });
   nativeTabs.set(wc.id,tab);wc.setAudioMuted(!!tab.saved.muted);
   wc.setWindowOpenHandler(({url}) => { if (httpUrl(url) && !closing) eventAction(() => newTab(url,tab.identity)); return {action:'deny'}; });
   wc.on('will-navigate', (event,url) => { if (!tabNavigationAllowed(tab,url)) event.preventDefault(); });

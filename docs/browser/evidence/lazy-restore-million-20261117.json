@@ -1,0 +1,28 @@
+{
+  "synthetic": true,
+  "tabs": 1000000,
+  "restoreMs": 7.661591000000044,
+  "restoreResponseBytes": 66,
+  "pageAllMs": 7646.3432589999975,
+  "pages": 20000,
+  "maxPage": 50,
+  "enumerated": 1000000,
+  "crashRetryStable": true,
+  "integrity": "ok",
+  "parentEventLoopP99ms": 11.730943,
+  "parentRssExcludesHelper": 57225216,
+  "files": [
+    {
+      "name": "tabs.sqlite",
+      "bytes": 111210496
+    },
+    {
+      "name": "tabs.sqlite-shm",
+      "bytes": 32768
+    },
+    {
+      "name": "tabs.sqlite-wal",
+      "bytes": 28872
+    }
+  ]
+}

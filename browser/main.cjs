@@ -534,7 +534,7 @@ async function perform(name, value) {
   switch (name) {
     case 'state': return stateView();
     case 'collection-query': {
-      if(!value||!['groups','tabs','update','health','folders','folder-create','folder-rename','move'].includes(value.op)||!profiles.some(p=>p.id===value.identity))throw new Error('Invalid collection request.');
+      if(!value||!['groups','tabs','update','health','folders','folder-create','folder-rename','move','restore-sessions','restore-tabs','restore-pause'].includes(value.op)||!profiles.some(p=>p.id===value.identity))throw new Error('Invalid collection request.');
       return collections.request(value);
     }
     case 'collection-save': {
@@ -546,6 +546,32 @@ async function perform(name, value) {
       let closedCount=0;
       if(value.close===true&&!closing)for(const old of records){const tab=tabs.find(t=>t.id===old.id);if(tab&&tab.identity===identity&&tab.url===old.url&&JSON.stringify(savedTab(tab))===checkpoints.get(old.id).saved&&(tab.collectionNavigationRevision||0)===checkpoints.get(old.id).revision){closeTab(tab.id);closedCount++;}}
       return {...result,closed:closedCount};
+    }
+    case 'collection-restore-reassign': {
+      if(value?.identity!==currentIdentity)throw new Error('Identity changed.');
+      workspaces.get(activeWorkspaceId);
+      return collections.request({op:'restore-reassign',identity:currentIdentity,session:value.session,workspace:activeWorkspaceId});
+    }
+    case 'collection-restore-start': {
+      if(value?.identity!==currentIdentity)throw new Error('Identity changed. Review before restoring.');
+      const identity=currentIdentity,workspace=activeWorkspaceId;workspaces.get(workspace);
+      // No eager tab array, renderer IPC, session JSON or Chromium views. The entire
+      // immutable source is referenced durably in SQLite and presented in pages.
+      return collections.request({op:'restore-start',identity,workspace,group:value.group,session:crypto.randomUUID()});
+    }
+    case 'collection-restore-open': {
+      if(value?.identity!==currentIdentity)throw new Error('Identity changed. Review before opening.');
+      const identity=currentIdentity,workspace=activeWorkspaceId;
+      const item=await collections.request({op:'restore-claim',identity,session:value.session,id:value.id,browser:crypto.randomUUID()});
+      if(closing||identity!==currentIdentity||workspace!==activeWorkspaceId)throw new Error('Identity or workspace changed while loading. The saved tab remains available.');
+      if(item.workspace!==workspace)throw new Error('Switch to the original workspace before opening this restore session.');
+      const existing=tabs.find(t=>t.id===item.browserId);
+      if(existing){if(existing.identity!==identity||tabWorkspace(existing)!==workspace)throw new Error('The restored tab moved. Use its existing workspace; no duplicate was opened.');activate(existing.id);writer.request(snapshot());await writer.flush();return existing.id;}
+      if(!httpUrl(item.url))throw new Error('Unsupported saved URL.');
+      const id=newTab(item.url,identity,{id:item.browserId,url:item.url,title:item.title,pinned:item.pinned,identity,workspaceId:workspace});
+      // Stable SQLite claims survive a crash before this write. Repeated activation
+      // focuses the same durable browser id, rather than duplicating an open tab.
+      writer.request(snapshot());await writer.flush();return id;
     }
     case 'collection-open': {
       if(currentIdentity!==value?.identity||!profiles.some(p=>p.id===value?.identity))throw new Error('Collection identity changed. Review before opening.');

@@ -28430,7 +28430,10 @@
         "flat folders",
         "folder and collection rename",
         "move collections between folders",
-        "precise collection reordering"
+        "precise collection reordering",
+        "durable paged lazy restore sessions",
+        "pause/resume and explicit workspace reassignment",
+        "stable crash-retry activation identities"
         ],
         "coverage": "partial",
         "remaining": "Full parity checklist and native acceptance in TAB-COLLECTIONS.md"

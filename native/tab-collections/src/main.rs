@@ -36,7 +36,7 @@ fn open(file: &str) -> Result<Connection> {
     db.busy_timeout(std::time::Duration::from_secs(5))?;
     db.execute_batch("PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA cache_size=-8192;")?;
     let version: i64 = db.query_row("PRAGMA user_version", [], |r| r.get(0))?;
-    if version > 2 {
+    if version > 3 {
         return Err("Unsupported collection database version; original file preserved".into());
     }
     if version == 0 {
@@ -63,6 +63,14 @@ fn open(file: &str) -> Result<Connection> {
           CREATE TRIGGER folder_revision_insert AFTER INSERT ON folders BEGIN INSERT INTO library_revisions VALUES(new.identity,1) ON CONFLICT(identity) DO UPDATE SET revision=revision+1; END;
           CREATE TRIGGER folder_revision_update AFTER UPDATE ON folders BEGIN INSERT INTO library_revisions VALUES(new.identity,1) ON CONFLICT(identity) DO UPDATE SET revision=revision+1; END;
           PRAGMA user_version=2; COMMIT;")?;
+    }
+    if version < 3 {
+        db.execute_batch("BEGIN IMMEDIATE;
+          CREATE TABLE restore_sessions(sequence INTEGER PRIMARY KEY,id TEXT NOT NULL UNIQUE,identity TEXT NOT NULL,workspace TEXT NOT NULL,collection_id INTEGER NOT NULL REFERENCES collections(id),title TEXT NOT NULL,max_tab INTEGER NOT NULL,count INTEGER NOT NULL,paused INTEGER NOT NULL DEFAULT 0);
+          CREATE INDEX restore_session_page ON restore_sessions(identity);
+          CREATE INDEX restore_workspace ON restore_sessions(workspace);
+          CREATE TABLE restore_claims(session_id TEXT NOT NULL REFERENCES restore_sessions(id),tab_id INTEGER NOT NULL REFERENCES tabs(id),browser_id TEXT NOT NULL UNIQUE,PRIMARY KEY(session_id,tab_id));
+          PRAGMA user_version=3; COMMIT;")?;
     }
     Ok(db)
 }
@@ -137,6 +145,95 @@ fn run(db: &mut Connection, v: &Value) -> Result<Value> {
     }
     let op = text(v, "op")?;
     match op {
+        "restore-workspace-count" => {
+            let count: i64 = db.query_row(
+                "SELECT COUNT(*) FROM restore_sessions WHERE workspace=?1",
+                [text(v, "workspace")?],
+                |r| r.get(0),
+            )?;
+            Ok(json!({"count":count}))
+        }
+        "restore-reassign" => {
+            if db.execute(
+                "UPDATE restore_sessions SET workspace=?1 WHERE id=?2 AND identity=?3",
+                params![text(v, "workspace")?, text(v, "session")?, identity],
+            )? != 1
+            {
+                return Err("Restore session not found".into());
+            }
+            Ok(json!({"moved":true}))
+        }
+        "restore-start" => {
+            let id = text(v, "session")?;
+            let workspace = text(v, "workspace")?;
+            let group = number(v, "group")?;
+            if id.is_empty() || workspace.is_empty() {
+                return Err("Missing restore identity".into());
+            }
+            let tx = db.transaction()?;
+            // Saved tab rows are immutable. Foreign keys retain their source: a bounded,
+            // durable snapshot reference, not a million eager browser placeholders.
+            tx.execute("INSERT INTO restore_sessions(id,identity,workspace,collection_id,title,max_tab,count) SELECT ?1,identity,?2,id,title,COALESCE((SELECT MAX(id) FROM tabs WHERE collection_id=?3),0),count FROM collections WHERE id=?3 AND identity=?4",params![id,workspace,group,identity])?;
+            let count: i64 = tx.query_row(
+                "SELECT count FROM restore_sessions WHERE id=?1 AND identity=?2",
+                params![id, identity],
+                |r| r.get(0),
+            )?;
+            tx.commit()?;
+            Ok(json!({"id":id,"count":count,"workspace":workspace}))
+        }
+        "restore-sessions" => {
+            let after = v["after"].as_i64().unwrap_or(0);
+            let mut stmt=db.prepare("SELECT rowid,id,title,workspace,count,paused FROM restore_sessions WHERE identity=?1 AND rowid>?2 ORDER BY rowid LIMIT 51")?;
+            let items=stmt.query_map(params![identity,after],|r|Ok(json!({"cursor":r.get::<_,i64>(0)?,"id":r.get::<_,String>(1)?,"title":r.get::<_,String>(2)?,"workspace":r.get::<_,String>(3)?,"count":r.get::<_,i64>(4)?,"paused":r.get::<_,bool>(5)?})))?.collect::<std::result::Result<Vec<_>,_>>()?;
+            let mut result = page(items, 0, false);
+            if !result["next"].is_null() {
+                result["next"] =
+                    result["items"].as_array().unwrap().last().unwrap()["cursor"].clone();
+            }
+            Ok(result)
+        }
+        "restore-pause" => {
+            let paused = v["paused"].as_bool().ok_or("Boolean required")?;
+            if db.execute(
+                "UPDATE restore_sessions SET paused=?1 WHERE id=?2 AND identity=?3",
+                params![paused, text(v, "session")?, identity],
+            )? != 1
+            {
+                return Err("Restore session not found".into());
+            }
+            Ok(json!({"paused":paused}))
+        }
+        "restore-tabs" => {
+            let session = text(v, "session")?;
+            let after = v["after"].as_i64().unwrap_or(0);
+            let mut stmt=db.prepare("SELECT t.id,t.url,t.title,t.pinned,r.browser_id FROM restore_sessions s JOIN tabs t ON t.collection_id=s.collection_id LEFT JOIN restore_claims r ON r.session_id=s.id AND r.tab_id=t.id WHERE s.id=?1 AND s.identity=?2 AND t.id>?3 AND t.id<=s.max_tab ORDER BY t.id LIMIT 101")?;
+            let items=stmt.query_map(params![session,identity,after],|r|Ok(json!({"id":r.get::<_,i64>(0)?,"url":r.get::<_,String>(1)?,"title":r.get::<_,String>(2)?,"pinned":r.get::<_,bool>(3)?,"browserId":r.get::<_,Option<String>>(4)?})))?.collect::<std::result::Result<Vec<_>,_>>()?;
+            let mut result = page(items, 0, false);
+            if !result["next"].is_null() {
+                result["next"] = result["next"]["id"].clone();
+            }
+            Ok(result)
+        }
+        "restore-claim" => {
+            let session = text(v, "session")?;
+            let id = number(v, "id")?;
+            let browser = text(v, "browser")?;
+            if browser.is_empty() {
+                return Err("Missing browser tab identity".into());
+            }
+            let tx = db.transaction()?;
+            let mut item=tx.query_row("SELECT t.url,t.title,t.pinned,s.workspace FROM restore_sessions s JOIN tabs t ON t.collection_id=s.collection_id WHERE s.id=?1 AND s.identity=?2 AND s.paused=0 AND t.id=?3 AND t.id<=s.max_tab",params![session,identity,id],|r|Ok(json!({"url":r.get::<_,String>(0)?,"title":r.get::<_,String>(1)?,"pinned":r.get::<_,bool>(2)?,"workspace":r.get::<_,String>(3)?}))).optional()?.ok_or("Restore session is paused or tab is unavailable in this identity")?;
+            tx.execute("INSERT INTO restore_claims VALUES(?1,?2,?3) ON CONFLICT(session_id,tab_id) DO NOTHING",params![session,id,browser])?;
+            let stable: String = tx.query_row(
+                "SELECT browser_id FROM restore_claims WHERE session_id=?1 AND tab_id=?2",
+                params![session, id],
+                |r| r.get(0),
+            )?;
+            item["browserId"] = json!(stable);
+            tx.commit()?;
+            Ok(item)
+        }
         "save" => {
             let title = text(v, "title")?;
             let rows = v["tabs"].as_array().ok_or("Tabs must be an array")?;
@@ -494,7 +591,7 @@ mod migration_tests {
             let version: i64 = db
                 .query_row("PRAGMA user_version", [], |r| r.get(0))
                 .unwrap();
-            assert_eq!(version, if conflict { 1 } else { 2 });
+            assert_eq!(version, if conflict { 1 } else { 3 });
             let column: i64 = db
                 .query_row(
                     "SELECT count(*) FROM pragma_table_info('collections') WHERE name='folder_id'",

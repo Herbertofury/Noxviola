@@ -1,7 +1,7 @@
 'use strict';
 // Bounded page replacement, shared by full library and sidebar. No accumulated DOM.
 window.createCollectionUI=function(root,api,sidebar=false){
-  let identity='',group=null,after=0,next=null,history=[],archived=false,busy=false,generation=0,refreshPending=false,folder=null,folders=false,moving=null;
+  let identity='',group=null,after=0,next=null,history=[],archived=false,busy=false,generation=0,refreshPending=false,folder=null,folders=false,moving=null,sessions=false,restore=null;
   const renameDrafts=new Map();
   const draftKey=(kind,id)=>`${identity}:${kind}:${id}`;
   const el=(tag,text)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;return e;};
@@ -13,39 +13,43 @@ window.createCollectionUI=function(root,api,sidebar=false){
   async function act(work){if(busy)return;busy=true;root.setAttribute('aria-busy','true');for(const b of root.querySelectorAll('button'))b.disabled=true;try{await work();}catch(e){status.textContent=e.message;}finally{busy=false;root.removeAttribute('aria-busy');for(const b of root.querySelectorAll('button'))b.disabled=false;prev.disabled=!history.length;forward.disabled=next===null;if(refreshPending){refreshPending=false;void act(load);}}}
   function button(text,work){const b=el('button',text);b.type='button';b.onclick=()=>act(work);return b;}
   const reset=()=>{after=0;history=[];};
-  const save=close=>async()=>{const result=await api.command('collection-save',{identity,title:title.value,close,includePinned:pinned.checked});group=null;folder=null;folders=false;archived=false;reset();await load();status.textContent=`Saved ${result.saved} tabs; closed ${result.closed}. Changed or unsupported pages remain open.`;};
-  actions.append(title,pinLabel,button('Save tabs',save(false)),button('Save and close',save(true)),button('Collections',async()=>{group=null;folders=false;reset();await load();}),button('Archived',async()=>{archived=!archived;group=null;folders=false;moving=null;reset();await load();}));
-  actions.append(button('Folders',async()=>{group=null;folders=true;reset();await load();}),button('Root',async()=>{group=null;folder=null;folders=false;reset();await load();}),button('New folder',async()=>{await api.command('collection-query',{op:'folder-create',identity,title:title.value});group=null;folders=true;reset();await load();}));
+  const save=close=>async()=>{sessions=false;restore=null;const result=await api.command('collection-save',{identity,title:title.value,close,includePinned:pinned.checked});group=null;folder=null;folders=false;archived=false;reset();await load();status.textContent=`Saved ${result.saved} tabs; closed ${result.closed}. Changed or unsupported pages remain open.`;};
+  actions.append(title,pinLabel,button('Save tabs',save(false)),button('Save and close',save(true)),button('Collections',async()=>{sessions=false;restore=null;group=null;folders=false;reset();await load();}),button('Archived',async()=>{sessions=false;restore=null;archived=!archived;group=null;folders=false;moving=null;reset();await load();}));
+  actions.append(button('Lazy restore sessions',async()=>{sessions=true;restore=null;group=null;folders=false;reset();await load();}));
+  actions.append(button('Folders',async()=>{sessions=false;restore=null;group=null;folders=true;reset();await load();}),button('Root',async()=>{sessions=false;restore=null;group=null;folder=null;folders=false;reset();await load();}),button('New folder',async()=>{sessions=false;restore=null;await api.command('collection-query',{op:'folder-create',identity,title:title.value});group=null;folders=true;reset();await load();}));
   const placement=el('div');placement.className='controls';
   const place=button('Move here at end',async()=>{if(!moving||moving.identity!==identity)return;await api.command('collection-query',{op:'move',identity,group:moving.id,folder:folder?.id||null});moving=null;group=null;folders=false;reset();await load();});
   placement.append(place,button('Cancel move',async()=>{moving=null;await load();}));
   if(sidebar)actions.append(button('Full library',()=>api.command('collections')));
   const importText=el('textarea');importText.setAttribute('aria-label','Import OneTab text: URL | title, one per line');importText.placeholder='Paste OneTab export: URL | title, one per line';
-  const details=el('details'),summary=el('summary','Import tab links');details.append(summary,importText,button('Import',async()=>{const submitted=importText.value;await api.command('collection-import',{identity,title:title.value,text:submitted});if(importText.value===submitted)importText.value='';group=null;folder=null;folders=false;archived=false;reset();await load();}));
+  const details=el('details'),summary=el('summary','Import tab links');details.append(summary,importText,button('Import',async()=>{sessions=false;restore=null;const submitted=importText.value;await api.command('collection-import',{identity,title:title.value,text:submitted});if(importText.value===submitted)importText.value='';group=null;folder=null;folders=false;archived=false;reset();await load();}));
   const prev=button('Previous',async()=>{after=history.pop()||0;await load();});const forward=button('Next',async()=>{history.push(after);after=next;await load();});paging.append(button('First page',async()=>{reset();await load();}),prev,forward);
   const searchButton=button('Search',async()=>{after=0;history=[];await load();});
-  root.append(el('p','Saves URLs, titles and pins for this identity and workspace, not page history or unsaved forms. Pinned and internal pages stay open unless included/supported.'),actions,placement,details,search,searchButton,status,list,paging);
+  root.append(el('p','Lazy restore retains the whole collection on disk. Only tabs you activate become live browser tabs; no pages load automatically. Pause prevents further activation and preserves everything. Saves URLs, titles and pins for this identity and workspace, not page history or unsaved forms. Pinned and internal pages stay open unless included/supported.'),actions,placement,details,search,searchButton,status,list,paging);
   async function load(){
     const token=++generation,owner=identity;
-    const page=await api.command('collection-query',{op:group?'tabs':folders?'folders':'groups',identity,group:group?.id,folder:folder?.id||null,after,archived,query:search.value});
+    const page=await api.command('collection-query',{op:restore?'restore-tabs':sessions?'restore-sessions':group?'tabs':folders?'folders':'groups',identity,session:restore?.id,group:group?.id,folder:folder?.id||null,after,archived,query:search.value});
     if(token!==generation||owner!==identity)return;
-    next=page.next;placement.hidden=!moving;place.hidden=folders||!!group;search.hidden=!group;searchButton.hidden=!group;
+    next=page.next;placement.hidden=!moving;place.hidden=folders||!!group||sessions||!!restore;search.hidden=!group;searchButton.hidden=!group;
     const nodes=page.items.map(item=>{
       const card=el('article');card.className='card';
-      if(group){const label=el('strong',item.title||item.url),url=el('p',item.url);url.className='subtle';card.append(label,url,button('Open tab (keep saved)',()=>api.command('collection-open',{identity:owner,id:item.id})));}
+      if(restore){card.append(el('strong',item.title||item.url),el('p',item.url),button('Activate lazy tab',()=>api.command('collection-restore-open',{identity:owner,session:restore.id,id:item.id})));if(item.browserId)card.append(el('small','Previously requested. Existing open tab is focused; failed requests remain retryable.'));}
+      else if(sessions){card.append(el('strong',item.title),el('p',`${item.count.toLocaleString()} lazy tabs · workspace ${item.workspace}${item.paused?' · paused':''}`),button('Move session to this workspace',async()=>{await api.command('collection-restore-reassign',{identity:owner,session:item.id});await load();}),button('Browse lazy tabs',async()=>{restore=item;reset();await load();}),button(item.paused?'Resume lazy session':'Pause lazy session',async()=>{await api.command('collection-query',{op:'restore-pause',identity:owner,session:item.id,paused:!item.paused});reset();await load();}));}
+      else if(group){const label=el('strong',item.title||item.url),url=el('p',item.url);url.className='subtle';card.append(label,url,button('Open tab (keep saved)',()=>api.command('collection-open',{identity:owner,id:item.id})));}
       else if(folders){
         card.append(el('strong',item.title),button('Open folder',async()=>{folder=item;folders=false;group=null;reset();await load();}));
         const rename=el('input'),key=draftKey('folder',item.id);rename.value=renameDrafts.get(key)??item.title;rename.oninput=()=>renameDrafts.set(key,rename.value);rename.setAttribute('aria-label',`Rename folder ${item.title}`);card.append(rename,button('Rename folder',async()=>{rename.disabled=true;try{await api.command('collection-query',{op:'folder-rename',identity:owner,folder:item.id,title:rename.value});renameDrafts.delete(key);reset();await load();}finally{rename.disabled=false;}}));
       }
       else{
         card.append(el('strong',`${item.starred?'★ ':''}${item.locked?'🔒 ':''}${item.title}`),el('p',`${item.count.toLocaleString()} tabs · ${new Date(item.created).toLocaleString()}`),button('Browse',async()=>{group=item;after=0;history=[];search.value='';await load();}));
+        card.append(button('Restore all lazily',async()=>{const result=await api.command('collection-restore-start',{identity:owner,group:item.id});if(owner!==identity)return;sessions=true;restore={...result,title:item.title};group=null;reset();await load();}));
         const rename=el('input'),key=draftKey('collection',item.id);rename.value=renameDrafts.get(key)??item.title;rename.oninput=()=>renameDrafts.set(key,rename.value);rename.setAttribute('aria-label',`Rename collection ${item.title}`);card.append(rename,button('Rename collection',async()=>{rename.disabled=true;try{await api.command('collection-query',{op:'update',identity:owner,group:item.id,field:'title',value:rename.value});renameDrafts.delete(key);reset();await load();}finally{rename.disabled=false;}}));
         card.append(button('Move / reorder',async()=>{moving={id:item.id,identity:owner};await load();}));
         if(moving&&moving.id!==item.id)card.append(button('Place before',async()=>{await api.command('collection-query',{op:'move',identity:owner,group:moving.id,folder:folder?.id||null,before:item.id});moving=null;reset();await load();}));
         for(const [field,label]of [['starred',item.starred?'Unstar':'Star'],['locked',item.locked?'Unlock':'Lock'],['archived',item.archived?'Unarchive':'Archive']])card.append(button(label,async()=>{await api.command('collection-query',{op:'update',identity:owner,group:item.id,field,value:!item[field]});reset();await load();}));
       }return card;
     });
-    list.replaceChildren(...nodes);status.textContent=`${folder?folder.title:'Root'} / ${group?group.title:folders?'Folders':archived?'Archived collections':'Collections'} · ${page.items.length} on this page${next!==null?' · more available':''}`;prev.disabled=!history.length;forward.disabled=next===null;
+    list.replaceChildren(...nodes);status.textContent=`${folder?folder.title:'Root'} / ${restore?'Lazy tabs: '+restore.title:sessions?'Lazy restore sessions':group?group.title:folders?'Folders':archived?'Archived collections':'Collections'} · ${page.items.length} on this page${next!==null?' · more available':''}`;prev.disabled=!history.length;forward.disabled=next===null;
   }
-  return {show(owner){if(identity!==owner){identity=owner;group=null;folder=null;folders=false;moving=null;after=0;history=[];search.value='';generation++;list.replaceChildren();}if(busy){refreshPending=true;return;}return act(load);}};
+  return {show(owner){if(identity!==owner){identity=owner;sessions=false;restore=null;group=null;folder=null;folders=false;moving=null;after=0;history=[];search.value='';generation++;list.replaceChildren();}if(busy){refreshPending=true;return;}return act(load);}};
 };

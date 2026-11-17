@@ -1,0 +1,50 @@
+name: Isolated native picker reproduction
+on:
+  pull_request:
+    paths: ['tests/native/minimal-picker.cjs', 'tests/native/file-picker.py', '.github/workflows/native-picker-reproduction.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: picker-repro-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  reproduce:
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run setup:electron
+      - run: npm run check:electron
+      - name: Linux native dialog dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install --yes xvfb libgtk-3-0 libnss3 libasound2 python3-gi gir1.2-atspi-2.0 at-spi2-core dbus-x11 xdotool x11-utils x11-apps
+      - name: Pinned Windows native accessibility adapter
+        if: runner.os == 'Windows'
+        run: python -m pip install uiautomation==2.0.29 comtypes==1.5.0
+      - name: Minimal Windows reproduction
+        if: runner.os == 'Windows'
+        run: node tests/native/minimal-picker.cjs
+      - name: Minimal Linux reproduction
+        if: runner.os == 'Linux'
+        run: dbus-run-session -- xvfb-run -a node tests/native/minimal-picker.cjs
+      - name: Retain synthetic native evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: native-picker-minimal-${{ matrix.os }}-${{ github.sha }}
+          path: |
+            native-picker-minimal-*/**/*.json
+            native-picker-minimal-*/**/*.log
+            native-picker-minimal-*/**/*.txt
+            native-picker-minimal-*/**/*.xwd
+            !native-picker-minimal-*/**/profile/**
+          retention-days: 7

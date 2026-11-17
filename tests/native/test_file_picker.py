@@ -147,7 +147,10 @@ class FilePickerContracts(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError,'picker gone'):
                     picker.x11_picker(args,time.monotonic()+10)
             self.assertEqual(stopped,['terminate','wait'])
-            self.assertEqual(launched,[['stdbuf','-oL','xev','-id','123','-event','keyboard','-event','structure','-event','focus']])
+            self.assertEqual(launched[0][:3], ['timeout','--signal=TERM','--kill-after=1s'])
+            self.assertGreater(float(launched[0][3][:-1]),0)
+            self.assertLessEqual(float(launched[0][3][:-1]),10)
+            self.assertEqual(launched[0][4:],['stdbuf','-oL','xev','-id','123','-event','keyboard','-event','structure','-event','focus'])
 
     def test_x11_fallback_rejects_changed_owner_before_input(self):
         commands = []
@@ -171,7 +174,7 @@ class FilePickerContracts(unittest.TestCase):
         self.assertFalse(picker.legacy_allowed('value','File name:',{'File name:'},42,0x40,''))
 
     def test_native_wrapper_actual_route_with_fake_owned_tree(self):
-        for cancel, duplicate, field_mode in [(True,False,'single'),(False,False,'single'),(True,True,'single'),(False,False,'nested'),(False,False,'siblings'),(False,False,'foreign'),(False,False,'export'),(False,False,'not-focusable'),(False,False,'focus-rejected'),(False,False,'combo-focus')]:
+        for cancel, duplicate, field_mode in [(True,False,'single'),(False,False,'single'),(True,True,'single'),(False,False,'nested'),(False,False,'siblings'),(False,False,'foreign'),(False,False,'export'),(False,False,'not-focusable'),(False,False,'focus-rejected'),(False,False,'combo-focus'),(False,False,'combo-child-focus')]:
             actions=[]
             args=SimpleNamespace(pid=314,title=('Export all saved collections for this identity; choose a NEW filename' if field_mode=='export' else 'Add collections from a same-identity backup; existing collections stay untouched'),file=os.path.abspath('fixture.noxlibrary'),cancel=cancel,timeout=2)
             class Legacy:
@@ -201,9 +204,14 @@ class FilePickerContracts(unittest.TestCase):
             button_name='Cancel' if cancel else ('Save' if field_mode=='export' else 'Open')
             button=Node(button_name,pattern=Legacy(button_name,43))
             field=Node('File name:',kind=50004,pattern=Legacy('File name:',42))
-            if field_mode in ('nested','combo-focus'):
-                if field_mode == 'combo-focus': field.IsKeyboardFocusable=False
+            if field_mode in ('nested','combo-focus','combo-child-focus'):
+                if field_mode in ('combo-focus','combo-child-focus'): field.IsKeyboardFocusable=False
                 field=Node('File name:',kind=50003,pattern=Legacy('File name:',42)).add(field)
+                if field_mode == 'combo-child-focus':
+                    def focus_child():
+                        field.children[0].HasKeyboardFocus=True
+                        actions.append('focus')
+                    field.SetFocus=focus_child
             elif field_mode == 'foreign':
                 field.ProcessId=999
             if field_mode == 'not-focusable': field.IsKeyboardFocusable=False

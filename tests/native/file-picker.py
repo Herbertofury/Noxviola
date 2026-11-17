@@ -125,7 +125,9 @@ def x11_picker(args, deadline):
         if getattr(args, 'evidence_dir', None):
             verify()
             event_log = open(Path(args.evidence_dir) / 'owned-window-events.txt', 'x')
-            observer = subprocess.Popen(['stdbuf', '-oL', 'xev', '-id', xid,
+            observer = subprocess.Popen(['timeout', '--signal=TERM', '--kill-after=1s',
+                                         str(max(.05, deadline-time.monotonic()))+'s',
+                                         'stdbuf', '-oL', 'xev', '-id', xid,
                                          '-event', 'keyboard', '-event', 'structure', '-event', 'focus'],
                                         stdout=event_log, stderr=subprocess.STDOUT)
         capture('opened')
@@ -390,7 +392,7 @@ def filename_matches(matches):
     ancestor, descendant = combos[0][3], edits[0][3]
     if len(descendant) > len(ancestor) and descendant[:len(ancestor)] == ancestor:
         # Native common dialogs can expose a nonfocusable internal Edit proxy.
-        # Its Value readback is not the ComboBox's committed filename. Use the
+        # An inner Value readback alone did not prove the saved path. Try the
         # unique focusable semantic owner, only for this verified parent/child pair.
         if combos[0][0].IsKeyboardFocusable and not edits[0][0].IsKeyboardFocusable:
             return combos
@@ -483,6 +485,19 @@ def windows_picker(args):
             raise RuntimeError(f'Expected one exact owned {kind} control; found {len(matches)}')
         return matches[0][:3]
 
+    def filename_focused(node):
+        if node.HasKeyboardFocus:
+            return True
+        if node.ControlType != 50003:
+            return False
+        # The real common-dialog composite focuses its internal Edit while the
+        # ComboBox itself remains HasKeyboardFocus=false (native CI evidence).
+        editors = [child for child in children(node, 32)
+                   if child.ProcessId == args.pid and child.ControlType == 50004
+                   and child.Name.replace('&', '') in PATH_LABELS
+                   and child.IsEnabled and not child.IsOffscreen]
+        return len(editors) == 1 and editors[0].HasKeyboardFocus
+
     phase('before-dialog-discovery')
     current = None
     while time.monotonic() < deadline:
@@ -506,7 +521,7 @@ def windows_picker(args):
         if not node.IsKeyboardFocusable:
             raise RuntimeError('Owned filename editor is not keyboard-focusable')
         node.SetFocus()
-        if not node.HasKeyboardFocus or not dialog() or node.ProcessId != args.pid:
+        if not filename_focused(node) or not dialog() or node.ProcessId != args.pid:
             raise RuntimeError('Owned filename editor did not receive focus')
         phase('before-filename-set', method=method, editorFocused=True)
         pattern.SetValue(args.file, waitTime=0)

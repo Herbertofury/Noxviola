@@ -1,6 +1,8 @@
 name: Native browser acceptance
 
 on:
+  pull_request:
+    paths: ['browser/**', 'native/**', 'tests/**', 'scripts/**', 'package*.json', '.github/workflows/browser-native.yml']
   push:
     branches: ['browser/enderloom-baseline-20261115']
     paths:

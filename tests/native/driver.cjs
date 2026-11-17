@@ -1224,6 +1224,21 @@ async function firstLaunch() {
     assert.equal((await site(url)).webContents.getURL(),url,'Re-enabling reopens the preserved active tab');
     await activate(previous);
   });
+  await check('Rust collection helper drives native sidebar and bounded full-view pages',async()=>{
+    await activate(expected.personalTab);const identity=(await state()).currentIdentity;
+    const saved=await command('collection-import',{identity,title:'Synthetic native collection',text:Array.from({length:205},(_,i)=>`${context.origin}/page?collection=${i} | Synthetic saved ${i}`).join('\n')});
+    assert.equal(saved.saved,205);const page=await command('collection-query',{op:'tabs',identity,group:saved.id});assert.equal(page.items.length,100);assert.ok(page.next);
+    assert.equal((await command('collection-query',{op:'tabs',identity:expected.secondIdentity,group:saved.id})).items.length,0);
+    await command('collections');await until(()=>window.webContents.executeJavaScript(`document.querySelectorAll('#collections-content .collection-list .card').length>0`),'native collection group card');
+    await window.webContents.executeJavaScript(`[...document.querySelectorAll('#collections-content button')].find(b=>b.textContent==='Browse').click()`);
+    await until(()=>window.webContents.executeJavaScript(`document.querySelectorAll('#collections-content .collection-list .card').length===100`),'bounded native collection tab page');
+    await window.webContents.executeJavaScript(`[...document.querySelectorAll('#collections-content button')].find(b=>b.textContent==='Next').click()`);
+    await until(()=>window.webContents.executeJavaScript(`document.querySelector('#collections-content .collection-list').textContent.includes('Synthetic saved 100')`),'next native collection page');
+    assert.equal(await window.webContents.executeJavaScript(`document.querySelectorAll('#collections-content .collection-list .card').length`),100);
+    await command('sidebar-select','collections');await until(()=>window.webContents.executeJavaScript(`document.querySelectorAll('#sidebar-collections .collection-list .card').length>0`),'native collection sidebar');
+    await command('sidebar-close');await command('panel-close');const restored=await command('collection-open',{identity,id:page.items[0].id});await site();assert.equal((await state()).tabs.find(t=>t.id===restored).identity,identity);await command('close',restored);await activate(expected.personalTab);
+    assert.equal((await command('collection-query',{op:'health',identity})).integrity,'ok');
+  });
   await check('legacy blank split preserves whole-unit group and pin metadata',async()=>{
     const previous=(await state()).activeId,workspace=await command('workspace-create',{name:'Synthetic empty split workspace',color:'cyan'});await command('workspace-switch',workspace.id);const first=(await state()).activeId,group=await command('group-create',{workspaceId:workspace.id,name:'Blank split group',color:'purple'});await command('tab-assign',{id:first,workspaceId:workspace.id,groupId:group.id});await command('tab-pin',{id:first,pinned:true});await command('split');const splitState=await state(),members=splitState.paneGeometry.panes.map(p=>p.tabId);assert.equal(members.length,2);assert.ok(splitState.tabs.filter(t=>members.includes(t.id)).every(t=>t.groupId===group.id&&t.pinned),'Legacy fallback must inherit group and pin');await command('activate',previous);for(const id of members)await command('close',id);await command('group-remove',group.id);await command('workspace-remove',workspace.id);
   });

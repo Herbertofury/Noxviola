@@ -269,6 +269,7 @@ function validateManifest(manifest) {
     for (const key of ['page', 'service_worker']) if (manifest.background[key]) addResource(manifest.background[key], `background.${key}`);
   }
   const pages = {popup: null, options: null};
+  for(const panel of require('./sidebar-extension-panel.cjs').manifestPanels(manifest))resources.push(...panel.resources);
   const action = manifest.action || manifest.browser_action || manifest.page_action;
   if (action?.default_popup) pages.popup = addResource(action.default_popup, 'Extension popup');
   if (manifest.options_ui?.page || manifest.options_page) pages.options = addResource(manifest.options_ui?.page || manifest.options_page, 'Extension options');
@@ -328,7 +329,10 @@ function compatibility(manifest, detectedApis, electronVersion) {
     if (['cookies','bookmarks','history','contextMenus'].includes(permission)) { add('HOST_PERMISSION_SUBSET',`Required ${permission} grants authorize implemented browser-host methods in this identity; optional grant changes and exact package functionality are not established.`,permission,'limited'); continue; }
     add('PERMISSION_API_NOT_VERIFIED', `The ${permission} permission does not establish that the corresponding API works in Electron.`, permission);
   }
-  for (const key of ['sidebar_action', 'side_panel', 'omnibox', 'commands', 'chrome_url_overrides', 'devtools_page']) {
+  for (const key of ['sidebar_action','side_panel']) {
+    if(manifest[key])add('SIDEBAR_PACKAGE_PAGE','The browser hosts verified packaged sidebar pages in their enabled identity and supplies a subset of the sidebar API. Remote panels, browser-specific styling and lifecycle events require additional support.',key,'limited');
+  }
+  for (const key of ['omnibox', 'commands', 'chrome_url_overrides', 'devtools_page']) {
     if (manifest[key]) add('HOST_INTEGRATION_REQUIRED', `${key} needs browser-host integration and has not been functionally verified.`, key, 'limited');
   }
   if (manifest.background?.service_worker) add('SERVICE_WORKER_UNVERIFIED', 'Manifest V3 background service-worker startup and event lifetime require a real runtime test.', 'background.service_worker');

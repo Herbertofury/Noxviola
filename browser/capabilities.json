@@ -14011,14 +14011,17 @@
         "permission service"
       ],
       "noxviola": {
-        "status": "absent",
+        "status": "partial",
         "codeOwner": "media/browser integration",
         "paths": [
           "browser/main.cjs",
-          "browser/renderer.js"
+          "browser/renderer.js",
+          "browser/media-controls.cjs",
+          "browser/sidebar-web-panel.cjs",
+          "tests/native/sidebar-media-notifications.cjs"
         ],
         "integrationStrategy": "Use native engine media controls and isolate optional enhancements.",
-        "note": "No accepted end-to-end Noxviola evidence for this complete capability."
+        "note": "Native playback, pause, seek, volume, element mute and page mute verified in a synthetic sidebar player. Controls and enumeration are scoped to the active identity."
       },
       "performance": "Measure decode, GPU, power and audio latency with equivalent media quality.",
       "privacy": "Do not capture, send, or retain media without explicit scope; respect service and DRM boundaries.",
@@ -14026,8 +14029,10 @@
         {
           "id": "accept-media-control-center",
           "procedure": "Play multiple sources; controls target the correct media session through navigation, identity changes and tab closure.",
-          "result": "not-run",
-          "evidence": []
+          "result": "partial",
+          "evidence": [
+            "docs/browser/SIDEBAR-SERVICES.md"
+          ]
         }
       ],
       "evidence": {
@@ -14039,13 +14044,13 @@
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
-        "nativeRuntime": "not-run",
+        "nativeRuntime": "Native playback, pause, seek, volume, element mute and page mute verified in a synthetic sidebar player. Controls and enumeration are scoped to the active identity.",
         "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Reuse the engine media-session lifecycle and publish incremental status.",
+      "nextAction": "Add media session transport commands, provider playback lifecycles, and verify independent sources across navigation and restart.",
       "priority": "P2",
       "updatedAt": "2026-11-15"
     },
@@ -17671,10 +17676,12 @@
           "browser/renderer.js",
           "browser/sidebar-layout.cjs",
           "browser/sidebar-web-panel.cjs",
-          "browser/preferences.cjs"
+          "browser/preferences.cjs",
+          "browser/permissions.cjs",
+          "tests/native/sidebar-media-notifications.cjs"
         ],
         "integrationStrategy": "Use a shared opt-in panel/adaptor service; preserve provider-specific behavior as variants.",
-        "note": "A user can explicitly add a provider website to an identity-scoped sidebar WebContentsView. This is a generic website panel, not a verified provider-specific integration; synthetic identity-isolated login popups work; real provider login flows, notifications, service controls and extension integration remain open."
+        "note": "A generated Windows sidebar website receives separate allow/block decisions per identity and a granted Chromium notification emits show. The durable decision survived view unload."
       },
       "performance": "No startup, polling or hidden page processes for disabled integrations.",
       "privacy": "Disclose data recipients and account scope; never transmit browsing or extension inventories to Noxviola.",
@@ -17682,8 +17689,10 @@
         {
           "id": "accept-messenger-sidebar",
           "procedure": "Use synthetic accounts only; verify panel cookies and notification permissions do not cross identities.",
-          "result": "not-run",
-          "evidence": []
+          "result": "partial",
+          "evidence": [
+            "docs/browser/SIDEBAR-SERVICES.md"
+          ]
         }
       ],
       "evidence": {
@@ -17693,14 +17702,14 @@
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "partial: installed Firefox 160.0 and Opera GX 139.0.6053.42 sidebar resources and synthetic-profile behaviors; not a complete browser audit",
-        "nativeRuntime": "partial: synthetic website panel and identity storage checks; provider-specific full workflows remain unverified",
+        "nativeRuntime": "A generated Windows sidebar website receives separate allow/block decisions per identity and a granted Chromium notification emits show. The durable decision survived view unload.",
         "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established",
         "sidebarResearch": "docs/browser/SIDEBAR-REFERENCE-2026-11-16.md"
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Verify each provider workflow, authentication, notifications and identity-specific integration; preserve unsupported behavior as open.",
+      "nextAction": "Verify provider sign-in, push delivery, visible OS toast actions and sidebar unread states using synthetic accounts.",
       "priority": "P2",
       "updatedAt": "2026-11-16"
     },
@@ -19845,14 +19854,17 @@
         "local data service"
       ],
       "noxviola": {
-        "status": "absent",
+        "status": "partial",
         "codeOwner": "optional productivity services",
         "paths": [
           "browser/main.cjs",
-          "browser/renderer.js"
+          "browser/renderer.js",
+          "browser/passwords.cjs",
+          "browser/password-page.cjs",
+          "tests/native/sidebar-passwords.cjs"
         ],
         "integrationStrategy": "Implement a reusable service and an optional presentation rather than a separate browser mode.",
-        "note": "No accepted end-to-end Noxviola evidence for this complete capability."
+        "note": "Windows app saves an encrypted login and fills an exact-origin sign-in form only after an explicit action. Wrong-site, cross-identity, locked and registration requests are refused."
       },
       "performance": "Initialize on demand and reuse content already available; record complete-work cost.",
       "privacy": "Keep page content local unless the user explicitly invokes a disclosed remote service.",
@@ -19860,8 +19872,10 @@
         {
           "id": "accept-autofill",
           "procedure": "Use synthetic data on valid and lookalike origins, embedded forms and navigation races; verify locking and revocation.",
-          "result": "not-run",
-          "evidence": []
+          "result": "partial",
+          "evidence": [
+            "docs/browser/SIDEBAR-SERVICES.md"
+          ]
         }
       ],
       "evidence": {
@@ -19873,13 +19887,13 @@
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
-        "nativeRuntime": "not-run",
+        "nativeRuntime": "Windows app saves an encrypted login and fills an exact-origin sign-in form only after an explicit action. Wrong-site, cross-identity, locked and registration requests are refused.",
         "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Evaluate established password-manager/OS integrations separately from the metadata-only account atlas.",
+      "nextAction": "Add optional sign-in suggestions, credential migration and OS reauthentication, then expand to address/card forms and frames.",
       "priority": "P2",
       "updatedAt": "2026-11-15"
     },
@@ -23273,15 +23287,18 @@
         "per-identity extension context"
       ],
       "noxviola": {
-        "status": "absent",
+        "status": "partial",
         "codeOwner": "canonical extension-management service",
         "paths": [
           "browser/extensions.cjs",
           "browser/main.cjs",
-          "docs/browser/EXTENSION-ARCHITECTURE.md"
+          "docs/browser/EXTENSION-ARCHITECTURE.md",
+          "browser/sidebar-extension-panel.cjs",
+          "browser/sidebar-extension-api.cjs",
+          "tests/native/driver.cjs"
         ],
         "integrationStrategy": "Use the canonical extension-management service; evaluate and harden the pinned maintained adapter, then bind actual APIs to canonical browser services with per-member functional tests.",
-        "note": "Target contract. Electron support and any wrapper are partial and must be recorded per member, context, option and exact version; no complete ecosystem support is claimed."
+        "note": "Windows app executes installed packaged sidebar_action and side_panel documents, handles a verified replacement page, and tears down disabled runtimes by identity."
       },
       "performance": "Observe actual background lifetimes and cleanup; do not replace semantics with no-op APIs.",
       "privacy": "Extension code stays untrusted; permissions, storage and messaging are identity-scoped.",
@@ -23289,8 +23306,10 @@
         {
           "id": "accept-extension-firefox-sidebar",
           "procedure": "Run a Firefox sidebar fixture, test focus/user-action constraints and per-window state; compare with Firefox.",
-          "result": "not-run",
-          "evidence": []
+          "result": "partial",
+          "evidence": [
+            "docs/browser/SIDEBAR-SERVICES.md"
+          ]
         }
       ],
       "evidence": {
@@ -23300,13 +23319,13 @@
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
-        "nativeRuntime": "not-run",
+        "nativeRuntime": "Windows app executes installed packaged sidebar_action and side_panel documents, handles a verified replacement page, and tears down disabled runtimes by identity.",
         "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Adapt the shared panel host while preserving Firefox-specific API behavior.",
+      "nextAction": "Verify unchanged third-party Firefox/Chromium panels and extend missing lifecycle events, icon and style compatibility.",
       "priority": "P1",
       "updatedAt": "2026-11-15"
     },

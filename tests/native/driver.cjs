@@ -15,6 +15,8 @@ const { createPageTools } = require('./page-tools.cjs');
 const { createExtensionStorage } = require('./extension-storage.cjs');
 const { exerciseSidebar } = require('./sidebar.cjs');
 const { exerciseSidebarAccounts } = require('./sidebar-accounts.cjs');
+const { exerciseSidebarMedia,exerciseSidebarNotifications } = require('./sidebar-media-notifications.cjs');
+const { exercisePasswords,verifyPasswordsAfterRestart } = require('./sidebar-passwords.cjs');
 const { exerciseTabContext } = require('./tab-context.cjs');
 const bridgeManifest = require('./fixtures/extension-bridge/manifest.json');
 const BRIDGE_CHECKS = ['chrome-callback-query', 'browser-promise-query', 'first-tab-event', 'canonical-tabs', 'native-message-ids', 'bookmark-service', 'cookie-host-and-identity', 'foreign-tab-denied', 'callback-last-error', 'promise-rejection', 'action-state', 'action-icons', 'cleanup'];
@@ -299,8 +301,16 @@ async function captureShell(name, width, height) {
     const actual = window.getContentSize();
     return actual[0] === width && actual[1] === height;
   }, `shell resize to ${width}x${height}`);
-  await window.webContents.executeJavaScript('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
-  const screenshot = await window.webContents.capturePage();
+  const contents=window.webContents,throttling=contents.getBackgroundThrottling();
+  let screenshot;
+  try{
+    // A covered Windows test window may suspend rAF indefinitely. Scope this
+    // to evidence capture and restore normal product behavior immediately.
+    contents.setBackgroundThrottling(false);
+    await contents.executeJavaScript('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+    screenshot=await contents.capturePage();
+  }finally{contents.setBackgroundThrottling(throttling);}
+  assert.ok(!screenshot.isEmpty(),'Native UI capture must contain pixels');
   fs.writeFileSync(path.join(context.output, `${name}-${width}x${height}.png`), screenshot.toPNG());
 }
 async function command(name, value) {
@@ -1031,6 +1041,53 @@ async function firstLaunch() {
   });
   await exerciseSidebar({window,context,command,state,activate,partitionFor,check,expected});
   await exerciseSidebarAccounts({window,context,command,state,activate,partitionFor,check,expected});
+  await exercisePasswords({window,context,command,activate,check,expected,until});
+  await exerciseSidebarMedia({window,context,command,state,activate,partitionFor,check,expected});
+  if(process.platform==='win32')await exerciseSidebarNotifications({window,context,command,state,activate,partitionFor,check,expected});
+  await check('installed Firefox and Chromium sidebar declarations run real extension documents with scoped APIs',async()=>{
+    const identity=expected.personalIdentity;
+    await activate(expected.personalTab);
+    const preview=await previewFixture('sidebar-extension');
+    const installed=await installPreviewThroughRenderer(preview,identity);
+    await command('panel-close');
+    await command('sidebar-select','extension-panels');
+    assert.deepEqual((await command('sidebar-data')).items.map(item=>item.kind).sort(),['side_panel','sidebar_action']);
+    const runtimeId=installed.identities[0].runtimeId,base='chrome-extension://'+runtimeId+'/';
+    const findPanel=kind=>until(async()=>{
+      const sidebar=(await state()).sidebarExtension;
+      return sidebar.visible&&sidebar.kind===kind&&window.contentView.children.find(view=>view.webContents.getURL()===sidebar.url);
+    },kind+' native extension view');
+    await until(()=>window.webContents.executeJavaScript(`(() => {
+      const buttons=[...document.querySelectorAll('#sidebar-services button')].filter(button=>button.textContent==='Open panel');
+      if(!buttons.length)return false;
+      buttons[0].click();return true;
+    })()`),'visible extension launcher');
+    const firefox=await findPanel('sidebar_action');
+    const response=await until(()=>firefox.webContents.executeJavaScript("document.body?.dataset.result||document.body?.dataset.error"),'actual extension script runs');
+    const data=JSON.parse(response);
+    assert.equal(data.firefox,base+'panel.html');assert.equal(data.options.path,'panel.html');assert.equal(data.runtimeId,runtimeId);
+    assert.equal(firefox.webContents.session,partitionFor(identity));
+    await assert.rejects(firefox.webContents.executeJavaScript('chrome.sidebarAction.toggle()'),/gesture|browser extension action|interaction/i);
+    await command('sidebar-extension-open',{id:installed.id,identity,kind:'side_panel'});
+    const chromium=await findPanel('side_panel');
+    const chromiumContents=chromium.webContents;
+    await chromiumContents.executeJavaScript("chrome.sidePanel.setOptions({path:'alternate.html'})").catch(error=>{
+      // The originating document may be destroyed by its own panel replacement.
+      if(!/destroy|navigat|frame/i.test(error.message))throw error;
+    });
+    await until(async()=>(await state()).sidebarExtension.url===base+'alternate.html','runtime changed to the verified replacement page');
+    await activate(expected.secondTab);
+    assert.equal((await state()).sidebarExtension.visible,false);
+    await assert.rejects(command('sidebar-extension-open',{id:installed.id,identity:expected.secondIdentity,kind:'side_panel'}),/enable|identity/i);
+    await activate(expected.personalTab);
+    await command('sidebar-extension-open',{id:installed.id,identity,kind:'side_panel'});
+    await command('extension-enable',{id:installed.id,identity,enabled:false});
+    assert.equal((await state()).sidebarExtension.visible,false);
+    assert.ok(chromiumContents.isDestroyed());
+    await command('extension-uninstall',installed.id);
+    assert.ok(!(await command('extension-list')).some(item=>item.id===installed.id),'Only the synthetic sidebar package is removed after its test');
+    await command('sidebar-close');
+  });
   await exerciseTabContext({window,context,command,state,check});
   await check('top-right browser menu opens Settings and the settings search filters real controls',async()=>{
     const original=Menu.buildFromTemplate;let captured=null,shown=false;
@@ -1318,6 +1375,7 @@ async function secondLaunch() {
     await command('close',fixture.last);assert.equal((await state()).activeId,fixture.first);await command('activate',fixture.previous);await command('workspace-switch',fixture.workspaceId);assert.equal((await state()).activeId,fixture.first);
     await command('activate',previous);await command('close',fixture.first);await command('workspace-remove',fixture.workspaceId);
   });
+  await verifyPasswordsAfterRestart({activate,command,expected,check});
   await check('the explicit disabled spelling choice survives restart in the default and every identity Session', async () => {
     assert.equal(expected.spellcheckEnabled, false);
     const previousTab = (await state()).activeId;

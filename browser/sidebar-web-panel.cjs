@@ -127,6 +127,7 @@ function createSidebarWebPanel({WebContentsView,getWindow,getSession,identityRea
     const win=getWindow();if(!entry.view.webContents.isDestroyed()){if(win&&!win.isDestroyed())win.contentView.removeChildView(entry.view);entry.view.webContents.close();}notify();return true;
   }
   function destroy(){if(disposed)return;for(const entry of [...entries.values()])release({identity:entry.identity,url:entry.site});disposed=true;current=null;visible=false;}
-  return {open,hide,layout,reload,back,forward,mute,release,state:snapshot,destroy};
+  const sources=()=>[...entries.values()].filter(entry=>!entry.view.webContents.isDestroyed()).map(entry=>({id:`sidebar:${entry.key}`,identity:entry.identity,kind:'sidebar',title:entry.title||entry.site,webContents:entry.view.webContents}));
+  return {open,hide,layout,reload,back,forward,mute,release,state:snapshot,destroy,sources};
 }
 module.exports={createSidebarWebPanel};

@@ -24,6 +24,8 @@ Historical evidence is preserved: the earlier baseline downloaded official Elect
 
 ## Service ownership
 
+The [sidebar services guide](SIDEBAR-SERVICES.md) covers local passwords and autofill, HTML media controls, identity-scoped notification choices, and hosted extension panels.
+
 | Source | Responsibility |
 | --- | --- |
 | `browser/main.cjs` | Trusted browser commands, WebContentsView/tab lifecycle, identity sessions, native dialogs and close coordination. |

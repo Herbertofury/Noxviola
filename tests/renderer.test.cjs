@@ -120,7 +120,7 @@ test('DOM: sidebar site icons keep focus, respect identity and reject remote ima
 test('DOM: account sidebar shows scoped metadata, identity controls and honest password status',async t=>{
  const initial=state({sidebarGeometry:{rail:48,panel:320,panelTarget:320,railX:0,panelX:48,tabX:368,pageX:368,pageRight:0},preferences:{searchEngine:'duckduckgo',tabLayout:'horizontal',sidebarVisible:true,sidebarExpanded:true,sidebarActive:'accounts'}});
  const h=await harness(t,{initial,command:async name=>name==='sidebar-data'?{identity:'personal',items:[{id:'one',label:'Example',handle:'synthetic',origin:'https://example.test',identity:'personal'}]}:undefined});await tick();
- assert.equal(h.$('sidebar-account-controls').hidden,false);assert.match(h.$('sidebar-account-controls').textContent,/Password manager not yet available/);assert.match(h.$('sidebar-items').textContent,/synthetic/);
+ assert.equal(h.$('sidebar-account-controls').hidden,false);assert.match(h.$('sidebar-account-controls').textContent,/Open passwords/);assert.match(h.$('sidebar-items').textContent,/synthetic/);
  h.$('sidebar-items').querySelector('button').click();await tick();assert.deepEqual(h.calls.find(call=>call.name==='sidebar-account-open').value,{id:'one',identity:'personal'});
  h.$('sidebar-account-identity').value='work';h.$('sidebar-account-identity').dispatchEvent(new h.window.Event('change',{bubbles:true}));await tick();assert.equal(h.calls.find(call=>call.name==='identity-switch').value,'work');
 });
@@ -136,11 +136,11 @@ test('DOM: workspace launcher follows canonical workspace updates without replac
 test('DOM: sidebar tool visibility and ordering are saved through the real settings form',async t=>{
   const h=await harness(t,{initial:state({panel:'settings'})});
   const rows=()=>[...h.document.querySelectorAll('.sidebar-tool-row')];
-  assert.equal(rows().length,11);const history=rows().find(row=>row.textContent.includes('History'));
+  assert.equal(rows().length,15);const history=rows().find(row=>row.textContent.includes('History'));
   const checkbox=history.querySelector('input');checkbox.checked=false;checkbox.dispatchEvent(new h.window.Event('change',{bubbles:true}));
   history.querySelector('[aria-label="Move History up"]').click();await tick();
   h.submit(h.$('settings-form'));await tick();const saved=h.calls.find(call=>call.name==='settings-save').value.sidebarTools;
-  assert.deepEqual(saved.map(item=>item.id),['tabs','history','bookmarks','downloads','accounts','extensions','settings','vault','following','resources','start']);assert.equal(saved.find(item=>item.id==='history').visible,false);
+  assert.deepEqual(saved.map(item=>item.id),['tabs','history','bookmarks','downloads','passwords','accounts','media','notifications','extension-panels','extensions','settings','vault','following','resources','start']);assert.equal(saved.find(item=>item.id==='history').visible,false);
 });
 test('DOM: sidebar manager shortcuts invoke canonical managers and customization selects sidebar settings',async t=>{
  const h=await harness(t,{initial:state({panel:'settings'})});h.document.querySelector('[data-sidebar=extensions]').click();await tick();assert.equal(h.calls.at(-1).name,'extensions');

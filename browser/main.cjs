@@ -1,6 +1,6 @@
 'use strict';
 // Browser lifecycle adapted from Herbertofury/Enderloom main.js (GPL-3.0-only).
-const {app, BrowserWindow, WebContentsView, ipcMain, session, dialog, Menu, shell, webContents, nativeImage, screen, systemPreferences} = require('electron');
+const {app, BrowserWindow, WebContentsView, ipcMain, session, dialog, Menu, shell, webContents, nativeImage, screen, systemPreferences, safeStorage} = require('electron');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
@@ -26,6 +26,11 @@ const {sidebarLayout} = require('./sidebar-layout.cjs');
 const {sidebarEase,sidebarDuration} = require('./sidebar-motion.cjs');
 const {createSidebarWebPanel} = require('./sidebar-web-panel.cjs');
 const {sidebarAccountData,sidebarAccountRoute} = require('./sidebar-accounts.cjs');
+const {PasswordStore}=require('./passwords.cjs');
+const passwordPage=require('./password-page.cjs');
+const {createMediaControls}=require('./media-controls.cjs');
+const {createSidebarExtensionPanel}=require('./sidebar-extension-panel.cjs');
+const {createSidebarExtensionAPI}=require('./sidebar-extension-api.cjs');
 const findSession = require('./find-session.cjs').createFindSession();
 const accountStore = require('./accounts.cjs');
 const vaultStore = require('./vault.cjs');
@@ -39,6 +44,7 @@ let writer, saveError = '', sessionFile, dataDirectory, downloads, permissions, 
 let vaultFile, vaultDocument = {version:1, items:[]}, vaultError = '', vaultRecovery = null, vaultImport = null;
 let accountFile, accounts = [], accountError = '', accountRecovery = null;
 let permissionOpening = null, extensionBusy = false;
+let passwords,sidebarExtension,sidebarExtensionAPI;
 let resolveIdentitySession, history, bookmarks, workspaces, follows, followTimer, resourceMonitor, extensionBridge, spellcheck;
 let activeWorkspaceId = 'default', nextRuntimeTabId = 1, preferencePreview = null;
 let sidebarProgress=0,sidebarRailProgress=0,sidebarTimer=null,sidebarDismissTimer=null,sidebarDismissGeneration=0;
@@ -51,6 +57,10 @@ const tabWorkspace = tab => tab.saved.workspaceId || 'default';
 const visibleTabs = () => tabs.filter(tab => tabWorkspace(tab) === activeWorkspaceId);
 const favicons = createFaviconLoader({nativeImage});
 const sidebarWeb=createSidebarWebPanel({WebContentsView,getWindow:()=>win,getSession:identitySession,identityReady,loadFavicon:favicons.load,onInteraction:cancelSidebarDismiss,onChange:value=>send('sidebar-web-state',value)});
+const mediaControls=createMediaControls({getSources:()=>[
+  ...tabs.filter(tab=>tab.view&&!tab.view.webContents.isDestroyed()).map(tab=>({id:`tab:${tab.id}`,identity:tab.identity,kind:'tab',title:tab.title,webContents:tab.view.webContents})),
+  ...sidebarWeb.sources(),
+],onChange:()=>send('media-changed',{})});
 const tabPreview = require('./tab-preview-host.cjs').createTabPreview({
   WebContentsView, ipcMain, root:__dirname, getWindow:()=>win, blocked:()=>Boolean(panel)||closing,
   getTabInfo:id=>{const tab=tabs.find(row=>row.id===id && tabWorkspace(row)===activeWorkspaceId);return tab?{title:tab.title,url:tab.url,identity:tab.identity,contents:tab.view?.webContents}:null;},
@@ -84,7 +94,7 @@ function tabDescriptor(tab) {
 }
 function stateView() {
   return {version:1, profiles, preferences, activeId, currentIdentity, splitId, paneTree, paneLayouts, paneGeometry:currentPaneGeometry(), panel, closing, saveError,
-    activeWorkspaceId,chromeHeight:chromeHeight(),sidebarGeometry:currentSidebarGeometry(),sidebarWeb:sidebarWeb.state(),shortcuts:preferenceStore.shortcutList(preferences),downloadHistory:downloads?.getStatus(),
+    activeWorkspaceId,chromeHeight:chromeHeight(),sidebarGeometry:currentSidebarGeometry(),sidebarWeb:sidebarWeb.state(),sidebarExtension:sidebarExtension?.state(),shortcuts:preferenceStore.shortcutList(preferences),downloadHistory:downloads?.getStatus(),
     canRestore:closed.length > 0, tabs:tabs.map(tab => ({id:tab.id,url:tab.url,title:tab.title,identity:tab.identity,loading:tab.loading,live:!!tab.view,favicon:tab.favicon,
       workspaceId:tabWorkspace(tab),groupId:tab.saved.groupId||null,pinned:!!tab.saved.pinned,muted:tab.view?.webContents.isAudioMuted()??!!tab.saved.muted,audible:tab.view?.webContents.isCurrentlyAudible()||false})),
     canBack:active()?.view?.webContents.navigationHistory.canGoBack() || false,
@@ -110,6 +120,11 @@ function publish(durable = true) {
 }
 function publishVault() { send('vault', {items:vaultDocument.items, open:panel === 'vault', error:vaultError, recoveryAvailable:!!vaultRecovery, preview:vaultImport?.preview.summary || null}); }
 function publishAccounts() { send('accounts', {accounts,profiles,open:panel === 'accounts',error:accountError,recoveryAvailable:!!accountRecovery}); }
+function passwordData(){const state=passwords?.state()||{locked:true};return {...state,identity:currentIdentity,items:state.locked?[]:passwords.list(currentIdentity)};}
+function publishPasswords(){send('passwords',passwordData());}
+function requireCurrentIdentity(value){if(value?.identity!==currentIdentity)throw new Error('The browser identity changed. Try again.');return currentIdentity;}
+function passwordTarget(identity){const tab=active(),contents=tab?.view?.webContents;if(!contents||contents.isDestroyed()||tab.identity!==identity||currentIdentity!==identity)throw new Error('Open a login page in the selected identity first.');return {tab,contents};}
+function requirePasswordTarget(target,identity){const current=passwordTarget(identity);if(current.tab!==target.tab||current.contents!==target.contents)throw new Error('The selected login page changed. Try again.');}
 function publishExtensions() { send('extensions', {items:extensions?.list() || [],profiles,currentIdentity,open:panel === 'extensions',error:extensionError,busy:extensionBusy}); }
 function publishExtensionActions() {send('extension-actions',extensionBridge?.actionState(currentIdentity,active()?.runtimeId)||[]);}
 function publishPermissions() { send('permissions', {items:permissions?.list() || [],profiles,open:panel === 'permissions',status:permissions?.status || 'blocked',error:permissions?.error || '',recoveryAvailable:permissions?.status === 'recovery'}); }
@@ -130,7 +145,22 @@ function currentSidebarGeometry(){
   const [width,height]=win&&!win.isDestroyed()?win.getContentSize():[1320,860];
   return sidebarLayout({width,height,chromeHeight:chromeHeight(),verticalTabs:preferences.tabLayout==='vertical',visible:preferences.sidebarVisible||sidebarProgress>0,expanded:sidebarProgress>0,side:preferences.sidebarSide,panelWidth:preferences.sidebarWidth,progress:sidebarProgress,railProgress:sidebarRailProgress});
 }
-function syncSidebarWeb(){
+function syncSidebarWeb({skipExtension=false,tabChanged=false}={}){
+  const extension=preferences.sidebarActive.match(/^extension:([^:]+):(sidebar_action|side_panel)$/);
+  if(sidebarExtension&&!skipExtension){
+    const state=sidebarExtension.state();
+    if(preferences.sidebarVisible&&preferences.sidebarExpanded&&extension){
+      if(state.identity!==currentIdentity)sidebarExtension.hide();
+      if(tabChanged||!state.visible||state.id!==extension[1]||state.identity!==currentIdentity||state.kind!==extension[2]){
+        const identity=currentIdentity,id=extension[1],kind=extension[2];
+        void sidebarExtensionAPI.openFromUser({id,identity,kind}).catch(error=>{
+          if(currentIdentity!==identity||preferences.sidebarActive!==`extension:${id}:${kind}`)return;
+          notice(error.message);
+          if(!sidebarExtension.state().error)changeSidebar({sidebarActive:'extension-panels'});
+        });
+      }
+    }else if(state.visible)sidebarExtension.hide();
+  }
   const appEntry=preferences.sidebarActive.startsWith('app:')?preferences.sidebarApps.find(item=>item.id===preferences.sidebarActive.slice(4)):null;
   const visible=preferences.sidebarVisible&&preferences.sidebarExpanded&&appEntry;
   const state=sidebarWeb.state();
@@ -139,8 +169,8 @@ function syncSidebarWeb(){
     try{sidebarWeb.open({identity:currentIdentity,url:appEntry.url});}catch(error){notice(`Sidebar page could not open: ${error.message}`);}
   }
 }
-function changeSidebar(patch){
-  cancelSidebarDismiss();preferences=preferenceStore.applyPreferences(preferences,patch);syncSidebarWeb();animateSidebar();publish(false);publishHistory();publishBookmarks();queueSave();
+function changeSidebar(patch,options){
+  cancelSidebarDismiss();preferences=preferenceStore.applyPreferences(preferences,patch);syncSidebarWeb(options);animateSidebar();publish(false);publishHistory();publishBookmarks();queueSave();
 }
 function cancelSidebarDismiss(){sidebarDismissGeneration++;clearTimeout(sidebarDismissTimer);sidebarDismissTimer=null;}
 function scheduleSidebarDismiss(tab,view){
@@ -172,7 +202,8 @@ function layout() {
   for (const tab of tabs) {if(!tab.view)continue;const pane=visible.get(tab.id);tab.view.setVisible(Boolean(pane)&&!panel);if(pane)tab.view.setBounds(pane.content);}
   send('pane-layout',panes);
   const grip=Math.min(6,geometry.panel);
-  sidebarWeb.layout({x:geometry.panelX+(preferences.sidebarSide==='right'?grip:0),y:chromeHeight()+40,width:Math.max(0,geometry.panel-grip),height:Math.max(0,height-chromeHeight()-40)});
+  const sidebarBounds={x:geometry.panelX+(preferences.sidebarSide==='right'?grip:0),y:chromeHeight()+40,width:Math.max(0,geometry.panel-grip),height:Math.max(0,height-chromeHeight()-40)};
+  sidebarWeb.layout(sidebarBounds);sidebarExtension?.layout(sidebarBounds);
   send('sidebar-layout',geometry);
   tabPreview.layout();
 }
@@ -278,13 +309,13 @@ wc.on('focus',()=>{if(activeId!==tab.id&&paneLayout.ids(paneTree).includes(tab.i
 function activate(id) {
   tabPreview.hide();
   const tab = tabs.find(row => row.id === id); if (!tab || closing) return;
-  const previousActive=activeId,changed = activeId !== id; activeId = id; currentIdentity = tab.identity;activeWorkspaceId=tabWorkspace(tab);workspaceLastTabs.set(activeWorkspaceId,id);
+  const changed = activeId !== id; activeId = id; currentIdentity = tab.identity;activeWorkspaceId=tabWorkspace(tab);workspaceLastTabs.set(activeWorkspaceId,id);
   if(!paneLayout.ids(paneTree).includes(id)){
     if(paneLayout.ids(paneTree).length>1)paneLayouts.push(paneTree);
     const saved=paneLayouts.find(tree=>paneLayout.ids(tree).includes(id));
     paneLayouts=paneLayouts.filter(tree=>tree!==saved);paneTree=saved||{tabId:id};
   }
-  showPage();for(const paneId of paneLayout.ids(paneTree))ensureView(findTab(paneId));syncSidebarWeb();layout();publish(changed);publishHistory();publishBookmarks();publishWorkspaces();publishExtensionActions();
+  showPage();for(const paneId of paneLayout.ids(paneTree))ensureView(findTab(paneId));syncSidebarWeb({tabChanged:changed});layout();publish(changed);publishHistory();publishBookmarks();publishWorkspaces();publishExtensionActions();
   if(changed)hostEvent(tab.identity,'tabs.onActivated',{tabId:tab.runtimeId,windowId:win.id});
 }
 function newTab(url = 'about:blank', identity = currentIdentity, saved = null, position = tabs.length, options = {}) {
@@ -312,6 +343,7 @@ function closeTab(id) {
   const index = tabs.findIndex(tab => tab.id === id); if (index < 0) return;
   const workspaceIndex=visibleTabs().findIndex(tab=>tab.id===id);
   const [tab] = tabs.splice(index,1);if(workspaceLastTabs.get(tabWorkspace(tab))===id)workspaceLastTabs.delete(tabWorkspace(tab));closed.push({saved:savedTab(tab),position:index,closedId:crypto.randomUUID()}); removeView(tab);runtimeTabs.delete(tab.runtimeId);
+  sidebarExtensionAPI?.dropTab(tab.identity,tab.runtimeId);
   hostEvent(tab.identity,'tabs.onRemoved',tab.runtimeId,{windowId:win.id,isWindowClosing:false});
   paneLayouts=paneLayouts.map(tree=>paneLayout.remove(tree,id)).filter(tree=>paneLayout.ids(tree).length>1);
   paneTree=paneLayout.remove(paneTree,id);if(paneTree&&activeId===id)activate(paneLayout.ids(paneTree)[0]);
@@ -381,10 +413,11 @@ function extensionHost() {
     return value;
   }
   return {
+    sidebar:sidebarExtensionAPI,
     messageSource:nativeId=>{
       const contents=webContents.fromId(nativeId);
       if(!contents||contents.isDestroyed())return null;
-      return {contents,owner:extensionWindows.get(BrowserWindow.fromWebContents(contents))||null};
+      return {contents,owner:extensionWindows.get(BrowserWindow.fromWebContents(contents))||sidebarExtension?.ownerFor(nativeId)||null};
     },
     tabs:{
       list:identity=>tabs.filter(tab=>tab.identity===identity).map(tabDescriptor),
@@ -552,7 +585,7 @@ function showBrowserMenu(anchor){
     item('New tab','new'),item('Reopen closed tab','restore',{enabled:closed.length>0}),{type:'separator'},
     item('Find in page','focus-find'),item('Search tabs','search-tabs'),{label:'Zoom',submenu:[item('Zoom in','zoom-in'),item('Zoom out','zoom-out'),item('Reset zoom','zoom-reset')]},
     {type:'separator'},item('History','history'),item('Downloads','downloads'),item('Bookmarks','bookmarks'),item('Extensions','extensions'),item('Library','vault'),
-    item('Workspaces and tab groups','workspaces'),item('Accounts and identities','accounts'),item('Site permissions','permissions'),
+    item('Workspaces and tab groups','workspaces'),item('Accounts and identities','accounts'),item('Passwords','show-passwords'),item('Site permissions','permissions'),
     {label:'More tools',submenu:[item('Following','following'),item('Resource monitor','resources'),item('Save page as PDF','save-pdf'),item('Save visible screenshot','save-screenshot'),item('Developer tools','devtools'),item('All browser tools','tools')]},
     {type:'separator'},item('Settings','settings'),{type:'separator'},{role:'quit',label:'Exit Noxviola'}
   ]);
@@ -567,6 +600,11 @@ async function perform(name, value) {
     case 'tab-preview': if (value?.open) {void tabPreview.show(String(value.id||''),value.position).catch(()=>notice('Tab preview is unavailable.'));} else tabPreview.hide(); break;
     case 'search-tabs': {const width=win.getContentSize()[0],right=preferences.tabSearchPosition==='right',anchor=value?.anchor||{x:right?width-180:38,y:0,width:28,height:34,align:right?'right':'left'};tabPreview.hide();tabSearch.show(anchor);break;}
     case 'sidebar-toggle':changeSidebar({sidebarVisible:!preferences.sidebarVisible});break;
+    case 'show-passwords':case 'show-notifications':case 'show-media':case 'show-extension-panels':{
+      if(panel)setPanel(panel);
+      changeSidebar({sidebarVisible:true,sidebarExpanded:true,sidebarActive:name.slice(5)});
+      break;
+    }
     case 'sidebar-rail-expand':changeSidebar({sidebarRailExpanded:!preferences.sidebarRailExpanded});break;
     case 'sidebar-pin':changeSidebar({sidebarPanelPinned:!preferences.sidebarPanelPinned});break;
     case 'sidebar-select':{
@@ -587,6 +625,10 @@ async function perform(name, value) {
     }
     case 'sidebar-data':{
       const type=preferences.sidebarActive;
+      if(type==='passwords')return passwordData();
+      if(type==='media')return mediaControls.list(currentIdentity);
+      if(type==='notifications')return {identity:currentIdentity,items:permissions.list().filter(item=>item.identity===currentIdentity&&item.permission==='notifications')};
+      if(type==='extension-panels')return {identity:currentIdentity,items:sidebarExtensionAPI.list(currentIdentity)};
       if(type==='bookmarks')return serviceView(bookmarks,()=>({identity:currentIdentity,tree:bookmarks.getTree(currentIdentity)}));
       if(type==='history')return serviceView(history,()=>({identity:currentIdentity,...history.query(currentIdentity,{})}));
       if(type==='downloads')return {identity:currentIdentity,items:downloads.list().filter(item=>item.identity===currentIdentity)};
@@ -595,6 +637,27 @@ async function perform(name, value) {
       return {identity:currentIdentity};
     }
     case 'sidebar-account-open':{const target=sidebarAccountRoute({id:value?.id,identity:value?.identity,currentIdentity,profiles,accounts,error:accountError});newTab(target.url,target.identity);break;}
+    case 'password-list':return passwordData();
+    case 'password-unlock':await passwords.unlock();publishPasswords();return passwordData();
+    case 'password-lock':passwords.lock();publishPasswords();break;
+    case 'password-save':{requireCurrentIdentity(value);return passwords.save(value);}
+    case 'password-remove':{const identity=requireCurrentIdentity(value);await passwords.remove(identity,value.id);break;}
+    case 'password-read-page':{const identity=requireCurrentIdentity(value),target=passwordTarget(identity),context=await passwordPage.prepare(target.contents);requirePasswordTarget(target,identity);const result=await passwordPage.read(context);requirePasswordTarget(target,identity);return {...result,identity};}
+    case 'password-fill':{
+      const identity=requireCurrentIdentity(value),target=passwordTarget(identity),context=await passwordPage.prepare(target.contents);
+      const credential=await passwords.reveal(identity,value.id,context.origin);requirePasswordTarget(target,identity);
+      const result=await passwordPage.fill(context,credential);requirePasswordTarget(target,identity);return result;
+    }
+    case 'password-reveal':{
+      const identity=requireCurrentIdentity(value),choice=await dialog.showMessageBox(win,{type:'question',title:'Reveal saved password',message:'Show this password in the sidebar?',detail:'Anyone viewing your screen can read it.',buttons:['Cancel','Reveal password'],defaultId:0,cancelId:0,noLink:true});
+      if(choice.response!==1)return null;requireCurrentIdentity(value);const result=await passwords.reveal(identity,value.id);requireCurrentIdentity(value);return {identity,id:result.id,password:result.password};
+    }
+    case 'password-recover':{const choice=await dialog.showMessageBox(win,{type:'warning',message:'Restore the previous encrypted password checkpoint?',detail:'The current file will be preserved separately.',buttons:['Cancel','Restore'],defaultId:0,cancelId:0,noLink:true});if(choice.response===1)await passwords.recover();publishPasswords();break;}
+    case 'media-list':return mediaControls.list(currentIdentity);
+    case 'media-action':{const identity=requireCurrentIdentity(value);return mediaControls.act(identity,value);}
+    case 'sidebar-extension-open':{requireCurrentIdentity(value);return sidebarExtensionAPI.openFromUser(value);}
+    case 'sidebar-extension-reload':return sidebarExtension.reload();
+    case 'sidebar-extension-unload':{const state=sidebarExtension.state();sidebarExtension.release({id:state.id,identity:state.identity,kind:state.kind});changeSidebar({sidebarExpanded:false});break;}
     case 'new': return newTab(typeof value === 'string' ? value : 'about:blank');
     case 'activate': activate(value); break;
     case 'close':closeTab(value);break;
@@ -850,7 +913,7 @@ async function requestClose() {
     const choice = await dialog.showMessageBox(win,{type:'warning',message:'Recent tabs could not be saved.',detail:`${error.message}\nKeep the browser open to preserve important addresses, or explicitly exit without saving recent tabs.`,buttons:['Keep browser open','Exit without saving recent tabs'],defaultId:0,cancelId:0,noLink:true});
     if (choice.response !== 1) {resumeAfterCloseError('Close canceled. Fix the save error and choose Retry save.');return;}
   }
-  closeExtensionWindows();sidebarWeb.destroy();
+  closeExtensionWindows();sidebarWeb.destroy();sidebarExtensionAPI?.destroy();sidebarExtension?.destroy();passwords?.dispose();mediaControls.dispose();
   try { if (!extensionError) await extensions.dispose(); } catch (error) { notice(error.message); }
   try{await extensionBridge?.dispose();}catch(error){notice(`Extension host cleanup: ${error.message}`);}clearInterval(followTimer);follows?.dispose();history?.dispose();bookmarks?.dispose();workspaces?.dispose();
   permissions.dispose(); downloads.dispose(); await writer.close().catch(() => {});
@@ -871,6 +934,8 @@ async function start() {
   tabs = originalSession.tabs.map(tabFromSaved); activeId = originalSession.activeId;paneTree=originalSession.paneTree|| (activeId?{tabId:activeId}:null);paneLayouts=originalSession.paneLayouts||[];
   for(const [workspace,id] of Object.entries(originalSession.workspaceLastTabs||{}))workspaceLastTabs.set(workspace,id);
   currentIdentity = active()?.identity || 'personal';
+  passwords=new PasswordStore({file:path.join(dataDirectory,'browser-passwords.encrypted.json'),safeStorage,getIdentities:()=>profiles.map(profile=>profile.id),onChange:publishPasswords});
+  try{await passwords.open();}catch{/* The password sidebar exposes its preserved recovery/error state. */}
   activeWorkspaceId=active()?tabWorkspace(active()):originalSession.activeWorkspaceId||'default';
   if(active())workspaceLastTabs.set(activeWorkspaceId,activeId);
   vaultFile = path.join(dataDirectory,'private-vault.json'); accountFile = path.join(dataDirectory,'private-accounts.json');
@@ -895,9 +960,24 @@ async function start() {
   downloads.on('status', () => publish(false));
   try { downloads.open(); } catch { /* Downloads exposes its history error and recovery controls without hiding live transfers. */ }
   extensions = new ExtensionManager({directory:path.join(dataDirectory,'extensions'),getSession:identitySession,getIdentities:() => profiles.map(profile => profile.id),loadExtension:createExtensionLoader({app,webContents})});
+  sidebarExtension=createSidebarExtensionPanel({WebContentsView,getWindow:()=>win,manager:extensions,onInteraction:cancelSidebarDismiss,
+    onExternalOpen:({url,context})=>{if(currentIdentity===context.identity)eventAction(()=>newTab(url,context.identity));},
+    onUserGesture:context=>{if(currentIdentity===context.identity)sidebarExtensionAPI.grantGesture(context);},
+    onChange:value=>{if(!value.identity||value.identity===currentIdentity)send('sidebar-extension-state',value);}});
+  sidebarExtensionAPI=createSidebarExtensionAPI({manager:extensions,panelHost:sidebarExtension,
+    tabs:{get:(identity,id)=>tabDescriptor(runtimeTab(identity,id)),list:identity=>tabs.filter(tab=>tab.identity===identity).map(tabDescriptor)},
+    windows:{getCurrent:windowDescriptor},
+    reveal:({id,identity,kind,tabId})=>{
+      if(closing||identity!==currentIdentity||active()?.runtimeId!==tabId)throw new Error('The selected tab or browser identity changed.');
+      if(!preferences.sidebarExpanded||!preferences.sidebarVisible||preferences.sidebarActive!==`extension:${id}:${kind}`)
+        changeSidebar({sidebarVisible:true,sidebarExpanded:true,sidebarActive:`extension:${id}:${kind}`},{skipExtension:true});
+    },
+    hide:({id,identity})=>{if(identity===currentIdentity&&preferences.sidebarActive.startsWith(`extension:${id}:`))changeSidebar({sidebarActive:'extension-panels'});},
+    onChange:identity=>{if(identity===currentIdentity)send('sidebar-extension-state',sidebarExtension.state());}});
   extensions.subscribeRuntime(event => {
     if (event.kind !== 'revoked' || !event.runtimeId) return;
     for (const tab of tabs) if (tab.identity === event.identity && extensionUrl(tab.url) && new URL(tab.url).hostname === event.runtimeId) removeView(tab);
+    if(event.identity===currentIdentity&&preferences.sidebarActive.startsWith(`extension:${event.id}:`))changeSidebar({sidebarActive:'extension-panels'});
     layout(); publish(false);
   });
   const {createExtensionBridge}=require('./extension-bridge.cjs');

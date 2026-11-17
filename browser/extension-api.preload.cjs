@@ -109,6 +109,9 @@
       action:{methods:['setTitle','getTitle','setPopup','getPopup','setIcon','setBadgeText','getBadgeText','setBadgeBackgroundColor','getBadgeBackgroundColor','enable','disable','openPopup'],events:['onClicked']},
       browserAction:{methods:['setTitle','getTitle','setPopup','getPopup','setIcon','setBadgeText','getBadgeText','setBadgeBackgroundColor','getBadgeBackgroundColor','enable','disable','openPopup'],events:['onClicked']},
     };
+    const manifest=nativeRuntime.getManifest?.();
+    if(manifest?.sidebar_action)definitions.sidebarAction={methods:['getPanel','setPanel','getTitle','setTitle','open','close','toggle','isOpen'],events:[]};
+    if(manifest?.permissions?.includes('sidePanel'))definitions.sidePanel={methods:['getOptions','setOptions','open','close','getPanelBehavior','setPanelBehavior'],events:[]};
     const apis = {runtime};
     for (const [namespace,definition] of Object.entries(definitions)) {
       // Optional-grant mutation and its events have no synchronized native

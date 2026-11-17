@@ -92,7 +92,7 @@ Search by capability ID or name. The application exposes the same JSON in its ex
 | devtools | Developer tools suite | development | absent | Wire explicit menu/shortcut access to engine tooling and document supported panels. |
 | picture-in-picture | Floating video playback | media | absent | Use supported native video surfaces and test each reference variant independently. |
 | mini-window | Floating page or region window | media | absent | Evaluate Firefox160 early Mini Window behavior and a reversible engine-backed implementation. |
-| media-control-center | Cross-tab media controls | media | absent | Reuse the engine media-session lifecycle and publish incremental status. |
+| media-control-center | Cross-tab media controls | media | partial | Add media session transport commands, provider playback lifecycles, and verify independent sources across navigation and restart. |
 | drm-media | DRM-protected media compatibility | media | blocked | Audit Electron codec/DRM availability; retain explicit service/platform blockers. |
 | cast-media | Media casting | media | absent | Confirm supported runtime discovery and casting APIs before advertising availability. |
 | gx-volume | Per-tab volume amplification | media | absent | Evaluate a consented audio graph; expose real gain and quality cost rather than a decorative slider. |
@@ -131,7 +131,7 @@ Search by capability ID or name. The application exposes the same JSON in its ex
 | personal-news | Optional news feeds | optional-services | absent | Use an opt-in feed reader; avoid recommendation telemetry. |
 | smart-home-panel | Optional smart-home panel | optional-services | absent | Investigate provider-supported APIs; do not imply access from a browser feature label. |
 | music-sidebar | Shared music-service panel | optional-services | partial | Verify each provider workflow, authentication, notifications and identity-specific integration; preserve unsupported behavior as open. |
-| messenger-sidebar | Shared messenger and social panel | optional-services | partial | Verify each provider workflow, authentication, notifications and identity-specific integration; preserve unsupported behavior as open. |
+| messenger-sidebar | Shared messenger and social panel | optional-services | partial | Verify provider sign-in, push delivery, visible OS toast actions and sidebar unread states using synthetic accounts. |
 | flow-transfer | Optional cross-device transfer | optional-services | absent | Evaluate a consented encrypted transfer protocol rather than silently copying provider accounts. |
 | panel-twitch | Twitch panel variant | optional-services | absent | Audit provider-specific embedding, permissions and terms before enabling this adapter. |
 | panel-discord | Discord panel variant | optional-services | absent | Audit provider-specific embedding, permissions and terms before enabling this adapter. |
@@ -158,7 +158,7 @@ Search by capability ID or name. The application exposes the same JSON in its ex
 | ai-vision | Optional visual page assistance | optional-services | absent | Gate capture on visible consent and source identity; do not start background screen analysis. |
 | ai-controls | Unified optional-AI controls | customization | absent | Create a capability switch registry with explicit dependency handling. |
 | visual-search | Optional visual search | optional-services | absent | Add provider selection with explicit payload review and safe results navigation. |
-| autofill | Form autofill and credential-manager integration | productivity | absent | Evaluate established password-manager/OS integrations separately from the metadata-only account atlas. |
+| autofill | Form autofill and credential-manager integration | productivity | partial | Add optional sign-in suggestions, credential migration and OS reauthentication, then expand to address/card forms and frames. |
 | passkeys | Passkey authentication | security | absent | Verify Electron WebAuthn/platform support and user verification before claiming passkey parity. |
 | password-health | Optional password health checks | security | absent | Delegate to a vetted credential manager; never add plaintext passwords to the account atlas. |
 | writing-assistance | Optional spelling and grammar assistance | productivity | partial | Keep local Session checking and saved-state evidence separate from dictionary traffic; qualify native corrections, then implement remaining language/grammar controls and a supported downloader opt-out without fake consent. |
@@ -177,7 +177,7 @@ Search by capability ID or name. The application exposes the same JSON in its ex
 | extension-content-scripts | Content scripts and execution worlds | extensions | partial | Verify absence of the new transport in webpages and content worlds, then qualify native injection and required browser-specific world semantics. |
 | extension-actions | Toolbar and page actions | extensions | partial | Extend the passing title/badge and six-stage image fixture to real extensions, Chromium-specific setters, popup/click/pageAction and complete accessibility/lifecycle semantics. |
 | extension-sidepanels | Chrome sidePanel behavior | extensions | absent | Add a panel host tied to the extension service after required API semantics are qualified. |
-| extension-firefox-sidebar | Firefox sidebarAction behavior | extensions | absent | Adapt the shared panel host while preserving Firefox-specific API behavior. |
+| extension-firefox-sidebar | Firefox sidebarAction behavior | extensions | partial | Verify unchanged third-party Firefox/Chromium panels and extend missing lifecycle events, icon and style compatibility. |
 | extension-tabs-api | Complete required tabs members | extensions | partial | Keep the recorded canonical/native-ID fixture as a baseline; add real-package coverage and the remaining method, option and event semantics. |
 | extension-windows-api | Required windows members | extensions | partial | Verify the real single-window subset natively, then extend the canonical window/session model before exposing complete windows APIs. |
 | extension-tab-groups | Extension tab group semantics | extensions | absent | Adapt tabGroups to the existing canonical group definitions after native UI/group acceptance; do not create a second extension-only group store. |

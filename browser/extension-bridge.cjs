@@ -231,6 +231,7 @@ class ExtensionBridge {
     if (namespace === 'events') return this.eventSubscription(context,event,name,args[0]);
     if (namespace === 'tabs') return this.tabs(context,name,args,event);
     if (namespace === 'windows') return this.windows(context,name,args);
+    if ((namespace === 'sidebarAction'||namespace === 'sidePanel')&&this.host.sidebar) return this.host.sidebar.invoke(context,namespace,name,args);
     if (namespace === 'extension' && name === 'isAllowedFileSchemeAccess') {
       if (args.length) reject('INVALID_ARGUMENT','extension.isAllowedFileSchemeAccess does not accept arguments.');
       // The manager passes this exact accepted per-identity flag to native
@@ -507,6 +508,8 @@ class ExtensionBridge {
     const tab = this.getTab(context,tabId), record = this.actionRecord(context), action = {...record.defaults,...record.tabs.get(tabId)};
     if (!action.enabled) reject('ACTION_DISABLED','The extension action is disabled for this tab.');
     if (policy.hasPermission(context,'activeTab')) { const key = identity+'\0'+context.id; if (!this.activeGrants.has(key)) this.activeGrants.set(key,new Map()); this.activeGrants.get(key).set(tabId,this.origin(tab.url)); }
+    if (await this.host.sidebar?.handleActionClick(context)) return;
+    this.host.sidebar?.grantGesture(context);
     if (action.popup) {
       const url = new URL(action.popup,'chrome-extension://'+runtimeId+'/');
       if (extensionOrigin(url.href) !== runtimeId) reject('EXTENSION_PAGE_ORIGIN','The action popup must stay within its authorized extension.');

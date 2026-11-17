@@ -1,0 +1,8 @@
+{
+  "name": "Noxviola synthetic extension sidebar",
+  "version": "1.0",
+  "manifest_version": 3,
+  "permissions": ["storage", "sidePanel"],
+  "side_panel": {"default_path": "panel.html"},
+  "sidebar_action": {"default_panel": "panel.html", "default_title": "Firefox fixture sidebar"}
+}

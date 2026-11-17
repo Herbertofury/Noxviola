@@ -978,8 +978,16 @@ async function firstLaunch() {
   });
   await check('site geolocation request is denied through production permission handling', async () => {
     const view = await site();
-    const outcome = await view.webContents.executeJavaScript('new Promise(resolve => navigator.geolocation.getCurrentPosition(() => resolve({allowed:true}), error => resolve({allowed:false,code:error.code}), {timeout:3000,maximumAge:0}))', true);
-    assert.deepEqual(outcome, { allowed: false, code: 1 });
+    window.show();
+    view.webContents.focus();
+    let watchdog;
+    try{
+      const outcome = await Promise.race([
+        view.webContents.executeJavaScript('new Promise(resolve => navigator.geolocation.getCurrentPosition(() => resolve({allowed:true}), error => resolve({allowed:false,code:error.code}), {timeout:3000,maximumAge:0}))',true),
+        new Promise((_,reject)=>{watchdog=setTimeout(()=>reject(new Error('No Chromium geolocation permission outcome arrived within 12 seconds.')),12000);}),
+      ]);
+      assert.deepEqual(outcome,{allowed:false,code:1});
+    }finally{clearTimeout(watchdog);}
   });
   await check('more than twelve live duplicate tabs, close/reopen and actual split bounds', async () => {
     const duplicate = `${context.origin}/page?duplicate=1`;

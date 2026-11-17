@@ -493,13 +493,18 @@ async function runPackagedPhase(packaged, context, phase, { publicHttps = false 
         assert.deepEqual(stateTabs(await state()), tabsBefore);
         await screenshot('customized-settings');
         await command('panel-close');
+        await command('activate',expected.personal);
+        if((await state()).splitId)await command('split');
         const target = await targetAt(personalUrl);
         await until(async () => {
           const outer = await evaluate(shell, '({width:innerWidth,height:innerHeight})');
           const page = await evaluate(target, '({width:innerWidth,height:innerHeight})');
           const current = await state();
-          result.customizedGeometry = { shell: outer, page, chromeHeight: current.chromeHeight, verticalTabsWidth: 210, sidebarLauncherWidth: 48 };
-          return current.chromeHeight === 72 && page.width === outer.width - 210 - 48 && page.height === outer.height - current.chromeHeight;
+          const pane=current.paneGeometry.panes.find(pane=>pane.tabId===expected.personal);
+          result.customizedGeometry = { shell: outer, page, pane:pane?.content, activeId:current.activeId, chromeHeight: current.chromeHeight, verticalTabsWidth: 210, sidebarLauncherWidth: 48 };
+          return current.activeId===expected.personal&&current.paneGeometry.panes.length===1&&current.chromeHeight===72&&
+            pane?.content.width===outer.width-210-48&&pane.content.height===outer.height-current.chromeHeight&&
+            page.width===pane.content.width&&page.height===pane.content.height;
         }, 'actual page viewport below the bookmarks bar and beside vertical tabs');
         assertStores(await evaluate(target, 'window.fixture.readIdentity()'), 'packaged-personal');
       });

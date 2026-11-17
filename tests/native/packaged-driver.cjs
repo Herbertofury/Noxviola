@@ -473,6 +473,40 @@ async function runPackagedPhase(packaged, context, phase, { publicHttps = false 
           assert.equal((await jobs.run('export','synthetic',backup)).tabs,205);assert.equal((await jobs.run('import','synthetic',backup)).tabs,205);const groups=await store.request({op:'groups',identity:'synthetic'});assert.equal(groups.items.length,2);assert.ok(groups.items.every(g=>g.count===205));assert.ok(groups.items.some(g=>g.id===source.id));assert.equal((await store.request({op:'health',identity:'synthetic'})).integrity,'ok');
         }finally{store.close();jobs.cancel();}
       });
+      await check('packaged native file picker exports and additively restores the library, with cancellation and malformed-file recovery',async()=>{
+        const identity=expected.collection.identity;
+        await command('activate',expected.personal);await command('collections');
+        const root='collections-content';
+        await until(()=>evaluate(shell,`!document.getElementById('${root}').hasAttribute('aria-busy')`),'backup controls ready');
+        await evaluate(shell,`(()=>{const r=document.getElementById('${root}');[...r.querySelectorAll('details')].find(d=>d.querySelector('summary')?.textContent==='Library-only backup and additive restore').open=true;})()`);
+        assert.ok(await evaluate(shell,`document.getElementById('${root}').textContent.includes('Plaintext backup')`));
+        await screenshot('library-backup-warning');
+        const choose=async(kind,file=null)=>{
+          const title=kind==='export'?'Export all saved collections for this identity; choose a NEW filename':'Add collections from a same-identity backup; existing collections stay untouched';
+          const label=kind==='export'?'Export library backup':'Add from library backup';
+          await evaluate(shell,`[...document.querySelectorAll('#${root} button')].find(b=>b.textContent===${JSON.stringify(label)}).click()`);
+          const args=['-B',path.join(__dirname,'file-picker.py'),'--pid',String(child.pid),'--title',title,...(file?['--file',file]:['--cancel'])];
+          const {stdout}=await executeFile('python',args,{encoding:'utf8',windowsHide:true,timeout:30_000});
+          const receipt=JSON.parse(stdout);assert.equal(receipt.pid,child.pid);
+          (result.nativePickerActions||=[]).push(receipt);
+          await until(()=>evaluate(shell,`!document.getElementById('${root}').hasAttribute('aria-busy')`),'native picker backup settled');
+          return evaluate(shell,`document.querySelector('#${root} [role=status]').textContent`);
+        };
+        assert.equal(await choose('export'),'File selection canceled.');
+        const file=path.join(context.output,'native-picker-library.noxlibrary');
+        assert.match(await choose('export',file),/^Exported .*205 tabs/);assert.ok(fs.statSync(file).size>0);
+        const before=digest(file);
+        assert.match(await choose('import',file),/^Added .*205 tabs/);
+        assert.equal(digest(file).sha256,before.sha256,'Import must not modify the source backup');
+        const folders=await command('collection-query',{op:'folders',identity});assert.equal(folders.items.filter(f=>f.title==='Packaged research').length,2);
+        assert.match(await choose('import',file),/already imported/i);
+        const malformed=path.join(context.output,'native-picker-malformed.noxlibrary');fs.writeFileSync(malformed,'{"type":"header"}\n',{flag:'wx'});
+        const invalidStatus=await choose('import',malformed);assert.match(invalidStatus,/missing field|invalid|header|format/i);assert.ok(!/canceled/i.test(invalidStatus));
+        assert.equal((await command('collection-query',{op:'folders',identity})).items.length,folders.items.length);
+        assert.equal((await command('collection-query',{op:'tabs',identity,group:expected.collection.group})).items.length,100);
+        assert.equal((await command('collection-query',{op:'health',identity})).integrity,'ok');
+        await screenshot('library-backup-error');await command('panel-close');
+      });
       await check('packaged workspace and group forms retain tab identity, pin and mute state', async () => {
         await evaluate(shell, 'window.__packagedWorkspaces = null; void window.browser.onWorkspaces(value => { window.__packagedWorkspaces = value; });');
         await command('workspaces');

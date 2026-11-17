@@ -76,3 +76,16 @@ A dedicated helper performs streaming jobs without the interactive helper's120se
 Tests cover metadata/provenance round-trip, other-identity exclusion, unchanged prior backup bytes, malformed/truncated/trailing/duplicate/unsafe input rollback, same-backup retry rejection, dedicated cancellation, trusted picker-only paths and reachable close handling. [Million-row fixture](evidence/library-backup-million-20261117.json) checks streaming checksum, every imported tab, retained existing data, interrupted export publication and interrupted import rollback. Timing/RSS are synthetic local measurements (parent excludes helper), not power-loss/disk-full guarantees. Native source-app tests drive the real picker-bound commands with explicitly supplied picker responses; packaged tests exercise the exact bundled helper and backup adapter. Native OS picker UI itself is not qualified by those fixtures.
 
 Remaining backup work: encrypted/compressed variants, per-record progress, automated retention/recovery UI, disk-full/power-loss/multi-instance contention testing, full live-context/lazy-session migration, explicit merge/duplicate policies and cross-product formats.
+
+### Native backup picker acceptance (in progress)
+The application already uses the system Save/Open dialogs for library-only backups.
+The renderer now distinguishes selecting a file from the subsequent streaming work,
+explains native-dialog cancellation and never displays an invented percentage.
+An additional exact-packaged acceptance fixture drives the real OS accessibility
+controls for cancel, new-file export, additive import, duplicate-import rejection
+and malformed-input recovery. It selects only the launched browser PID and exact
+picker title; an inaccessible or differently-owned portal dialog is a failed gate,
+not a reason to broaden desktop access. No picker responses are injected in this
+fixture. Hosted Windows/Linux results must pass before native-picker qualification
+is claimed. Existing worker no-overwrite, same-identity and transactional tests
+remain mandatory; the native picker does not weaken them.

@@ -57,7 +57,7 @@ jobs:
         run: node scripts/setup-legacy-electron.cjs --receipt native-results/legacy-runtime.json
       - name: Install Linux display dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install --yes xvfb libgtk-3-0 libnss3 libasound2
+        run: sudo apt-get update && sudo apt-get install --yes xvfb libgtk-3-0 libnss3 libasound2 python3-gi gir1.2-atspi-2.0 at-spi2-core dbus-x11 xdotool
       - name: Exercise actual sandboxed Electron on Windows
         if: runner.os == 'Windows'
         run: npm run test:native -- --legacy-runtime-receipt native-results/legacy-runtime.json
@@ -71,7 +71,7 @@ jobs:
         run: npm run test:native -- --package-receipt native-results/package.json --public-https --output native-results/packaged
       - name: Exercise the exact packaged Linux executable and bounded HTTPS cases
         if: runner.os == 'Linux'
-        run: xvfb-run -a npm run test:native -- --package-receipt native-results/package.json --public-https --output native-results/packaged
+        run: dbus-run-session -- xvfb-run -a npm run test:native -- --package-receipt native-results/package.json --public-https --output native-results/packaged
       - name: Archive the complete package and verify every extracted entry digest
         run: python tests/native/portable-archive.py --receipt native-results/package.json --output native-results/distribution
       - name: Retain exact native gate evidence

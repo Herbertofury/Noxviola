@@ -1,6 +1,6 @@
 """Operate one real native file picker belonging to the launched fixture PID.
 
-Windows: built-in UI Automation ValuePattern/InvokePattern. Linux: AT-SPI and,
+Windows: pinned native UIAutomation wrapper with Value/Invoke and verified Legacy patterns. Linux: AT-SPI and,
 when the location field is hidden, Ctrl+L sent to the exact owned X11 window.
 If AT-SPI has no applications, a separately reported targeted X11 keyboard route
 uses the real GTK picker without claiming accessibility qualification.
@@ -103,6 +103,16 @@ def x11_picker(args, deadline):
         if current != [xid]:
             raise RuntimeError("Owned X11 picker became ambiguous before keyboard input")
 
+    accept_key = None
+    if not args.cancel:
+        if args.title == "Export all saved collections for this identity; choose a NEW filename":
+            if os.path.lexists(args.file):
+                raise RuntimeError("Keyboard export requires a new nonexistent target")
+            accept_key = "alt+s"
+        elif args.title == "Add collections from a same-identity backup; existing collections stay untouched":
+            accept_key = "alt+o"
+        else:
+            raise RuntimeError("No explicitly known GTK accept mnemonic for this picker")
     if args.cancel:
         verify()
         run(["key", "--window", xid, "Escape"])
@@ -115,6 +125,8 @@ def x11_picker(args, deadline):
         run(["type", "--window", xid, "--delay", "0", "--", args.file])
         verify()
         run(["key", "--window", xid, "Return"])
+    accept_sent = False
+    earliest_accept = time.monotonic() + .25
     while time.monotonic() < deadline:
         current = run(x11_search_arguments(args.pid, args.title)[1:], check=False)
         if current.returncode == 1 and not current.stdout.strip():
@@ -124,6 +136,26 @@ def x11_picker(args, deadline):
         current.check_returncode()
         if current.stdout.strip().splitlines() != [xid]:
             raise RuntimeError("Owned picker changed during keyboard completion")
+        if accept_key and not accept_sent and time.monotonic() >= earliest_accept:
+            # Do not send even an accept mnemonic while a secondary owned modal exists.
+            visible = run(["search", "--onlyvisible", "--pid", str(args.pid)]).stdout.strip().splitlines()
+            if len(visible) > 32:
+                raise RuntimeError("Owned window inspection exceeds budget")
+            for other in visible:
+                if not other.isdigit() or other == xid:
+                    continue
+                if run(["getwindowpid", other]).stdout.strip() != str(args.pid):
+                    continue
+                prop = subprocess.run(["xprop", "-id", other, "WM_TRANSIENT_FOR"], check=True,
+                                      capture_output=True, text=True, timeout=max(.05, deadline-time.monotonic())).stdout
+                targets = re.findall(r"0x[0-9a-fA-F]+", prop)
+                if any(int(target, 16) == int(xid) for target in targets):
+                    raise RuntimeError("Secondary owned modal present; refusing accept mnemonic")
+            if accept_key == "alt+s" and os.path.lexists(args.file):
+                raise RuntimeError("Export target appeared; refusing accept mnemonic")
+            verify()
+            run(["key", "--window", xid, accept_key])
+            accept_sent = True
         time.sleep(.05)
     raise TimeoutError("Owned X11 picker did not dismiss; no secondary prompt or overwrite is approved")
 
@@ -295,181 +327,129 @@ def linux_picker(args):
     raise TimeoutError("Native picker did not dismiss; secondary prompts are not automatically approved")
 
 
-WINDOWS_SCRIPT = r'''
-$ErrorActionPreference = 'Stop'
-[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
-Add-Type -AssemblyName UIAutomationClient
-Add-Type -AssemblyName UIAutomationTypes
-$r = $env:NOXVIOLA_PICKER_REQUEST | ConvertFrom-Json
-$deadline = [DateTime]::UtcNow.AddSeconds([double]$r.timeout)
-$A = [System.Windows.Automation.AutomationElement]
-$T = [System.Windows.Automation.TreeScope]
-function Phase([string]$name) {
-  [Console]::Error.WriteLine((@{diagnostic='owned-picker-phase';pid=[int]$r.pid;phase=$name} | ConvertTo-Json -Compress))
-}
-# Read-only diagnostics: names are read only AFTER exact PID verification.
-# Never use these candidates as alternate action targets.
-function OwnedDiagnostics {
-  $items = New-Object System.Collections.ArrayList
-  $condition = New-Object System.Windows.Automation.PropertyCondition($A::ProcessIdProperty, [int]$r.pid)
-  $roots = $A::RootElement.FindAll($T::Children, $condition)
-  $queue = New-Object System.Collections.Queue
-  foreach ($root in $roots) { $queue.Enqueue(@($root, 0)) }
-  $visited = 0
-  $until = [DateTime]::UtcNow.AddMilliseconds(700)
-  while ($queue.Count -gt 0 -and $visited -lt 64 -and [DateTime]::UtcNow -lt $until) {
-    $pair = $queue.Dequeue(); $element = $pair[0]; $depth = [int]$pair[1]; $visited++
-    try {
-      if ($element.Current.ProcessId -ne [int]$r.pid) { continue }
-      if ($depth -eq 0 -or $element.Current.ControlType -eq [System.Windows.Automation.ControlType]::Window) {
-        $name = [string]$element.Current.Name
-        if ($name.Length -gt 512) { $name = $name.Substring(0,512) }
-        [void]$items.Add(@{title=$name;depth=$depth;offscreen=$element.Current.IsOffscreen;type=$element.Current.ControlType.ProgrammaticName;handle=$element.Current.NativeWindowHandle})
-      }
-      if ($depth -lt 3) {
-        $children = $element.FindAll($T::Children, $condition)
-        for ($i=0; $i -lt $children.Count -and $queue.Count -lt 64; $i++) { $queue.Enqueue(@($children[$i], ($depth+1))) }
-      }
-    } catch { }
-  }
-  [Console]::Error.WriteLine((@{diagnostic='owned-picker-windows';pid=[int]$r.pid;windows=@($items);visited=$visited;bounded=$true} | ConvertTo-Json -Depth 5 -Compress))
-}
-function Dialog {
-  # Windows IFileDialog is an owned child Window of the application's root Window.
-  # Traverse ONLY exact-PID Window children, never arbitrary desktop descendants.
-  $condition = New-Object System.Windows.Automation.AndCondition(
-    (New-Object System.Windows.Automation.PropertyCondition($A::ProcessIdProperty, [int]$r.pid)),
-    (New-Object System.Windows.Automation.PropertyCondition($A::ControlTypeProperty, [System.Windows.Automation.ControlType]::Window)))
-  $roots = $A::RootElement.FindAll($T::Children, $condition)
-  if ($roots.Count -gt 64) { throw 'Owned window traversal exceeds inspection budget' }
-  $queue = New-Object System.Collections.Queue
-  foreach ($root in $roots) { $queue.Enqueue(@($root, 0)) }
-  $found = New-Object System.Collections.ArrayList
-  $visited = 0
-  while ($queue.Count -gt 0) {
-    if ($visited -ge 64 -or [DateTime]::UtcNow -ge $deadline) { throw 'Owned window traversal exceeds inspection budget' }
-    $pair = $queue.Dequeue(); $element = $pair[0]; $depth = [int]$pair[1]; $visited++
-    if ($element.Current.ProcessId -ne [int]$r.pid) { continue }
-    if ($element.Current.Name -ceq [string]$r.title -and -not $element.Current.IsOffscreen) {
-      [void]$found.Add($element)
-      if ($found.Count -gt 1) { throw 'Ambiguous owned native picker' }
-    }
-    $children = $element.FindAll($T::Children, $condition)
-    if (($depth -ge 3 -and $children.Count -gt 0) -or ($visited + $queue.Count + $children.Count -gt 64)) { throw 'Owned window traversal exceeds inspection budget' }
-    for ($i=0; $i -lt $children.Count; $i++) { $queue.Enqueue(@($children[$i], ($depth+1))) }
-  }
-  if ($found.Count -eq 1) { return $found[0] }
-  return $null
-}
-function OwnedButtonDiagnostics($d) {
-  $condition = New-Object System.Windows.Automation.PropertyCondition($A::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button)
-  $raw = $d.FindAll($T::Descendants, $condition)
-  $buttons = New-Object System.Collections.ArrayList
-  $until = [DateTime]::UtcNow.AddMilliseconds(700)
-  for ($i=0; $i -lt $raw.Count -and $i -lt 32 -and [DateTime]::UtcNow -lt $until; $i++) {
-    $button = $raw[$i]
-    if ($button.Current.ProcessId -ne [int]$r.pid) { continue }
-    $name = [string]$button.Current.Name
-    if ($name.Length -gt 96) { $name=$name.Substring(0,96) }
-    [void]$buttons.Add(@{name=$name;pid=$button.Current.ProcessId;enabled=$button.Current.IsEnabled;offscreen=$button.Current.IsOffscreen})
-  }
-  [Console]::Error.WriteLine((@{diagnostic='owned-picker-buttons';pid=[int]$r.pid;rawCount=$raw.Count;buttons=@($buttons)} | ConvertTo-Json -Depth 5 -Compress))
-}
-function NamedControls($d, $names, $pattern, $diagnose) {
-  # Names and required behavior, not provider-specific ControlType taxonomy.
-  $owner = New-Object System.Windows.Automation.PropertyCondition($A::ProcessIdProperty, [int]$r.pid)
-  $raw = $d.FindAll($T::Descendants, $owner)
-  if ($raw.Count -gt 2048) { throw 'Owned picker controls exceed inspection budget' }
-  $matches = New-Object System.Collections.ArrayList
-  $evidence = New-Object System.Collections.ArrayList
-  for ($i=0; $i -lt $raw.Count; $i++) {
-    if ([DateTime]::UtcNow -ge $deadline) { throw 'Owned control inspection timed out' }
-    $control=$raw[$i]
-    if ($control.Current.ProcessId -ne [int]$r.pid) { continue }
-    $name=[string]$control.Current.Name
-    if ($name.Replace('&','') -cnotin $names) { continue }
-    $behavior=$null
-    $supported=$control.TryGetCurrentPattern($pattern, [ref]$behavior)
-    if ($diagnose -and $evidence.Count -lt 32) {
-      [void]$evidence.Add(@{name=$name;type=$control.Current.ControlType.ProgrammaticName;patternAvailable=$supported;enabled=$control.Current.IsEnabled;offscreen=$control.Current.IsOffscreen})
-    }
-    if ($supported -and $control.Current.IsEnabled -and -not $control.Current.IsOffscreen) { [void]$matches.Add($control) }
-  }
-  if ($diagnose) { [Console]::Error.WriteLine((@{diagnostic='owned-named-controls';pid=[int]$r.pid;matches=@($evidence)} | ConvertTo-Json -Depth 5 -Compress)) }
-  return @($matches)
-}
-$d=$null
-OwnedDiagnostics
-$firstDiscovery = $true
-while ([DateTime]::UtcNow -lt $deadline) {
-  if ($firstDiscovery) { Phase 'before-dialog-discovery' }
-  $d=Dialog
-  if ($firstDiscovery) { Phase 'after-dialog-discovery'; $firstDiscovery=$false }
-  if ($d) {break}; Start-Sleep -Milliseconds 50
-}
-if (-not $d) { OwnedDiagnostics; throw 'Exact owned native picker did not appear' }
-Phase 'dialog-discovered'
-if (-not $r.cancel) {
-  Phase 'before-filename-enumeration'
-  $edits = @(NamedControls $d @('File name:', 'File name', 'Filename:', 'Filename') ([System.Windows.Automation.ValuePattern]::Pattern) $true)
-  Phase 'after-filename-enumeration'
-  if ($edits.Count -ne 1) { throw "Expected one filename Edit control, found $($edits.Count)" }
-  if (-not (Dialog)) { throw 'Owned picker changed before filename entry' }
-  $value = $edits[0].GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
-  if ($value.Current.IsReadOnly) { throw 'Filename field is read-only' }
-  Phase 'before-filename-set'
-  $value.SetValue([string]$r.file)
-  Phase 'after-filename-set'
-  if ($value.Current.Value -cne [string]$r.file) { throw 'Filename readback mismatch' }
-}
-$button=$null
-$firstActionCheck=$true
-Phase 'before-action-dialog-check'
-while ([DateTime]::UtcNow -lt $deadline) {
-  $d=Dialog; if (-not $d) { throw 'Picker disappeared before native action' }
-  if ($firstActionCheck) { Phase 'after-action-dialog-check' }
-  $names = if ($r.cancel) { @('Cancel') } else { @('Open','Save') }
-  if ($firstActionCheck) { Phase 'before-button-enumeration' }
-  $buttons = @(NamedControls $d $names ([System.Windows.Automation.InvokePattern]::Pattern) $firstActionCheck)
-  if ($firstActionCheck) { Phase 'after-button-enumeration'; OwnedButtonDiagnostics $d; $firstActionCheck=$false }
-  if ($buttons.Count -gt 1) { throw 'Ambiguous native picker action' }
-  if ($buttons.Count -eq 1) {$button=$buttons[0];break}
-  Start-Sleep -Milliseconds 50
-}
-if (-not $button) { throw 'No enabled native picker action' }
-Phase 'before-invoke-pattern'
-$invoke=$button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
-Phase 'before-invoke'
-$invoke.Invoke()
-Phase 'after-invoke'
-Phase 'before-dismissal-check'
-while ([DateTime]::UtcNow -lt $deadline) {
-  if (-not (Dialog)) {
-    Phase 'dialog-dismissed'
-    @{pid=[int]$r.pid;title=[string]$r.title;action=$(if($r.cancel){'cancel'}else{'submit'});delivery='Windows UI Automation ValuePattern/InvokePattern';dialogDismissed=$true} | ConvertTo-Json -Compress
-    exit 0
-  }
-  Start-Sleep -Milliseconds 50
-}
-throw 'Picker did not dismiss; secondary prompts are not automatically approved'
-'''
+def legacy_allowed(kind, name, expected, role, state, default_action):
+    if name.replace('&', '') not in expected or state & (0x1 | 0x8000 | 0x10000):
+        return False
+    if kind == 'value':
+        return role == 42 and not state & 0x40  # ROLE_SYSTEM_TEXT, not read-only
+    return role == 43 and default_action.lower() in ('press', 'click')
 
 
 def windows_picker(args):
-    env = dict(os.environ, NOXVIOLA_PICKER_REQUEST=json.dumps(vars(args)))
-    try:
-        outcome = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", WINDOWS_SCRIPT],
-                                 env=env, capture_output=True, text=True, encoding="utf-8", timeout=args.timeout+1)
-    except subprocess.TimeoutExpired as error:
-        diagnostics = error.stderr or ""
-        if isinstance(diagnostics, bytes):
-            diagnostics = diagnostics.decode("utf-8", errors="replace")
-        raise TimeoutError("Windows native picker timed out; owned diagnostics: " + (diagnostics[:800] + " ... " + diagnostics[-1600:] if len(diagnostics) > 2400 else diagnostics)) from error
-    if outcome.returncode:
-        raise RuntimeError("Windows native picker automation failed: " + outcome.stderr.strip()[:1600])
-    if outcome.stderr.strip():
-        print(outcome.stderr.strip(), file=sys.stderr)
-    return json.loads(outcome.stdout.lstrip("\ufeff"))
+    # Maintained native UIA wrapper; unlike stock managed UIA, includes Legacy MSAA.
+    sys.coinit_flags = 0  # non-window-owning MTA worker
+    import uiautomation as auto
+    deadline = time.monotonic() + args.timeout
+
+    def phase(name, **data):
+        print(json.dumps({'diagnostic': 'native-uia', 'pid': args.pid, 'phase': name, **data}), file=sys.stderr, flush=True)
+
+    def children(node, limit):
+        child, count = node.GetFirstChildControl(), 0
+        while child:
+            count += 1
+            if count > limit or time.monotonic() >= deadline:
+                raise TimeoutError('Native UIA child inspection budget exceeded')
+            yield child
+            child = child.GetNextSiblingControl()
+
+    def dialog():
+        queue = [(node, 0) for node in children(auto.GetRootControl(), 256)
+                 if node.ProcessId == args.pid and node.ControlType == auto.ControlType.WindowControl]
+        found, visited = [], 0
+        while queue:
+            node, depth = queue.pop()
+            visited += 1
+            if visited > 64 or time.monotonic() >= deadline:
+                raise TimeoutError('Owned UIA window traversal budget exceeded')
+            if node.ProcessId != args.pid:
+                continue
+            if node.Name == args.title and not node.IsOffscreen:
+                found.append(node)
+            for child in children(node, 256):
+                if child.ProcessId == args.pid and child.ControlType == auto.ControlType.WindowControl:
+                    if depth >= 3:
+                        raise RuntimeError('Owned UIA window depth exceeded')
+                    queue.append((child, depth+1))
+        if len(found) > 1:
+            raise RuntimeError('Ambiguous exact owned native picker')
+        return found[0] if found else None
+
+    def control(root, kind, names):
+        queue, matches, evidence, visited = [(root, 0)], [], [], 0
+        while queue:
+            node, depth = queue.pop()
+            visited += 1
+            if visited > 2048 or depth > 24 or time.monotonic() >= deadline:
+                raise TimeoutError('Owned UIA control traversal budget exceeded')
+            if node.ProcessId != args.pid:
+                continue
+            name = node.Name or ''
+            if name.replace('&', '') in names and node.IsEnabled and not node.IsOffscreen:
+                pattern_id = auto.PatternId.ValuePattern if kind == 'value' else auto.PatternId.InvokePattern
+                pattern = node.GetPattern(pattern_id)
+                method = 'ValuePattern' if kind == 'value' else 'InvokePattern'
+                legacy = None
+                if pattern is None:
+                    legacy = node.GetPattern(auto.PatternId.LegacyIAccessiblePattern)
+                    if legacy and legacy_allowed(kind, legacy.Name, names, legacy.Role, legacy.State, legacy.DefaultAction or ''):
+                        pattern, method = legacy, 'LegacyIAccessiblePattern'
+                evidence.append({'name': name[:96], 'type': node.ControlType, 'method': method if pattern else None,
+                                 'legacyRole': legacy.Role if legacy else None})
+                if pattern:
+                    if kind != 'value' or method == 'LegacyIAccessiblePattern' or not pattern.IsReadOnly:
+                        matches.append((node, pattern, method))
+            for child in children(node, 2048):
+                queue.append((child, depth+1))
+        phase('named-controls', kind=kind, controls=evidence[:32])
+        if len(matches) != 1:
+            raise RuntimeError(f'Expected one exact owned {kind} control; found {len(matches)}')
+        return matches[0]
+
+    phase('before-dialog-discovery')
+    current = None
+    while time.monotonic() < deadline:
+        current = dialog()
+        if current:
+            break
+        time.sleep(.05)
+    if not current:
+        raise TimeoutError('Exact owned native picker did not appear')
+    phase('dialog-discovered')
+    methods = []
+    if not args.cancel:
+        node, pattern, method = control(current, 'value', {'File name:', 'File name', 'Filename:', 'Filename'})
+        if not dialog() or node.ProcessId != args.pid or node.Name.replace('&', '') not in {'File name:', 'File name', 'Filename:', 'Filename'} or not node.IsEnabled or node.IsOffscreen:
+            raise RuntimeError('Owned filename control changed')
+        if method == 'LegacyIAccessiblePattern' and not legacy_allowed('value', pattern.Name, {'File name:', 'File name', 'Filename:', 'Filename'}, pattern.Role, pattern.State, pattern.DefaultAction or ''):
+            raise RuntimeError('Legacy filename semantics changed')
+        phase('before-filename-set', method=method)
+        pattern.SetValue(args.file, waitTime=0)
+        if pattern.Value != args.file:
+            raise RuntimeError('Filename readback mismatch')
+        methods.append(method)
+    current = dialog()
+    if not current:
+        raise RuntimeError('Picker disappeared before native action')
+    names = {'Cancel'} if args.cancel else {'Save', 'Open'}
+    node, pattern, method = control(current, 'action', names)
+    if not dialog() or node.ProcessId != args.pid or node.Name.replace('&', '') not in names or not node.IsEnabled or node.IsOffscreen:
+        raise RuntimeError('Owned action control changed')
+    phase('before-native-action', method=method)
+    if method == 'LegacyIAccessiblePattern':
+        if not legacy_allowed('action', pattern.Name, names, pattern.Role, pattern.State, pattern.DefaultAction or ''):
+            raise RuntimeError('Legacy action semantics changed')
+        pattern.DoDefaultAction(waitTime=0)
+    else:
+        pattern.Invoke(waitTime=0)
+    methods.append(method)
+    phase('after-native-action')
+    while time.monotonic() < deadline:
+        if not dialog():
+            return {'pid': args.pid, 'title': args.title, 'action': 'cancel' if args.cancel else 'submit',
+                    'delivery': 'Native UIA ' + '/'.join(methods), 'dialogDismissed': True}
+        time.sleep(.05)
+    raise TimeoutError('Picker did not dismiss; no secondary prompt or overwrite is approved')
 
 
 def main():

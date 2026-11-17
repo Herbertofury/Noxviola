@@ -84,8 +84,10 @@ explains native-dialog cancellation and never displays an invented percentage.
 An additional exact-packaged acceptance fixture drives the real OS accessibility
 controls for cancel, new-file export, additive import, duplicate-import rejection
 and malformed-input recovery. It selects only the launched browser PID and exact
-picker title; an inaccessible or differently-owned portal dialog is a failed gate,
-not a reason to broaden desktop access. No picker responses are injected in this
-fixture. Hosted Windows/Linux results must pass before native-picker qualification
+picker title. Linux may use normal keyboard input directed to that exact owned
+GTK window when AT-SPI has no registered applications; its receipt explicitly does
+not qualify accessibility. Differently-owned portal dialogs still fail closed. No picker responses are injected in this
+fixture. Windows uses pinned, test-only native accessibility adapters, never
+shipped runtime dependencies. Hosted Windows/Linux results must pass before native-picker qualification
 is claimed. Existing worker no-overwrite, same-identity and transactional tests
 remain mandatory; the native picker does not weaken them.

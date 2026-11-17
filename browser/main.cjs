@@ -534,7 +534,7 @@ async function perform(name, value) {
   switch (name) {
     case 'state': return stateView();
     case 'collection-query': {
-      if(!value||!['groups','tabs','update','health'].includes(value.op)||!profiles.some(p=>p.id===value.identity))throw new Error('Invalid collection request.');
+      if(!value||!['groups','tabs','update','health','folders','folder-create','folder-rename','move'].includes(value.op)||!profiles.some(p=>p.id===value.identity))throw new Error('Invalid collection request.');
       return collections.request(value);
     }
     case 'collection-save': {

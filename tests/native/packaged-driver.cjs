@@ -448,6 +448,17 @@ async function runPackagedPhase(packaged, context, phase, { publicHttps = false 
         await assert.rejects(command('bookmark-save', { id: saved.id, title: 'Forbidden cross-identity edit' }), /not found|identity/i);
         await command('activate', expected.personal);
       });
+      await check('packaged Rust collections browse folders and bounded pages in both surfaces and restore a real tab',async()=>{
+        await command('activate',expected.personal);const identity=(await state()).currentIdentity;
+        const saved=await command('collection-import',{identity,title:'Packaged collection',text:Array.from({length:205},(_,i)=>`${context.origin}/page?packaged-collection=${i} | Packaged saved ${i}`).join('\n')});
+        const folder=await command('collection-query',{op:'folder-create',identity,title:'Packaged research'});await command('collection-query',{op:'move',identity,group:saved.id,folder:folder.id});
+        const page=await command('collection-query',{op:'tabs',identity,group:saved.id});assert.equal(page.items.length,100);assert.equal((await command('collection-query',{op:'groups',identity:expected.secondIdentity})).items.length,0);
+        await command('collections');await until(()=>evaluate(shell,`!document.getElementById('collections-content').hasAttribute('aria-busy')&&document.getElementById('collections-content').textContent.includes('Root / Collections')`),'packaged collection root ready');
+        const click=async(root,label)=>{await evaluate(shell,`[...document.querySelectorAll('#${root} button')].find(b=>b.textContent===${JSON.stringify(label)}).click()`);await until(()=>evaluate(shell,`!document.getElementById('${root}').hasAttribute('aria-busy')`),'packaged collection action settled');};
+        await click('collections-content','Folders');await click('collections-content','Open folder');await click('collections-content','Browse');assert.equal(await evaluate(shell,`document.querySelectorAll('#collections-content .collection-list .card').length`),100);await click('collections-content','Next');assert.ok(await evaluate(shell,`document.querySelector('#collections-content .collection-list').textContent.includes('Packaged saved 100')`));await screenshot('tab-collections-full');
+        await command('sidebar-select','collections');await until(()=>evaluate(shell,`!document.getElementById('sidebar-collections').hasAttribute('aria-busy')&&document.getElementById('sidebar-collections').textContent.includes('Root / Collections')`),'packaged collection sidebar ready');await click('sidebar-collections','Folders');await click('sidebar-collections','Open folder');assert.equal(await evaluate(shell,`document.querySelectorAll('#sidebar-collections .collection-list .card').length`),1);await screenshot('tab-collections-sidebar');
+        await command('sidebar-close');await command('panel-close');const opened=await command('collection-open',{identity,id:page.items[0].id});const target=await targetAt(`${context.origin}/page?packaged-collection=0`);await ready(target);assert.equal((await state()).tabs.find(t=>t.id===opened).identity,identity);await command('close',opened);await command('activate',expected.personal);expected.collection={identity,group:saved.id,folder:folder.id};
+      });
       await check('packaged workspace and group forms retain tab identity, pin and mute state', async () => {
         await evaluate(shell, 'window.__packagedWorkspaces = null; void window.browser.onWorkspaces(value => { window.__packagedWorkspaces = value; });');
         await command('workspaces');
@@ -549,6 +560,9 @@ async function runPackagedPhase(packaged, context, phase, { publicHttps = false 
         assert.deepEqual(restored.preferences, expected.preferences);
         assert.equal(restored.activeId, expected.activeId);
         assert.equal(restored.activeWorkspaceId, expected.activeWorkspaceId);
+      });
+      await check('packaged collection folders and every saved tab survive process restart',async()=>{
+        const {identity,group,folder}=expected.collection;const groups=await command('collection-query',{op:'groups',identity,folder});assert.equal(groups.items[0].id,group);assert.equal(groups.items[0].count,205);let after=0,total=0;do{const page=await command('collection-query',{op:'tabs',identity,group,after});total+=page.items.length;after=page.next;}while(after!==null);assert.equal(total,205);assert.equal((await command('collection-query',{op:'health',identity})).integrity,'ok');
       });
       await check('packaged restart preserves both identities and persistent cookie lifetimes', async () => {
         await command('activate', expected.personal);

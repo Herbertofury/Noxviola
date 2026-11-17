@@ -1,0 +1,12 @@
+{
+  "synthetic": true,
+  "collections": 20000,
+  "folders": 2000,
+  "insertionMs": 3544.453329,
+  "browseMs": 138.69688700000006,
+  "pages": 400,
+  "maxPage": 50,
+  "reorderMs": 0.2870829999997113,
+  "preservedTabs": true,
+  "integrity": "ok"
+}

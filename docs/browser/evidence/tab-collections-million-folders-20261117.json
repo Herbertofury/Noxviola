@@ -1,0 +1,26 @@
+{
+  "synthetic": true,
+  "tabs": 1000000,
+  "groups": 1000,
+  "ingestMs": 25768.105079,
+  "page100P50ms": 0.4215010000007169,
+  "page100P95ms": 0.6522760000007111,
+  "parentEventLoopP99ms": 15.122431,
+  "parentRss": 112005120,
+  "integrity": "ok",
+  "restart": true,
+  "files": [
+    {
+      "name": "collections.sqlite",
+      "bytes": 272023552
+    },
+    {
+      "name": "collections.sqlite-shm",
+      "bytes": 32768
+    },
+    {
+      "name": "collections.sqlite-wal",
+      "bytes": 0
+    }
+  ]
+}

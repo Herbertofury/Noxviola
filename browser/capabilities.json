@@ -28426,7 +28426,11 @@
           "star",
           "lock",
           "archive and unarchive",
-          "OneTab text import"
+          "OneTab text import",
+        "flat folders",
+        "folder and collection rename",
+        "move collections between folders",
+        "precise collection reordering"
         ],
         "coverage": "partial",
         "remaining": "Full parity checklist and native acceptance in TAB-COLLECTIONS.md"

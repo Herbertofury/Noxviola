@@ -372,6 +372,56 @@ fn run(db: &mut Connection, v: &Value) -> Result<Value> {
             tx.commit()?;
             Ok(json!({"moved":true}))
         }
+        "search-all" => {
+            let query = text(v, "query")?.trim();
+            if query.len() > 512 {
+                return Err("Search is too long".into());
+            }
+            let scope = text(v, "scope")?;
+            if !["live", "archived", "all"].contains(&scope) {
+                return Err("Invalid search scope".into());
+            }
+            let starred = v["starred"].as_bool().ok_or("Boolean required")?;
+            let tx = db.transaction()?;
+            let rev = revision(&tx, identity)?;
+            let after = if v["after"].is_null() || v["after"] == 0 {
+                0
+            } else {
+                if v["after"]["identity"] != identity
+                    || v["after"]["query"] != query
+                    || v["after"]["scope"] != scope
+                    || v["after"]["starred"] != starred
+                {
+                    return Err("Search changed. Start at First page or Search again".into());
+                }
+                cursor(&v["after"], rev)?.0
+            };
+            let fts = query
+                .split_whitespace()
+                .map(|s| format!("\"{}\"*", s.replace('"', "\"\"")))
+                .collect::<Vec<_>>()
+                .join(" AND ");
+            if fts.is_empty() {
+                return Ok(json!({"items":[],"next":null,"revision":rev}));
+            }
+            let eligible:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM collections WHERE identity=?1 AND (?2='all' OR archived=CASE WHEN ?2='archived' THEN 1 ELSE 0 END) AND (?3=0 OR starred=1))",params![identity,scope,starred],|r|r.get(0))?;
+            if !eligible {
+                return Ok(json!({"items":[],"next":null,"revision":rev}));
+            }
+            // Keep FTS as the outer loop. Reordering this join can perform a full
+            // FTS scan per tab in SQLite's bundled planner. Direct rowid range/order
+            // also avoids sorting every match before returning a bounded page.
+            let mut stmt=tx.prepare("SELECT t.id,t.url,t.title,t.pinned,c.id,c.title,c.archived,c.starred,c.folder_id,f.title FROM search CROSS JOIN tabs t ON t.id=search.rowid CROSS JOIN collections c ON c.id=t.collection_id LEFT JOIN folders f ON f.id=c.folder_id AND f.identity=c.identity WHERE search MATCH ?1 AND c.identity=?2 AND search.rowid>?3 AND (?4='all' OR c.archived=CASE WHEN ?4='archived' THEN 1 ELSE 0 END) AND (?5=0 OR c.starred=1) ORDER BY search.rowid LIMIT 51")?;
+            let items=stmt.query_map(params![fts,identity,after,scope,starred],|r|Ok(json!({"id":r.get::<_,i64>(0)?,"url":r.get::<_,String>(1)?,"title":r.get::<_,String>(2)?,"pinned":r.get::<_,bool>(3)?,"group":r.get::<_,i64>(4)?,"groupTitle":r.get::<_,String>(5)?,"archived":r.get::<_,bool>(6)?,"starred":r.get::<_,bool>(7)?,"folder":r.get::<_,Option<i64>>(8)?,"folderTitle":r.get::<_,Option<String>>(9)?})))?.collect::<std::result::Result<Vec<_>,_>>()?;
+            let mut result = page(items, rev, false);
+            if !result["next"].is_null() {
+                result["next"]["identity"] = json!(identity);
+                result["next"]["query"] = json!(query);
+                result["next"]["scope"] = json!(scope);
+                result["next"]["starred"] = json!(starred);
+            }
+            Ok(result)
+        }
         "tabs" => {
             let id = number(v, "group")?;
             let after = v["after"].as_i64().unwrap_or(0);

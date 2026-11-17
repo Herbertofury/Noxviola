@@ -28433,7 +28433,9 @@
         "precise collection reordering",
         "durable paged lazy restore sessions",
         "pause/resume and explicit workspace reassignment",
-        "stable crash-retry activation identities"
+        "stable crash-retry activation identities",
+        "whole-library token-prefix title/URL search",
+        "live/archive/all and starred-collection search filters"
         ],
         "coverage": "partial",
         "remaining": "Full parity checklist and native acceptance in TAB-COLLECTIONS.md"

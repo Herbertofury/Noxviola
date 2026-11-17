@@ -448,6 +448,69 @@ async function runPackagedPhase(packaged, context, phase, { publicHttps = false 
         await assert.rejects(command('bookmark-save', { id: saved.id, title: 'Forbidden cross-identity edit' }), /not found|identity/i);
         await command('activate', expected.personal);
       });
+      await check('packaged Rust collections browse folders and bounded pages in both surfaces and restore a real tab',async()=>{
+        await command('activate',expected.personal);const identity=(await state()).currentIdentity;
+        const saved=await command('collection-import',{identity,title:'Packaged collection',text:Array.from({length:205},(_,i)=>`${context.origin}/page?packaged-collection=${i} | Packaged saved ${i}`).join('\n')});
+        const folder=await command('collection-query',{op:'folder-create',identity,title:'Packaged research'});await command('collection-query',{op:'move',identity,group:saved.id,folder:folder.id});
+        const page=await command('collection-query',{op:'tabs',identity,group:saved.id});assert.equal(page.items.length,100);assert.equal((await command('collection-query',{op:'groups',identity:expected.secondIdentity})).items.length,0);
+        await command('collections');await until(()=>evaluate(shell,`!document.getElementById('collections-content').hasAttribute('aria-busy')&&document.getElementById('collections-content').textContent.includes('Root / Collections')`),'packaged collection root ready');
+        const click=async(root,label)=>{await until(()=>evaluate(shell,`!document.getElementById('${root}').hasAttribute('aria-busy')&&[...document.querySelectorAll('#${root} button')].some(b=>b.textContent===${JSON.stringify(label)}&&!b.disabled)`),'enabled collection control '+label);await evaluate(shell,`[...document.querySelectorAll('#${root} button')].find(b=>b.textContent===${JSON.stringify(label)}).click()`);await until(()=>evaluate(shell,`!document.getElementById('${root}').hasAttribute('aria-busy')`),'packaged collection action settled');};
+        await click('collections-content','Folders');await click('collections-content','Open folder');await click('collections-content','Browse');assert.equal(await evaluate(shell,`document.querySelectorAll('#collections-content .collection-list .card').length`),100);await click('collections-content','Next');assert.ok(await evaluate(shell,`document.querySelector('#collections-content .collection-list').textContent.includes('Packaged saved 100')`));await screenshot('tab-collections-full');
+        await command('sidebar-select','collections');await until(()=>evaluate(shell,`!document.getElementById('sidebar-collections').hasAttribute('aria-busy')&&document.getElementById('sidebar-collections').textContent.includes('Root / Collections')`),'packaged collection sidebar ready');await click('sidebar-collections','Folders');await click('sidebar-collections','Open folder');assert.equal(await evaluate(shell,`document.querySelectorAll('#sidebar-collections .collection-list .card').length`),1);await screenshot('tab-collections-sidebar');
+        await command('sidebar-close');await command('panel-close');const opened=await command('collection-open',{identity,id:page.items[0].id});const target=await targetAt(`${context.origin}/page?packaged-collection=0`);await ready(target);assert.equal((await state()).tabs.find(t=>t.id===opened).identity,identity);await command('close',opened);await command('activate',expected.personal);const before=(await state()).tabs.length,beforeTargets=(await targets()).length;const lazy=await command('collection-restore-start',{identity,group:saved.id});assert.equal(lazy.count,205);assert.equal((await state()).tabs.length,before);assert.equal((await targets()).length,beforeTargets);
+        const pending=await command('collection-query',{op:'restore-tabs',identity,session:lazy.id});assert.equal(pending.items.length,50);
+        await command('collections');await click('collections-content','Lazy restore sessions');await click('collections-content','Browse lazy tabs');assert.equal(await evaluate(shell,`document.querySelectorAll('#collections-content .collection-list .card').length`),50);await screenshot('tab-collections-lazy');
+        await click('collections-content','Search entire library');await evaluate(shell,`document.querySelector('#collections-content input[type=search]').value='Packaged saved';`);await click('collections-content','Search');assert.equal(await evaluate(shell,`document.querySelectorAll('#collections-content .collection-list .card').length`),50);assert.ok(await evaluate(shell,`document.querySelector('#collections-content .collection-list').textContent.includes('Packaged research / Packaged collection')`));await click('collections-content','Next');assert.ok(await evaluate(shell,`document.querySelector('#collections-content .collection-list').textContent.includes('Packaged saved 50')`));await screenshot('tab-collections-global-search');await click('collections-content','Browse source collection');assert.equal(await evaluate(shell,`document.querySelectorAll('#collections-content .collection-list .card').length`),100);
+        await command('collection-query',{op:'restore-pause',identity,session:lazy.id,paused:true});await assert.rejects(command('collection-restore-open',{identity,session:lazy.id,id:pending.items[0].id}),/paused/);assert.equal((await state()).tabs.length,before);await command('collection-query',{op:'restore-pause',identity,session:lazy.id,paused:false});
+        const materialized=await command('collection-restore-open',{identity,session:lazy.id,id:pending.items[0].id});await ready(await targetAt(`${context.origin}/page?packaged-collection=0`));assert.equal((await state()).tabs.length,before+1);assert.equal(await command('collection-restore-open',{identity,session:lazy.id,id:pending.items[0].id}),materialized);assert.equal((await state()).tabs.length,before+1);
+        await command('close',materialized);await command('activate',expected.personal);expected.collection={identity,group:saved.id,folder:folder.id,lazy:lazy.id};
+      });
+      await check('exact packaged Rust helper streams library backup and additive restoration without replacing source',async()=>{
+        const {TabCollections}=require('../../browser/tab-collections.cjs'),{CollectionBackups}=require('../../browser/collection-backups.cjs');
+        const binary=path.join(packaged.directory,'resources','app.asar.unpacked','browser','bin',process.platform==='win32'?'noxviola-tab-collections.exe':'noxviola-tab-collections'),file=path.join(context.output,'packaged-backup-fixture.sqlite'),backup=path.join(context.output,'packaged-library.noxlibrary');
+        const store=new TabCollections({file,binary}),jobs=new CollectionBackups({file,binary});try{
+          const source=await store.request({op:'save',identity:'synthetic',title:'Packaged backup',created:1,tabs:Array.from({length:205},(_,i)=>({url:`https://synthetic.example/${i}`,title:`Packaged backup ${i}`}))});
+          assert.equal((await jobs.run('export','synthetic',backup)).tabs,205);assert.equal((await jobs.run('import','synthetic',backup)).tabs,205);const groups=await store.request({op:'groups',identity:'synthetic'});assert.equal(groups.items.length,2);assert.ok(groups.items.every(g=>g.count===205));assert.ok(groups.items.some(g=>g.id===source.id));assert.equal((await store.request({op:'health',identity:'synthetic'})).integrity,'ok');
+        }finally{store.close();jobs.cancel();}
+      });
+      await check('packaged native file picker exports and additively restores the library, with cancellation and malformed-file recovery',async()=>{
+        const identity=expected.collection.identity;
+        await command('activate',expected.personal);await command('collections');
+        const root='collections-content';
+        await until(()=>evaluate(shell,`!document.getElementById('${root}').hasAttribute('aria-busy')`),'backup controls ready');
+        await evaluate(shell,`(()=>{const r=document.getElementById('${root}');[...r.querySelectorAll('details')].find(d=>d.querySelector('summary')?.textContent==='Library-only backup and additive restore').open=true;})()`);
+        assert.ok(await evaluate(shell,`document.getElementById('${root}').textContent.includes('Plaintext backup')`));
+        await screenshot('library-backup-warning');
+        const choose=async(kind,file=null)=>{
+          const title=kind==='export'?'Export all saved collections for this identity; choose a NEW filename':'Add collections from a same-identity backup; existing collections stay untouched';
+          const label=kind==='export'?'Export library backup':'Add from library backup';
+          const evidence=path.join(context.output,`picker-${result.nativePickerActions?.length||0}-${kind}`);fs.mkdirSync(evidence,{recursive:true});
+          const args=['-B',path.join(__dirname,'file-picker.py'),'--pid',String(child.pid),'--title',title,'--evidence-dir',evidence,...(file?['--file',file]:['--cancel'])];
+          const picker=executeFile('python',args,{encoding:'utf8',windowsHide:true,timeout:30_000}).catch(error=>{throw new Error(`Native picker failed: ${String(error.stdout||'').slice(0,4000)} ${String(error.stderr||'').slice(0,2000)}`,{cause:error});});
+          // Start the owned-dialog observer before opening a modal: GTK can hold CDP dispatch until dismissal.
+          const [{stdout}]=await Promise.all([picker,evaluate(shell,`[...document.querySelectorAll('#${root} button')].find(b=>b.textContent===${JSON.stringify(label)}).click()`)]);
+          const receipt=JSON.parse(stdout);assert.equal(receipt.pid,child.pid);assert.equal(receipt.title,title);assert.equal(receipt.action,file?'submit':'cancel');assert.equal(receipt.dialogDismissed,true);
+          (result.nativePickerActions||=[]).push(receipt);
+          await until(()=>evaluate(shell,`!document.getElementById('${root}').hasAttribute('aria-busy')`),'native picker backup settled');
+          const status=await evaluate(shell,`document.querySelector('#${root} [role=status]').textContent`);
+          (result.nativeBackupStatuses||=[]).push({kind,status});
+          return status;
+        };
+        assert.equal(await choose('export'),'File selection canceled.');
+        const file=path.join(context.output,'native-picker-library.noxlibrary');
+        assert.match(await choose('export',file),/^Exported .*205 tabs/);assert.ok(fs.statSync(file).size>0);
+        const before=digest(file);
+        assert.match(await choose('import',file),/^Added .*205 tabs/);
+        assert.equal(digest(file).sha256,before.sha256,'Import must not modify the source backup');
+        const folders=await command('collection-query',{op:'folders',identity});assert.equal(folders.items.filter(f=>f.title==='Packaged research').length,2);
+        assert.match(await choose('import',file),/already imported/i);
+        const malformed=path.join(context.output,'native-picker-malformed.noxlibrary');fs.writeFileSync(malformed,'{"type":"header"}\n',{flag:'wx'});
+        const invalidStatus=await choose('import',malformed);assert.match(invalidStatus,/missing field|invalid|header|format/i);assert.ok(!/canceled/i.test(invalidStatus));
+        assert.equal((await command('collection-query',{op:'folders',identity})).items.length,folders.items.length);
+        assert.equal((await command('collection-query',{op:'tabs',identity,group:expected.collection.group})).items.length,100);
+        assert.equal((await command('collection-query',{op:'health',identity})).integrity,'ok');
+        await screenshot('library-backup-error');await command('panel-close');
+      });
       await check('packaged workspace and group forms retain tab identity, pin and mute state', async () => {
         await evaluate(shell, 'window.__packagedWorkspaces = null; void window.browser.onWorkspaces(value => { window.__packagedWorkspaces = value; });');
         await command('workspaces');
@@ -550,6 +613,9 @@ async function runPackagedPhase(packaged, context, phase, { publicHttps = false 
         assert.equal(restored.activeId, expected.activeId);
         assert.equal(restored.activeWorkspaceId, expected.activeWorkspaceId);
       });
+      await check('packaged collection folders and every saved tab survive process restart',async()=>{
+        const {identity,group,folder,lazy}=expected.collection;assert.ok((await command('collection-query',{op:'restore-sessions',identity})).items.some(s=>s.id===lazy&&s.count===205));const groups=await command('collection-query',{op:'groups',identity,folder});assert.equal(groups.items[0].id,group);assert.equal(groups.items[0].count,205);let after=0,total=0;do{const page=await command('collection-query',{op:'tabs',identity,group,after});total+=page.items.length;after=page.next;}while(after!==null);assert.equal(total,205);assert.equal((await command('collection-query',{op:'health',identity})).integrity,'ok');
+      });
       await check('packaged restart preserves both identities and persistent cookie lifetimes', async () => {
         await command('activate', expected.personal);
         const personal = await targetAt(personalUrl); await ready(personal);
@@ -650,7 +716,12 @@ async function runPackagedPhase(packaged, context, phase, { publicHttps = false 
     if (child && !exitResult) {
       result.terminatedAfterFailure = true;
       child.kill();
-      await bounded(exitPromise.catch(() => {}), 5_000, 'Packaged failure cleanup did not observe process termination.').catch(error => { result.cleanupError = error.message; });
+      await bounded(exitPromise.catch(() => {}), 5_000, 'Packaged failure cleanup did not observe process termination.').catch(async error => {
+        result.cleanupError = error.message;
+        // Only this spawned synthetic-fixture process. A native modal can defer SIGTERM.
+        result.forcedFixtureTermination = true;child.kill('SIGKILL');
+        await bounded(exitPromise.catch(() => {}),5_000,'Owned fixture process did not exit after forced failure cleanup.').catch(forceError=>{result.cleanupError += ' '+forceError.message;});
+      });
     }
     await Promise.all([log, network].map(stream => new Promise(resolve => stream.end(resolve))));
     result.exit = exitResult;

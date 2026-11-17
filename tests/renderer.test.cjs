@@ -46,7 +46,7 @@ async function harness(t, {initial = state(), command = async () => undefined} =
   }};
   for (const method of ipcMethods) api[method] = callback => { listeners.set(method, callback); return () => listeners.delete(method); };
   window.browser = Object.freeze(api);
-  window.eval(source);
+  window.eval(fs.readFileSync(path.join(__dirname,'../browser/tab-collections-ui.js'),'utf8')); window.eval(source);
   await tick();
   t.after(() => { window.close(); assert.deepEqual(errors, [], 'production renderer must not throw DOM errors'); });
   let current = initial;
@@ -129,11 +129,11 @@ test('DOM: workspace launcher follows canonical workspace updates without replac
 test('DOM: sidebar tool visibility and ordering are saved through the real settings form',async t=>{
   const h=await harness(t,{initial:state({panel:'settings'})});
   const rows=()=>[...h.document.querySelectorAll('.sidebar-tool-row')];
-  assert.equal(rows().length,4);const history=rows().find(row=>row.textContent.includes('History'));
+  assert.equal(rows().length,5);const history=rows().find(row=>row.textContent.includes('History'));
   const checkbox=history.querySelector('input');checkbox.checked=false;checkbox.dispatchEvent(new h.window.Event('change',{bubbles:true}));
   history.querySelector('[aria-label="Move History up"]').click();await tick();
   h.submit(h.$('settings-form'));await tick();const saved=h.calls.find(call=>call.name==='settings-save').value.sidebarTools;
-  assert.deepEqual(saved.map(item=>item.id),['tabs','history','bookmarks','downloads']);assert.equal(saved.find(item=>item.id==='history').visible,false);
+  assert.deepEqual(saved.map(item=>item.id),['tabs','collections','history','bookmarks','downloads']);assert.equal(saved.find(item=>item.id==='history').visible,false);
 });
 function findButton(root, label) {
   const found = [...root.querySelectorAll('button')].find(button => button.textContent === label);

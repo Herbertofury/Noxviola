@@ -21,7 +21,7 @@ async function setup(t, orientation='horizontal') {
   window.addEventListener('error',event=>{errors.push(event.error?.message||event.message);event.preventDefault();});
   window.browser={command:async(name,value)=>{calls.push({name,value});if(name==='state')return state;}};
   for(const method of methods)window.browser[method]=callback=>{listeners.set(method,callback);return()=>listeners.delete(method);};
-  window.eval(source);await tick();
+  window.eval(fs.readFileSync(path.join(__dirname,'../browser/tab-collections-ui.js'),'utf8')); window.eval(source);await tick();
   t.after(()=>{window.close();assert.deepEqual(errors,[]);});
   const tab=window.document.querySelector('[data-tab-id="a"]');
   tab.getBoundingClientRect=()=>({x:30,y:12,width:120,height:32});

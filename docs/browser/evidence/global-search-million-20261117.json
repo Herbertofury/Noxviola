@@ -1,0 +1,17 @@
+{
+  "synthetic": true,
+  "sourceTabs": 1000000,
+  "query": "Tab",
+  "deepStart": 900001,
+  "pageSize": 50,
+  "repetitions": 20,
+  "deepP50ms": 34.98334199999999,
+  "deepP95ms": 75.613203,
+  "rareMs": 0.8943679999999858,
+  "emptyIdentityMs": 0.15023199999995995,
+  "sparseStarredMs": 207.580337,
+  "sparseMatched": 17,
+  "loopP99ms": 11.649023,
+  "parentRssExcludesHelper": 40034304,
+  "integrity": "ok"
+}

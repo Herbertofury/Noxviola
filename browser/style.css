@@ -191,3 +191,28 @@ body[data-sidebar-side=right] #sidebar-resize{right:auto;left:0}
 @media(max-width:760px){.follow-compose{grid-template-columns:1fr}.follow-compose label:has([type=checkbox]){grid-column:auto}}
 
 #pane-chrome{position:fixed;inset:0;pointer-events:none;z-index:12}.pane-toolbar{position:absolute;display:flex;align-items:center;gap:3px;margin:0;padding:2px;background:#21162d;box-sizing:border-box;pointer-events:auto;overflow:auto;border-top:2px solid #49325e}.pane-toolbar.active{border-color:var(--accent,#ad75eb)}.pane-toolbar input{flex:1;min-width:70px;height:24px;padding:2px 5px}.pane-toolbar select{max-width:100px;min-width:60px;height:24px;padding:0 3px}.pane-toolbar button{height:24px;min-width:25px;padding:0 4px}.pane-divider{position:absolute;padding:0;margin:0;border:0;border-radius:0;pointer-events:auto;background:#62437c;min-width:0;min-height:0}.pane-divider[data-axis=x]{cursor:col-resize}.pane-divider[data-axis=y]{cursor:row-resize}.pane-divider:focus{outline:2px solid #f2caff;outline-offset:-2px}
+/* Local library surfaces share bounded pages, without offscreen card accumulation. */
+.collection-list { display:grid; gap:12px; grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr)); }
+.collection-list .card { min-width:0; background:var(--panel,#080808); overflow-wrap:anywhere; }
+#sidebar-collections { padding:12px; overflow:auto; }
+#sidebar-collections .controls { display:flex; flex-wrap:wrap; gap:6px; }
+#sidebar-collections input:not([type=checkbox]),#sidebar-collections textarea { max-width:100%; min-width:0; }
+#collections-content textarea,#sidebar-collections textarea { width:100%; min-height:100px; }
+/* Collection tools keep usable fields at narrow widths instead of shrinking the
+   name to a few letters. Neutral deep-black surfaces respect explicit light mode. */
+#collections-content > .controls,#sidebar-collections > .controls {gap:8px;align-items:center;margin:12px 0 18px}
+#collections-content > .controls > input:not([type=checkbox]) {flex:1 1 240px;min-width:180px}
+#sidebar-collections > .controls > input:not([type=checkbox]) {flex:1 0 100%;width:100%;max-width:100%}
+#collections-content label,#sidebar-collections label {display:flex;align-items:center;gap:8px}
+.collection-list .card {padding:14px;border:1px solid #303030;border-radius:12px;box-shadow:0 2px 8px #0002}
+.collection-list .card > button {margin:5px 5px 0 0}
+.collection-list .card > input {margin-top:10px}
+.collection-list .card > strong {display:block;font-size:15px;line-height:1.45}
+.collection-list .card > p {margin:8px 0 12px}
+body:not([data-theme=light]) #collections,body:not([data-theme=light]) #sidebar-collections {background:#050505;color:#ededed}
+body:not([data-theme=light]) .collection-list .card {background:#0d0d0d}
+body:not([data-theme=light]) #collections-content button,body:not([data-theme=light]) #sidebar-collections button {background:#191919;border-color:#3d3d3d;color:#ededed}
+body:not([data-theme=light]) #collections-content button:hover,body:not([data-theme=light]) #sidebar-collections button:hover {background:#2b2b2b;border-color:#777}
+body:not([data-theme=light]) #collections-content input,body:not([data-theme=light]) #sidebar-collections input,body:not([data-theme=light]) #collections-content textarea,body:not([data-theme=light]) #sidebar-collections textarea {background:#101010;border-color:#444;color:#ededed}
+body:not([data-theme=light]) #collections-content summary,body:not([data-theme=light]) #sidebar-collections summary {color:#d7d7d7}
+body[data-theme=light] .collection-list .card {background:#fff;border-color:var(--border);color:inherit}

@@ -6,6 +6,8 @@ const crypto = require('node:crypto');
 const { execFileSync } = require('node:child_process');
 
 const APP_FILES = [
+  'THIRD_PARTY_COLLECTIONS_LICENSES.txt', 'browser/tab-collections.cjs', 'browser/collection-backups.cjs', 'browser/tab-collections-ui.js',
+  `browser/bin/noxviola-tab-collections${process.platform==='win32'?'.exe':''}`,
   'browser/main.cjs', 'browser/preload.cjs', 'browser/renderer.js',
   'browser/index.html', 'browser/style.css', 'browser/assets/noxviola.png',
   'browser/tab-preview-host.cjs', 'browser/tab-preview-preload.cjs', 'browser/tab-preview.html', 'browser/tab-preview.js', 'browser/tab-preview.css',
@@ -196,6 +198,7 @@ async function main(argv = process.argv.slice(2)) {
     return;
   }
   const { receipt, out, ...target } = options;
+  if(target.platform!==process.platform||target.arch!==process.arch)throw new Error('Build collections on the target platform and architecture before packaging. Cross-target helper packaging is not supported.');
   const root = path.resolve(__dirname, '..');
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'noxviola-package-'));
   try {
@@ -211,7 +214,7 @@ async function main(argv = process.argv.slice(2)) {
     const output = await packager({
       dir: stage, name: 'Noxviola', platform: target.platform, arch: target.arch,
       electronVersion: info.electron, out: path.join(out ? path.resolve(out) : path.join(root, 'dist-preview'), applicationManifestSha256.slice(0, 16)),
-      asar: true, prune: false, overwrite: false,
+      asar: {unpack:'**/browser/bin/**'}, prune: false, overwrite: false,
     });
     if (output.length !== 1) throw new Error('No unique preview was produced. An existing output is preserved; move it aside before packaging again.');
     const packages = [];

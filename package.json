@@ -15,7 +15,8 @@
     "test": "node --test tests/*.test.cjs",
     "check": "node scripts/check-source.cjs",
     "test:native": "node scripts/native-smoke.cjs",
-    "package:preview": "node scripts/package-preview.cjs"
+    "package:preview": "node scripts/package-preview.cjs",
+    "build:collections": "node scripts/build-collections.cjs"
   },
   "devDependencies": {
     "@electron/packager": "20.3.0",

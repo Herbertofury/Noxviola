@@ -18,7 +18,7 @@ let lastProfiles = '', lastSettings = '', lastSaveError = '', addressDirty = fal
 const tabNodes = new Map(), groupNodes=new Map(), painting = new WeakMap();
 let hideTabPreview = () => {};
 let revealedTabKey = '';
-const SIDEBAR_TOOLS=[['tabs','Open tabs'],['bookmarks','Bookmarks'],['history','History'],['downloads','Downloads']];
+const SIDEBAR_TOOLS=[['tabs','Open tabs'],['collections','Tab collections'],['bookmarks','Bookmarks'],['history','History'],['downloads','Downloads']];
 const SIDEBAR_WEBSITES=[['ChatGPT','https://chatgpt.com/'],['Gemini','https://gemini.google.com/'],['Discord','https://discord.com/app'],['WhatsApp','https://web.whatsapp.com/'],['Telegram','https://web.telegram.org/'],['Instagram','https://www.instagram.com/'],['X','https://x.com/'],['Bluesky','https://bsky.app/'],['TikTok','https://www.tiktok.com/'],['Spotify','https://open.spotify.com/'],['Twitch','https://www.twitch.tv/'],['YouTube','https://www.youtube.com/'],['Gmail','https://mail.google.com/'],['Google Calendar','https://calendar.google.com/']];
 let sidebarData={},sidebarWebState={},sidebarRequest=0,sidebarDraftApps=[],sidebarDraftTools=[],sidebarAppsKey='';
 const sidebarWorkspaceNodes=new Map();
@@ -210,16 +210,17 @@ function renderSidebarChrome(){
     let site='';try{site=new URL(app.url).href;}catch{}const candidate=icons.get(site),icon=typeof candidate==='string'&&/^data:image\/(?:png|x-icon);base64,[a-z0-9+/=]+$/i.test(candidate)?candidate:'';
     const image=badge.querySelector('img');if(icon){if(image?.getAttribute('src')!==icon){const next=node('img');next.alt='';next.src=icon;badge.replaceChildren(next);}}else if(image||badge.textContent!==app.name.trim().slice(0,2).toLocaleUpperCase())badge.textContent=app.name.trim().slice(0,2).toLocaleUpperCase();
   }
-  const app=apps.find(item=>`app:${item.id}`===active),names={bookmarks:'Bookmarks',history:'History',downloads:'Downloads',tabs:'Open tabs'};
+  const app=apps.find(item=>`app:${item.id}`===active),names={collections:'Tab collections',bookmarks:'Bookmarks',history:'History',downloads:'Downloads',tabs:'Open tabs'};
   $('sidebar-title').textContent=web&&sidebarWebState.error?'Page failed':app?.name||names[active]||'Sidebar';
   $('sidebar-title').title=sidebarWebState.error||sidebarWebState.url||'';
   $('sidebar-resize').setAttribute('aria-valuenow',String(pref.sidebarWidth||320));
-  $('sidebar-web-controls').hidden=!web;$('sidebar-browser-content').hidden=web;
+  $('sidebar-web-controls').hidden=!web;$('sidebar-browser-content').hidden=web||active==='collections';$('sidebar-collections').hidden=active!=='collections';
   $('sidebar-back').disabled=!sidebarWebState.canGoBack;$('sidebar-forward').disabled=!sidebarWebState.canGoForward;
   $('sidebar-mute').textContent=sidebarWebState.muted?'♬̸':'♬';$('sidebar-mute').setAttribute('aria-label',sidebarWebState.muted?'Unmute sidebar page':'Mute sidebar page');
 }
 async function refreshSidebar(){
   const pref=currentState.preferences,type=pref.sidebarActive||'bookmarks';if(pref.sidebarVisible===false||!pref.sidebarExpanded||type.startsWith('app:'))return;
+  if(type==='collections'){collectionSidebar.show(currentState.currentIdentity);return;}
   if(type==='tabs'){sidebarData={identity:currentState.currentIdentity,tabs:currentState.tabs,activeId:currentState.activeId};renderSidebarItems();return;}
   const ticket=++sidebarRequest,identity=currentState.currentIdentity;
   try{const data=await api.command('sidebar-data');if(ticket!==sidebarRequest||identity!==currentState.currentIdentity||type!==currentState.preferences.sidebarActive)return;sidebarData=data||{};renderSidebarItems();}
@@ -342,6 +343,7 @@ function renderState(state) {
   $('engine-version').textContent = `Noxviola ${state.engine?.appVersion||''} · Electron ${state.engine?.electron || 'unknown'} · Chromium ${state.engine?.chromium || 'unknown'} · ${state.engine?.isPackaged?'Packaged preview':'Development preview'}`;
   document.querySelectorAll('[data-command="restore"]').forEach(control=>{control.disabled=!state.canRestore;});
   if (old.panel !== state.panel) renderPanel(state.panel);
+  else if(state.panel==='collections'&&old.currentIdentity!==state.currentIdentity)collectionFull.show(state.currentIdentity);
   else if(state.panel==='workspaces')refreshWorkspaceState();
   else if(state.panel==='downloads'&&(old.currentIdentity!==state.currentIdentity||JSON.stringify(old.downloadHistory)!==JSON.stringify(state.downloadHistory)||JSON.stringify(old.profiles)!==profilesKey))renderDownloads();
   if(old.currentIdentity!==state.currentIdentity)renderBookmarksBar();
@@ -349,7 +351,10 @@ function renderState(state) {
   if(state.preferences.sidebarVisible!==false&&state.preferences.sidebarExpanded&&
     (old.currentIdentity!==state.currentIdentity||old.preferences.sidebarActive!==state.preferences.sidebarActive||!old.preferences.sidebarExpanded||old.preferences.sidebarVisible===false||state.preferences.sidebarActive==='tabs'))refreshSidebar();
 }
+const collectionFull=window.createCollectionUI($('collections-content'),api);
+const collectionSidebar=window.createCollectionUI($('sidebar-collections'),api,true);
 function renderPanel(panel) {
+  if(panel==='collections')collectionFull.show(currentState.currentIdentity);
   if (panel === 'vault') renderVault();
   else if (panel === 'accounts') renderAccounts();
   else if (panel === 'extensions') renderExtensions();

@@ -212,3 +212,7 @@ test('spelling evidence preserves unknown shortcut metadata and every unrelated 
     assert.throws(() => assertOnlySpellingChanged(before, { preferences: changed, shortcuts: after.shortcuts }, false), /independent non-shortcut preference/);
   }
 });
+
+test('Native file picker helper rejects foreign, ambiguous and malformed input without global desktop control',()=>{
+  require('node:child_process').execFileSync('python', ['-B', path.join(__dirname,'native','test_file_picker.py')], {stdio:'pipe'});
+});

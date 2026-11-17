@@ -37,3 +37,6 @@ The isolated/main-world extension preload architecture is adapted from `electron
 Mozilla's **webextension-polyfill 0.12.0** distribution is embedded byte-for-byte in the extension preload to implement the `browser.*` Promise facade and asynchronous message semantics. Its MPL-2.0 license and provenance are retained in [extension-browser-polyfill-LICENSE.txt](browser/extension-browser-polyfill-LICENSE.txt); the enclosing source identifies the unchanged vendored block. It adds no downloaded-at-runtime script or package dependency. The facade does not create missing browser-host API implementations or grant additional permissions.
 
 CEF, CefSharp, WebView2, Servo and Hermes research does not imply they are bundled into the Electron application.
+
+## Rust tab collection helper
+The independently compiled GPL-3.0-only helper uses pinned Rust crates and bundled SQLite. Applicable license texts and provenance are shipped in `THIRD_PARTY_COLLECTIONS_LICENSES.txt`; complete source and lockfile are under `native/tab-collections`.

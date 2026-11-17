@@ -229,11 +229,29 @@ function OwnedDiagnostics {
   [Console]::Error.WriteLine((@{diagnostic='owned-picker-windows';pid=[int]$r.pid;windows=@($items);visited=$visited;bounded=$true} | ConvertTo-Json -Depth 5 -Compress))
 }
 function Dialog {
+  # Windows IFileDialog is an owned child Window of the application's root Window.
+  # Traverse ONLY exact-PID Window children, never arbitrary desktop descendants.
   $condition = New-Object System.Windows.Automation.AndCondition(
     (New-Object System.Windows.Automation.PropertyCondition($A::ProcessIdProperty, [int]$r.pid)),
-    (New-Object System.Windows.Automation.PropertyCondition($A::NameProperty, [string]$r.title)))
-  $found = @($A::RootElement.FindAll($T::Children, $condition) | Where-Object { -not $_.Current.IsOffscreen })
-  if ($found.Count -gt 1) { throw 'Ambiguous owned native picker' }
+    (New-Object System.Windows.Automation.PropertyCondition($A::ControlTypeProperty, [System.Windows.Automation.ControlType]::Window)))
+  $roots = $A::RootElement.FindAll($T::Children, $condition)
+  if ($roots.Count -gt 64) { throw 'Owned window traversal exceeds inspection budget' }
+  $queue = New-Object System.Collections.Queue
+  foreach ($root in $roots) { $queue.Enqueue(@($root, 0)) }
+  $found = New-Object System.Collections.ArrayList
+  $visited = 0
+  while ($queue.Count -gt 0) {
+    if ($visited -ge 64 -or [DateTime]::UtcNow -ge $deadline) { throw 'Owned window traversal exceeds inspection budget' }
+    $pair = $queue.Dequeue(); $element = $pair[0]; $depth = [int]$pair[1]; $visited++
+    if ($element.Current.ProcessId -ne [int]$r.pid) { continue }
+    if ($element.Current.Name -ceq [string]$r.title -and -not $element.Current.IsOffscreen) {
+      [void]$found.Add($element)
+      if ($found.Count -gt 1) { throw 'Ambiguous owned native picker' }
+    }
+    $children = $element.FindAll($T::Children, $condition)
+    if (($depth -ge 3 -and $children.Count -gt 0) -or ($visited + $queue.Count + $children.Count -gt 64)) { throw 'Owned window traversal exceeds inspection budget' }
+    for ($i=0; $i -lt $children.Count; $i++) { $queue.Enqueue(@($children[$i], ($depth+1))) }
+  }
   if ($found.Count -eq 1) { return $found[0] }
   return $null
 }

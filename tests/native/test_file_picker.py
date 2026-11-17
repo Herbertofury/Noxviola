@@ -59,9 +59,21 @@ class FilePickerContracts(unittest.TestCase):
         for forbidden in ['Invoke()', 'SetValue(', 'SendKeys', 'SendInput']:
             self.assertNotIn(forbidden, block)
 
+    def test_windows_nested_picker_keeps_exact_owner_and_title(self):
+        block = picker.WINDOWS_SCRIPT.split('function Dialog {', 1)[1].split('function Descendants', 1)[0]
+        self.assertIn('$A::ProcessIdProperty, [int]$r.pid', block)
+        self.assertIn('[System.Windows.Automation.ControlType]::Window', block)
+        self.assertIn('$element.Current.Name -ceq [string]$r.title', block)
+        self.assertIn('-not $element.Current.IsOffscreen', block)
+        self.assertIn('$visited -ge 64', block)
+        self.assertIn('$depth -ge 3', block)
+        self.assertIn("throw 'Ambiguous owned native picker'", block)
+        self.assertNotIn('$T::Descendants', block)
+        self.assertLess(block.index('ProcessId -ne [int]$r.pid'), block.index('$element.Current.Name'))
+
     def test_windows_uses_scoped_accessibility_not_global_keys(self):
         script=picker.WINDOWS_SCRIPT
-        for required in ['ProcessIdProperty','NameProperty','$T::Children','ValuePattern','InvokePattern']:
+        for required in ['ProcessIdProperty','ControlTypeProperty','$T::Children','ValuePattern','InvokePattern']:
             self.assertIn(required,script)
         for forbidden in ['SendKeys','SendInput','SetForegroundWindow','ExecutionPolicy','Replace\')']:
             self.assertNotIn(forbidden,script)

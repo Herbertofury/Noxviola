@@ -713,7 +713,12 @@ async function runPackagedPhase(packaged, context, phase, { publicHttps = false 
     if (child && !exitResult) {
       result.terminatedAfterFailure = true;
       child.kill();
-      await bounded(exitPromise.catch(() => {}), 5_000, 'Packaged failure cleanup did not observe process termination.').catch(error => { result.cleanupError = error.message; });
+      await bounded(exitPromise.catch(() => {}), 5_000, 'Packaged failure cleanup did not observe process termination.').catch(async error => {
+        result.cleanupError = error.message;
+        // Only this spawned synthetic-fixture process. A native modal can defer SIGTERM.
+        result.forcedFixtureTermination = true;child.kill('SIGKILL');
+        await bounded(exitPromise.catch(() => {}),5_000,'Owned fixture process did not exit after forced failure cleanup.').catch(forceError=>{result.cleanupError += ' '+forceError.message;});
+      });
     }
     await Promise.all([log, network].map(stream => new Promise(resolve => stream.end(resolve))));
     result.exit = exitResult;

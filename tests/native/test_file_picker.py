@@ -51,7 +51,7 @@ class FilePickerContracts(unittest.TestCase):
 
     def test_x11_location_shortcut_target_is_exact_not_regex_wildcard(self):
         self.assertEqual(picker.x11_search_arguments(314,'Pick (fixture).*'),
-                         ['xdotool','search','--onlyvisible','--pid','314','--name',r'^Pick\ \(fixture\)\.\*$'])
+                         ['xdotool','search','--all','--onlyvisible','--pid','314','--name',r'^Pick\ \(fixture\)\.\*$'])
 
     def test_windows_diagnostics_are_bounded_and_owned_only(self):
         script = picker.WINDOWS_SCRIPT
@@ -115,7 +115,7 @@ class FilePickerContracts(unittest.TestCase):
         self.assertIn('if desktop.get_child_count() == 0:', source)
 
     def test_windows_button_diagnostics_are_owned_readonly_and_bounded(self):
-        block = picker.WINDOWS_SCRIPT.split('function OwnedButtonDiagnostics($d) {', 1)[1].split('function Descendants', 1)[0]
+        block = picker.WINDOWS_SCRIPT.split('function OwnedButtonDiagnostics($d) {', 1)[1].split('function NamedControls', 1)[0]
         self.assertIn('$i -lt 32', block)
         self.assertIn('AddMilliseconds(700)', block)
         self.assertLess(block.index('ProcessId -ne [int]$r.pid'), block.index('$button.Current.Name'))
@@ -124,11 +124,21 @@ class FilePickerContracts(unittest.TestCase):
         for forbidden in ['Invoke()', 'SetValue(', 'SendKeys', 'SendInput']:
             self.assertNotIn(forbidden, block)
 
+    def test_windows_named_controls_require_exact_owner_name_and_pattern(self):
+        block = picker.WINDOWS_SCRIPT.split('function NamedControls', 1)[1].split('$d=$null', 1)[0]
+        self.assertIn('$A::ProcessIdProperty, [int]$r.pid', block)
+        self.assertIn("$name.Replace('&','') -cnotin $names", block)
+        self.assertIn('TryGetCurrentPattern($pattern, [ref]$behavior)', block)
+        self.assertIn('$supported -and $control.Current.IsEnabled -and -not $control.Current.IsOffscreen', block)
+        self.assertIn('$raw.Count -gt 2048', block)
+        self.assertNotIn('ControlTypeProperty', block)
+        self.assertLess(block.index('ProcessId -ne [int]$r.pid'), block.index('$control.Current.Name'))
+
     def test_windows_phase_diagnostics_bracket_native_operations(self):
         script = picker.WINDOWS_SCRIPT
         for before, operation, after in [
             ("Phase 'before-dialog-discovery'", '$d=Dialog', "Phase 'after-dialog-discovery'"),
-            ("Phase 'before-button-enumeration'", '$buttons = @(Descendants', "Phase 'after-button-enumeration'"),
+            ("Phase 'before-button-enumeration'", '$buttons = @(NamedControls', "Phase 'after-button-enumeration'"),
             ("Phase 'before-invoke'", '$invoke.Invoke()', "Phase 'after-invoke'")]:
             self.assertLess(script.index(before), script.index(operation))
             self.assertLess(script.index(operation), script.index(after))

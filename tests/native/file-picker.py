@@ -60,7 +60,7 @@ def select_control(items, kind):
 
 def x11_search_arguments(pid, title):
     # Exact PID and exact title: no match-all/fallback target or global keyboard.
-    return ["xdotool", "search", "--onlyvisible", "--pid", str(pid), "--name", "^" + re.escape(title) + "$"]
+    return ["xdotool", "search", "--all", "--onlyvisible", "--pid", str(pid), "--name", "^" + re.escape(title) + "$"]
 
 
 def reveal_location(pid, title, deadline):
@@ -375,9 +375,28 @@ function OwnedButtonDiagnostics($d) {
   }
   [Console]::Error.WriteLine((@{diagnostic='owned-picker-buttons';pid=[int]$r.pid;rawCount=$raw.Count;buttons=@($buttons)} | ConvertTo-Json -Depth 5 -Compress))
 }
-function Descendants($d, $type) {
-  $condition = New-Object System.Windows.Automation.PropertyCondition($A::ControlTypeProperty, $type)
-  return @($d.FindAll($T::Descendants, $condition) | Where-Object { $_.Current.ProcessId -eq [int]$r.pid -and -not $_.Current.IsOffscreen -and $_.Current.IsEnabled })
+function NamedControls($d, $names, $pattern, $diagnose) {
+  # Names and required behavior, not provider-specific ControlType taxonomy.
+  $owner = New-Object System.Windows.Automation.PropertyCondition($A::ProcessIdProperty, [int]$r.pid)
+  $raw = $d.FindAll($T::Descendants, $owner)
+  if ($raw.Count -gt 2048) { throw 'Owned picker controls exceed inspection budget' }
+  $matches = New-Object System.Collections.ArrayList
+  $evidence = New-Object System.Collections.ArrayList
+  for ($i=0; $i -lt $raw.Count; $i++) {
+    if ([DateTime]::UtcNow -ge $deadline) { throw 'Owned control inspection timed out' }
+    $control=$raw[$i]
+    if ($control.Current.ProcessId -ne [int]$r.pid) { continue }
+    $name=[string]$control.Current.Name
+    if ($name.Replace('&','') -cnotin $names) { continue }
+    $behavior=$null
+    $supported=$control.TryGetCurrentPattern($pattern, [ref]$behavior)
+    if ($diagnose -and $evidence.Count -lt 32) {
+      [void]$evidence.Add(@{name=$name;type=$control.Current.ControlType.ProgrammaticName;patternAvailable=$supported;enabled=$control.Current.IsEnabled;offscreen=$control.Current.IsOffscreen})
+    }
+    if ($supported -and $control.Current.IsEnabled -and -not $control.Current.IsOffscreen) { [void]$matches.Add($control) }
+  }
+  if ($diagnose) { [Console]::Error.WriteLine((@{diagnostic='owned-named-controls';pid=[int]$r.pid;matches=@($evidence)} | ConvertTo-Json -Depth 5 -Compress)) }
+  return @($matches)
 }
 $d=$null
 OwnedDiagnostics
@@ -392,7 +411,7 @@ if (-not $d) { OwnedDiagnostics; throw 'Exact owned native picker did not appear
 Phase 'dialog-discovered'
 if (-not $r.cancel) {
   Phase 'before-filename-enumeration'
-  $edits = @(Descendants $d ([System.Windows.Automation.ControlType]::Edit) | Where-Object { $_.Current.Name -in @('File name:', 'File name', 'Filename:', 'Filename') })
+  $edits = @(NamedControls $d @('File name:', 'File name', 'Filename:', 'Filename') ([System.Windows.Automation.ValuePattern]::Pattern) $true)
   Phase 'after-filename-enumeration'
   if ($edits.Count -ne 1) { throw "Expected one filename Edit control, found $($edits.Count)" }
   if (-not (Dialog)) { throw 'Owned picker changed before filename entry' }
@@ -411,7 +430,7 @@ while ([DateTime]::UtcNow -lt $deadline) {
   if ($firstActionCheck) { Phase 'after-action-dialog-check' }
   $names = if ($r.cancel) { @('Cancel') } else { @('Open','Save') }
   if ($firstActionCheck) { Phase 'before-button-enumeration' }
-  $buttons = @(Descendants $d ([System.Windows.Automation.ControlType]::Button) | Where-Object { $_.Current.Name.Replace('&','') -in $names })
+  $buttons = @(NamedControls $d $names ([System.Windows.Automation.InvokePattern]::Pattern) $firstActionCheck)
   if ($firstActionCheck) { Phase 'after-button-enumeration'; OwnedButtonDiagnostics $d; $firstActionCheck=$false }
   if ($buttons.Count -gt 1) { throw 'Ambiguous native picker action' }
   if ($buttons.Count -eq 1) {$button=$buttons[0];break}

@@ -116,6 +116,14 @@ class FilePickerContracts(unittest.TestCase):
             accepts = [cmd for cmd in commands if cmd[-1] == 'alt+o']
             self.assertEqual(len(accepts), 0 if secondary else 1)
 
+    def test_capture_is_verified_readonly_xwd_not_gdk_lifecycle(self):
+        source = inspect.getsource(picker.x11_picker)
+        block = source.split('def capture(stage):',1)[1].split("capture('opened')",1)[0]
+        self.assertLess(block.index('verify()'),block.index("['xwd', '-silent', '-id', xid"))
+        self.assertIn('deadline-time.monotonic()',block)
+        for forbidden in ['foreign_new_for_display', 'display.close', 'DestroyWindow', 'windowclose']:
+            self.assertNotIn(forbidden,block)
+
     def test_x11_fallback_rejects_changed_owner_before_input(self):
         commands = []
         def run(cmd, **kwargs):

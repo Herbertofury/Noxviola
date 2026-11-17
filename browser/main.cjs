@@ -542,7 +542,7 @@ async function perform(name, value) {
       const choice=kind==='export'?await dialog.showSaveDialog(win,{title:'Export all saved collections for this identity; choose a NEW filename',defaultPath:`noxviola-library-${identity}.noxlibrary`,filters}):await dialog.showOpenDialog(win,{title:'Add collections from a same-identity backup; existing collections stay untouched',properties:['openFile'],filters});
       const file=kind==='export'?choice.filePath:choice.filePaths?.[0];if(choice.canceled||!file)return {canceled:true};
       if(identity!==currentIdentity||closing)throw new Error('Identity changed while selecting the backup. Nothing started.');
-      return collectionBackups.run(kind,identity,file);
+      return {...await collectionBackups.run(kind,identity,file),file};
     }
     case 'collection-query': {
       if(!value||!['groups','tabs','update','health','folders','folder-create','folder-rename','move','restore-sessions','restore-tabs','restore-pause','search-all'].includes(value.op)||!profiles.some(p=>p.id===value.identity))throw new Error('Invalid collection request.');

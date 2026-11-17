@@ -492,7 +492,9 @@ async function runPackagedPhase(packaged, context, phase, { publicHttps = false 
           const receipt=JSON.parse(stdout);assert.equal(receipt.pid,child.pid);assert.equal(receipt.title,title);assert.equal(receipt.action,file?'submit':'cancel');assert.equal(receipt.dialogDismissed,true);
           (result.nativePickerActions||=[]).push(receipt);
           await until(()=>evaluate(shell,`!document.getElementById('${root}').hasAttribute('aria-busy')`),'native picker backup settled');
-          return evaluate(shell,`document.querySelector('#${root} [role=status]').textContent`);
+          const status=await evaluate(shell,`document.querySelector('#${root} [role=status]').textContent`);
+          (result.nativeBackupStatuses||=[]).push({kind,status});
+          return status;
         };
         assert.equal(await choose('export'),'File selection canceled.');
         const file=path.join(context.output,'native-picker-library.noxlibrary');

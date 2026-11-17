@@ -108,17 +108,15 @@ def x11_picker(args, deadline):
         if not directory:
             return
         verify()
-        import gi
-        gi.require_version('Gdk', '3.0')
-        gi.require_version('GdkX11', '3.0')
-        from gi.repository import Gdk, GdkX11
-        display = Gdk.Display.open(os.environ['DISPLAY'])
-        window = GdkX11.X11Window.foreign_new_for_display(display, int(xid))
-        pixels = Gdk.pixbuf_get_from_window(window, 0, 0, window.get_width(), window.get_height())
-        if not pixels:
-            raise RuntimeError('Owned picker screenshot unavailable')
-        pixels.savev(str(Path(directory) / (stage + '.png')), 'png', [], [])
-        display.close()
+        # xwd reads the drawable; no foreign Gtk/Gdk object or remote lifecycle.
+        output = Path(directory) / (stage + '.xwd')
+        if output.exists():
+            raise RuntimeError('Owned picker evidence already exists')
+        subprocess.run(['xwd', '-silent', '-id', xid, '-out', str(output)],
+                       check=True, capture_output=True, text=True,
+                       timeout=max(.05, deadline-time.monotonic()))
+        if not output.is_file() or output.stat().st_size < 100:
+            raise RuntimeError('Owned picker XWD capture unavailable')
 
     capture('opened')
     # GTK must process its initial focus and activation guard before synthetic keys.
@@ -531,7 +529,8 @@ def main():
                 diagnostics = diagnostics.decode("utf-8", errors="replace")
             raise TimeoutError("Native helper timed out; owned diagnostics: " + (diagnostics[:800] + " ... " + diagnostics[-1600:] if len(diagnostics) > 2400 else diagnostics)) from error
         if worker.returncode:
-            raise RuntimeError("Native picker helper failed: " + (worker.stdout + worker.stderr).strip()[:2000])
+            evidence = (worker.stdout + worker.stderr).strip()
+            raise RuntimeError("Native picker helper failed: " + (evidence[:1600] + " ... " + evidence[-2400:] if len(evidence) > 4000 else evidence))
         print(worker.stdout.strip())
         return
     if sys.platform == "win32":
@@ -547,5 +546,8 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as error:
+        import traceback
+        # Call locations only: no locals, credentials or foreign window content.
+        print(''.join(traceback.format_tb(error.__traceback__, limit=8))[-4000:], file=sys.stderr, flush=True)
         print(json.dumps({"platform": sys.platform, "error": {"name": type(error).__name__, "message": str(error)}}))
         sys.exit(1)

@@ -316,6 +316,7 @@ test('DOM product: preference controls preserve a dirty draft and apply committe
   h.input(field(form,'customSearchURL'),'https://search.example/?q={searchTerms}');
   h.check(field(form,'showBookmarksBar'),true);
   h.check(field(form,'sidebarRailExpanded'),true);
+  h.check(field(form,'sidebarPanelPinned'),false);
   h.check(field(form,'sidebarShowWorkspaces'),false);
   assert.equal(field(form,'spellcheckEnabled').checked,true);
   h.check(field(form,'spellcheckEnabled'),false);
@@ -329,7 +330,7 @@ test('DOM product: preference controls preserve a dirty draft and apply committe
   assert.equal(h.document.body.dataset.theme,'dark','typing a draft does not claim a saved theme');
   h.submit(form); await tick();
   const expected = {searchEngine:'custom',tabLayout:'vertical',tabSearchPosition:'right',tabSearchStyle:'compact',theme:'light',accent:'teal',density:'compact',
-    sidebarVisible:true,sidebarRailExpanded:true,sidebarShowWorkspaces:false,sidebarSide:'left',sidebarWidth:320,sidebarApps:[],sidebarTools:[{id:'tabs',visible:true},{id:'bookmarks',visible:true},{id:'history',visible:true},{id:'downloads',visible:true}],
+    sidebarVisible:true,sidebarPanelPinned:false,sidebarRailExpanded:true,sidebarShowWorkspaces:false,sidebarSide:'left',sidebarWidth:320,sidebarApps:[],sidebarTools:[{id:'tabs',visible:true},{id:'bookmarks',visible:true},{id:'history',visible:true},{id:'downloads',visible:true},{id:'accounts',visible:true}],
     homePage:'https://home.example/',customSearchURL:'https://search.example/?q={searchTerms}',showBookmarksBar:true,spellcheckEnabled:false,
     toolbar:{home:false,library:true,extensions:false,split:true},shortcuts:{new:'Ctrl+Shift+N','focus-address':''}};
   assert.deepEqual(h.calls.find(call => call.name === 'settings-save').value,expected);
@@ -382,4 +383,16 @@ test('Modrinth following shows same-version declarations and saves identity-scop
  h.emit('onFollows',{identity:'work',items:[{id:'mod',identity:'work',name:'Versioned mod',kind:'project',provider:'modrinth-versions',url:'https://modrinth.com/mod/example',lastSuccess:1000,compatibility:{loader:'forge',gameVersion:'1.20.1'},matchingVersionIds:[],items:[{id:'modrinth:version1',kind:'modrinth-version',title:'Forge version',versionNumber:'1.0',releaseType:'release',loaders:['forge'],gameVersions:['1.19.2'],observedAt:1000,publishedAt:'2026-11-16',read:false},{id:'modrinth:version2',kind:'modrinth-version',title:'Fabric version',versionNumber:'2.0',releaseType:'beta',loaders:['fabric'],gameVersions:['1.20.1'],observedAt:1000,publishedAt:'2026-11-16',read:false}]}]});
  await painted(h,'follow-items');assert.match(h.$('follow-items').textContent,/0 versions in the last successful snapshot match both saved filters/);assert.match(h.$('follow-items').textContent,/Loaders: forge · Minecraft: 1.19.2/);assert.match(h.$('follow-items').textContent,/Loaders: fabric · Minecraft: 1.20.1/);
  const form=h.$('follow-items').querySelector('form'),inputs=form.querySelectorAll('input');h.input(inputs[0],'fabric');h.submit(form);await tick();assert.deepEqual(h.calls.at(-1),{name:'follow-change',value:{id:'mod',identity:'work',compatibility:{loader:'fabric',gameVersion:'1.20.1'}}});
+});
+
+test('settings search and categories retain drafts and reveal hidden invalid settings',async t=>{
+  const initial=state({panel:'settings',shortcuts:[{id:'new',label:'New tab',accelerator:'Ctrl+T',defaultAccelerator:'Ctrl+T'}]});
+  const h=await harness(t,{initial}),form=h.$('settings-form'),search=h.$('settings-search'),home=field(form,'homePage');
+  h.input(home,'https://draft.example/');h.document.querySelector('[data-settings-filter="sidebar"]').click();
+  assert.equal(form.querySelector('[name="homePage"]').closest('[data-settings-category]').hidden,true);
+  assert.equal(form.querySelector('[name="sidebarWidth"]').closest('[data-settings-category]').hidden,false);
+  h.input(search,'new tab');const shortcutGroup=form.querySelector('[data-settings-category="shortcuts"]');assert.equal(shortcutGroup.hidden,false);assert.equal(shortcutGroup.open,true);assert.equal(home.value,'https://draft.example/');
+  h.input(search,'no-such-noxviola-setting');assert.match(h.$('settings-search-status').textContent,/No settings found/);assert.equal(home.value,'https://draft.example/');
+  home.dispatchEvent(new h.window.Event('invalid',{bubbles:false,cancelable:true}));assert.equal(search.value,'');assert.equal(home.closest('[data-settings-category]').hidden,false);assert.equal(home.value,'https://draft.example/');assert.equal(shortcutGroup.open,false);
+  h.input(search,'pin');assert.equal(form.querySelector('[data-settings-terms*="pinned"]').hidden,false);search.dispatchEvent(new h.window.CompositionEvent('compositionstart',{bubbles:true}));search.dispatchEvent(new h.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));assert.equal(search.value,'pin','Escape during IME composition does not clear the draft');search.dispatchEvent(new h.window.CompositionEvent('compositionend',{bubbles:true}));search.dispatchEvent(new h.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));assert.equal(search.value,'');
 });

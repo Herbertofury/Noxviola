@@ -3,7 +3,7 @@
 // executes browser-shell code in the website. Popups remain in that identity.
 const {httpUrl}=require('./state.cjs');
 
-function createSidebarWebPanel({WebContentsView,getWindow,getSession,identityReady=async()=>{},loadFavicon=async()=>'',onChange=()=>{}}){
+function createSidebarWebPanel({WebContentsView,getWindow,getSession,identityReady=async()=>{},loadFavicon=async()=>'',onInteraction=()=>{},onChange=()=>{}}){
   const entries=new Map();let current=null,visible=false,bounds=null,disposed=false;
   const keyFor=(identity,url)=>JSON.stringify([identity,url]);
   function canTraverse(wc,direction){
@@ -81,6 +81,8 @@ function createSidebarWebPanel({WebContentsView,getWindow,getSession,identityRea
     const entry={key:keyFor(identity,site),identity,site,url:site,title:'',favicon:'',faviconRevision:0,view,popups:new Set(),started:false,pending:null,loading:false,error:''};
     view.setBackgroundColor('#171122');view.setVisible(false);win.contentView.addChildView(view);
     protectPopupSource(wc,entry,session);
+    wc.on('before-mouse-event',(_event,input)=>{if(input.type==='mouseDown')onInteraction();});
+    wc.on('before-input-event',(_event,input)=>{if(input.type==='keyDown')onInteraction();});
     for(const eventName of ['will-navigate','will-redirect'])wc.on(eventName,(event,url)=>{if(!httpUrl(url))event.preventDefault();});
     wc.on('did-start-navigation',(_event,_url,isSameDocument,isMainFrame)=>{if(isMainFrame&&!isSameDocument){entry.faviconRevision++;if(entry.favicon){entry.favicon='';if(current?.identity===entry.identity)notify();}}});
     wc.on('page-favicon-updated',(_event,urls)=>{

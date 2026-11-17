@@ -22,7 +22,9 @@ const {createIdentitySessionResolver} = require('./session-path.cjs');
 const {PermissionManager} = require('./permissions.cjs');
 const {createFaviconLoader} = require('./favicons.cjs');
 const {sidebarLayout} = require('./sidebar-layout.cjs');
+const {sidebarEase,sidebarDuration} = require('./sidebar-motion.cjs');
 const {createSidebarWebPanel} = require('./sidebar-web-panel.cjs');
+const {sidebarAccountData,sidebarAccountRoute} = require('./sidebar-accounts.cjs');
 const findSession = require('./find-session.cjs').createFindSession();
 const accountStore = require('./accounts.cjs');
 const vaultStore = require('./vault.cjs');
@@ -37,7 +39,7 @@ let accountFile, accounts = [], accountError = '', accountRecovery = null;
 let permissionOpening = null, extensionBusy = false;
 let resolveIdentitySession, history, bookmarks, workspaces, follows, followTimer, resourceMonitor, extensionBridge, spellcheck;
 let activeWorkspaceId = 'default', nextRuntimeTabId = 1, preferencePreview = null;
-let sidebarProgress=0,sidebarRailProgress=0,sidebarTimer=null;
+let sidebarProgress=0,sidebarRailProgress=0,sidebarTimer=null,sidebarDismissTimer=null,sidebarDismissGeneration=0;
 const runtimeTabs = new Map(), nativeTabs = new Map(), sessionTargets = new Map(), workspaceLastTabs = new Map(), browserEvents = new EventEmitter();
 const configuredSessions = new Set(), identityInitializations = new Map(), extensionWindows = new Map(), pendingOperations = new Set();
 const SIDEBAR = 210;
@@ -46,7 +48,7 @@ const active = () => tabs.find(tab => tab.id === activeId);
 const tabWorkspace = tab => tab.saved.workspaceId || 'default';
 const visibleTabs = () => tabs.filter(tab => tabWorkspace(tab) === activeWorkspaceId);
 const favicons = createFaviconLoader({nativeImage});
-const sidebarWeb=createSidebarWebPanel({WebContentsView,getWindow:()=>win,getSession:identitySession,identityReady,loadFavicon:favicons.load,onChange:value=>send('sidebar-web-state',value)});
+const sidebarWeb=createSidebarWebPanel({WebContentsView,getWindow:()=>win,getSession:identitySession,identityReady,loadFavicon:favicons.load,onInteraction:cancelSidebarDismiss,onChange:value=>send('sidebar-web-state',value)});
 const tabPreview = require('./tab-preview-host.cjs').createTabPreview({
   WebContentsView, ipcMain, root:__dirname, getWindow:()=>win, blocked:()=>Boolean(panel)||closing,
   getTabInfo:id=>{const tab=tabs.find(row=>row.id===id && tabWorkspace(row)===activeWorkspaceId);return tab?{title:tab.title,url:tab.url,identity:tab.identity,contents:tab.view?.webContents}:null;},
@@ -136,13 +138,24 @@ function syncSidebarWeb(){
   }
 }
 function changeSidebar(patch){
-  preferences=preferenceStore.applyPreferences(preferences,patch);syncSidebarWeb();animateSidebar();publish(false);publishHistory();publishBookmarks();queueSave();
+  cancelSidebarDismiss();preferences=preferenceStore.applyPreferences(preferences,patch);syncSidebarWeb();animateSidebar();publish(false);publishHistory();publishBookmarks();queueSave();
+}
+function cancelSidebarDismiss(){sidebarDismissGeneration++;clearTimeout(sidebarDismissTimer);sidebarDismissTimer=null;}
+function scheduleSidebarDismiss(tab,view){
+  if(closing||panel||preferences.sidebarPanelPinned||!preferences.sidebarVisible||!preferences.sidebarExpanded)return;
+  cancelSidebarDismiss();const generation=sidebarDismissGeneration;
+  // Wait for the page renderer to finish the input task before changing view
+  // geometry. An unresponsive or navigated-away renderer leaves the panel open.
+  setImmediate(async()=>{try{if(view.webContents.isDestroyed())return;await view.webContents.executeJavaScript('void 0');}catch{return;}
+    if(generation!==sidebarDismissGeneration)return;
+    sidebarDismissTimer=setTimeout(()=>{sidebarDismissTimer=null;if(generation===sidebarDismissGeneration&&!closing&&!panel&&!preferences.sidebarPanelPinned&&preferences.sidebarVisible&&preferences.sidebarExpanded&&tab.view===view&&(tab.id===activeId||tab.id===splitId))changeSidebar({sidebarExpanded:false});},180);
+  });
 }
 function animateSidebar(){
   clearTimeout(sidebarTimer);const target=preferences.sidebarVisible&&preferences.sidebarExpanded?1:0,from=sidebarProgress,railTarget=preferences.sidebarRailExpanded?1:0,railFrom=sidebarRailProgress;
   let reduced=false;try{reduced=systemPreferences.getAnimationSettings().prefersReducedMotion;}catch{}
-  const duration=reduced?0:180*Math.max(Math.abs(target-from),Math.abs(railTarget-railFrom)),start=performance.now();
-  const tick=()=>{const t=duration?Math.min(1,(performance.now()-start)/duration):1,eased=1-Math.pow(1-t,3);sidebarProgress=from+(target-from)*eased;sidebarRailProgress=railFrom+(railTarget-railFrom)*eased;layout();if(t<1)sidebarTimer=setTimeout(tick,8);else{sidebarTimer=null;sidebarProgress=target;sidebarRailProgress=railTarget;layout();}};
+  const panelDuration=sidebarDuration(from,target,230,190,reduced),railDuration=sidebarDuration(railFrom,railTarget,200,160,reduced),duration=Math.max(panelDuration,railDuration),start=performance.now();
+  const tick=()=>{const elapsed=performance.now()-start,panelT=panelDuration?Math.min(1,elapsed/panelDuration):1,railT=railDuration?Math.min(1,elapsed/railDuration):1;sidebarProgress=from+(target-from)*sidebarEase(panelT);sidebarRailProgress=railFrom+(railTarget-railFrom)*sidebarEase(railT);layout();if(elapsed<duration)sidebarTimer=setTimeout(tick,8);else{sidebarTimer=null;sidebarProgress=target;sidebarRailProgress=railTarget;layout();}};
   tick();
 }
 function layout() {
@@ -206,6 +219,8 @@ function ensureView(tab) {
   const view = new WebContentsView({webPreferences:{session:identitySession(tab.identity),nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true,allowRunningInsecureContent:false,spellcheck:true}});
   tab.view = view; tab.initializing = true; win.contentView.addChildView(view);
   const wc = view.webContents;
+  wc.on('before-mouse-event',(_event,input)=>{if(input.type==='mouseUp'&&input.button==='left')scheduleSidebarDismiss(tab,view);});
+  wc.on('before-input-event',(_event,input)=>{if(input.type==='keyDown'&&!input.isAutoRepeat&&!input.control&&!input.meta&&!input.alt&&input.key&&!['Shift','Control','Meta','Alt','Escape'].includes(input.key))scheduleSidebarDismiss(tab,view);});
   nativeTabs.set(wc.id,tab);wc.setAudioMuted(!!tab.saved.muted);
   wc.setWindowOpenHandler(({url}) => { if (httpUrl(url) && !closing) eventAction(() => newTab(url,tab.identity)); return {action:'deny'}; });
   wc.on('will-navigate', (event,url) => { if (!tabNavigationAllowed(tab,url)) event.preventDefault(); });
@@ -478,6 +493,7 @@ async function recoverService(service,label) {
   if(choice.response===1)service.recover(service.inspection.preview);
 }
 async function savePreferences(value) {
+  cancelSidebarDismiss();
   const proposed=preferenceStore.applyPreferences(preferences,value);
   const oldApps=preferences.sidebarApps;
   spellcheck.setEnabled(proposed.spellcheckEnabled);
@@ -519,14 +535,32 @@ function buildMenu() {
     {label:'Save visible screenshot',click:()=>invoke('save-screenshot')},{label:'Resource monitor',click:()=>invoke('resources')},
     {label:'Customize',click:()=>invoke('settings')},{type:'separator'},{role:'quit'}]}]));
 }
+function showBrowserMenu(anchor){
+  const invoke=(name,value)=>runBrowserOperation(name,value).catch(error=>{notice(error.message);layout();publish(false);});
+  const shortcuts=new Map(preferenceStore.shortcutList(preferences).map(item=>[item.id,item.accelerator]));
+  const panels=new Set(['history','downloads','bookmarks','extensions','vault','workspaces','accounts','permissions','following','resources','tools','settings']);
+  const item=(label,name,extra={})=>({label,...(shortcuts.get(name)?{accelerator:shortcuts.get(name)}:{}),...extra,click:()=>{if(!panels.has(name)||panel!==name)invoke(name);}});
+  const menu=Menu.buildFromTemplate([
+    item('New tab','new'),item('Reopen closed tab','restore',{enabled:closed.length>0}),{type:'separator'},
+    item('Find in page','focus-find'),item('Search tabs','search-tabs'),{label:'Zoom',submenu:[item('Zoom in','zoom-in'),item('Zoom out','zoom-out'),item('Reset zoom','zoom-reset')]},
+    {type:'separator'},item('History','history'),item('Downloads','downloads'),item('Bookmarks','bookmarks'),item('Extensions','extensions'),item('Library','vault'),
+    item('Workspaces and tab groups','workspaces'),item('Accounts and identities','accounts'),item('Site permissions','permissions'),
+    {label:'More tools',submenu:[item('Following','following'),item('Resource monitor','resources'),item('Save page as PDF','save-pdf'),item('Save visible screenshot','save-screenshot'),item('Developer tools','devtools'),item('All browser tools','tools')]},
+    {type:'separator'},item('Settings','settings'),{type:'separator'},{role:'quit',label:'Exit Noxviola'}
+  ]);
+  const [width,height]=win.getContentSize(),valid=anchor&&['x','y','width','height'].every(key=>Number.isFinite(anchor[key]));
+  const options={window:win};if(valid){options.x=Math.max(0,Math.min(width-1,Math.round(anchor.x+anchor.width-250)));options.y=Math.max(0,Math.min(height-1,Math.round(anchor.y+anchor.height)));}menu.popup(options);
+}
 async function perform(name, value) {
   const wc = active()?.view?.webContents;
   switch (name) {
     case 'state': return stateView();
+    case 'browser-menu':showBrowserMenu(value?.anchor);break;
     case 'tab-preview': if (value?.open) {void tabPreview.show(String(value.id||''),value.position).catch(()=>notice('Tab preview is unavailable.'));} else tabPreview.hide(); break;
     case 'search-tabs': {const width=win.getContentSize()[0],right=preferences.tabSearchPosition==='right',anchor=value?.anchor||{x:right?width-180:38,y:0,width:28,height:34,align:right?'right':'left'};tabPreview.hide();tabSearch.show(anchor);break;}
     case 'sidebar-toggle':changeSidebar({sidebarVisible:!preferences.sidebarVisible});break;
     case 'sidebar-rail-expand':changeSidebar({sidebarRailExpanded:!preferences.sidebarRailExpanded});break;
+    case 'sidebar-pin':changeSidebar({sidebarPanelPinned:!preferences.sidebarPanelPinned});break;
     case 'sidebar-select':{
       if(typeof value!=='string')throw new Error('Choose a sidebar panel.');
       const closingCurrent=preferences.sidebarVisible&&preferences.sidebarExpanded&&preferences.sidebarActive===value;
@@ -549,8 +583,10 @@ async function perform(name, value) {
       if(type==='history')return serviceView(history,()=>({identity:currentIdentity,...history.query(currentIdentity,{})}));
       if(type==='downloads')return {identity:currentIdentity,items:downloads.list().filter(item=>item.identity===currentIdentity)};
       if(type==='tabs')return {identity:currentIdentity,tabs:stateView().tabs,activeId};
+      if(type==='accounts')return sidebarAccountData({identity:currentIdentity,profiles,accounts,error:accountError,recoveryAvailable:!!accountRecovery});
       return {identity:currentIdentity};
     }
+    case 'sidebar-account-open':{const target=sidebarAccountRoute({id:value?.id,identity:value?.identity,currentIdentity,profiles,accounts,error:accountError});newTab(target.url,target.identity);break;}
     case 'new': return newTab(typeof value === 'string' ? value : 'about:blank');
     case 'activate': activate(value); break;
     case 'close':closeTab(value);break;
@@ -568,20 +604,28 @@ async function perform(name, value) {
     case 'next-tab':case 'previous-tab':{const candidates=visibleTabs(),index=candidates.findIndex(tab=>tab.id===activeId);if(candidates.length)activate(candidates[(index+(name==='next-tab'?1:-1)+candidates.length)%candidates.length].id);break;}
     case 'tab-pin':pinTab(findTab(value?.id||activeId),value?.pinned);break;
     case 'tab-mute':muteTab(findTab(value?.id||activeId),value?.muted);break;
+    case 'tab-duplicate':{const tab=findTab(value);newTab(tab.url,tab.identity,{...savedTab(tab),id:crypto.randomUUID()},tabs.indexOf(tab)+1);break;}
+    case 'tab-reload':{const tab=findTab(value);if(tab.url==='about:blank')break;const view=ensureView(tab);if(view&&!tab.initializing&&!view.webContents.isDestroyed())view.webContents.reload();break;}
     case 'tab-move':{const tab=findTab(value?.id),peers=tabs.filter(row=>tabWorkspace(row)===tabWorkspace(tab)),index=value?.index??peers.indexOf(tab)+value?.offset;
       if(!Number.isInteger(index)||index<0||index>=peers.length)throw new Error('This tab cannot move farther in that direction.');moveTab(tab,tabs.indexOf(peers[index]));break;}
     case 'tab-assign':assignTab(findTab(value?.id),value?.workspaceId,value?.groupId||null);break;
     case 'tab-menu':{
-      const tab=findTab(value),invoke=(command,arg)=>runBrowserOperation(command,arg).catch(error=>notice(error.message));
-      const peers=visibleTabs(),index=peers.indexOf(tab);
+      const tab=findTab(typeof value==='string'?value:value?.id),invoke=(command,arg)=>runBrowserOperation(command,arg).catch(error=>notice(error.message));
+      const peers=visibleTabs(),index=peers.indexOf(tab),workspace=tabWorkspace(tab),groups=workspaces.listGroups(workspace);
+      const [width,height]=win.getContentSize(),position=value?.position,popup={window:win};
+      if(position&&Number.isFinite(position.x)&&Number.isFinite(position.y)){popup.x=Math.max(0,Math.min(width-1,Math.round(position.x)));popup.y=Math.max(0,Math.min(height-1,Math.round(position.y)));}
       Menu.buildFromTemplate([
+        {label:'Reload tab',enabled:tab.url!=='about:blank',click:()=>invoke('tab-reload',tab.id)},
+        {label:'Duplicate tab',click:()=>invoke('tab-duplicate',tab.id)},
+        {type:'separator'},
         {label:tab.saved.pinned?'Unpin tab':'Pin tab',click:()=>invoke('tab-pin',{id:tab.id,pinned:!tab.saved.pinned})},
         {label:tab.saved.muted?'Unmute tab':'Mute tab',click:()=>invoke('tab-mute',{id:tab.id,muted:!tab.saved.muted})},
         {label:'Move left / up',enabled:index>0,click:()=>invoke('tab-move',{id:tab.id,offset:-1})},
         {label:'Move right / down',enabled:index>=0&&index<peers.length-1,click:()=>invoke('tab-move',{id:tab.id,offset:1})},
         {label:'Move to workspace',submenu:workspaces.list().map(item=>({label:item.name,type:'radio',checked:tabWorkspace(tab)===item.id,click:()=>invoke('tab-assign',{id:tab.id,workspaceId:item.id})}))},
+        {label:'Move to group',submenu:[{label:'No group',type:'radio',checked:!tab.saved.groupId,click:()=>invoke('tab-assign',{id:tab.id,workspaceId:workspace})},...groups.map(group=>({label:group.name,type:'radio',checked:tab.saved.groupId===group.id,click:()=>invoke('tab-assign',{id:tab.id,workspaceId:workspace,groupId:group.id})})),{type:'separator'},{label:'Manage tab groups…',click:()=>{if(panel!=='workspaces')invoke('workspaces');}}]},
         {type:'separator'},{label:'Close tab',click:()=>invoke('close',tab.id)}
-      ]).popup({window:win});break;
+      ]).popup(popup);break;
     }
     case 'split': {
       if (splitId) splitId = null;
@@ -756,7 +800,7 @@ function resumeAfterCloseError(message) {
 }
 async function requestClose() {
   if (closing || allowClose || !win || win.isDestroyed()) return;
-  tabPreview.hide();tabSearch.dismiss();clearTimeout(sidebarTimer);
+  tabPreview.hide();tabSearch.dismiss();clearTimeout(sidebarTimer);cancelSidebarDismiss();
   closing = true; clearTimeout(saveTimer); publish(false);
   const pending = await Promise.allSettled([...pendingOperations]);
   const failed = pending.find(result => result.status === 'rejected');
@@ -842,7 +886,8 @@ async function start() {
   win.webContents.on('context-menu',(_event,params)=>Menu.buildFromTemplate([
     ...spellcheck.contextMenu(win.webContents,params),{role:'copy',enabled:!!params.selectionText},{role:'paste',enabled:params.isEditable},
   ]).popup({window:win}));
-  ipcMain.handle('command',command); win.on('resize',()=>{layout();tabSearch.dismiss();});win.on('move',tabSearch.dismiss);win.on('blur',tabPreview.hide);win.on('minimize',()=>{tabPreview.hide();tabSearch.dismiss();});
+  ipcMain.handle('command',command); win.on('resize',()=>{layout();tabSearch.dismiss();});win.on('move',tabSearch.dismiss);win.on('blur',()=>{tabPreview.hide();cancelSidebarDismiss();});win.on('minimize',()=>{tabPreview.hide();tabSearch.dismiss();});
+  win.webContents.on('before-mouse-event',(_event,input)=>{if(input.type==='mouseDown')cancelSidebarDismiss();});win.webContents.on('before-input-event',(_event,input)=>{if(input.type==='keyDown')cancelSidebarDismiss();});
   win.on('close',event => {if (!allowClose) {event.preventDefault();requestClose().catch(error => resumeAfterCloseError(error.message));}});
   win.webContents.on('did-finish-load',() => {
     eventAction(() => {if (tabs.length) {ensureView(active() || tabs[0]);syncSidebarWeb();layout();publish(false);} else newTab();});

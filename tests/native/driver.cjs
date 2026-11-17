@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { performance } = require('node:perf_hooks');
-const { app, BrowserWindow, dialog, session, webContents } = require('electron');
+const { app, BrowserWindow, dialog, session, webContents, Menu } = require('electron');
 const { readContext, preflight, sourceEvidence } = require('../../scripts/native-smoke.cjs');
 const { createIdentitySessionResolver, identityStoragePaths } = require('../../browser/session-path.cjs');
 const { DOWNLOAD } = require('./fixture-server.cjs');
@@ -14,6 +14,8 @@ const { assertOnlySpellingChanged } = require('./preferences-evidence.cjs');
 const { createPageTools } = require('./page-tools.cjs');
 const { createExtensionStorage } = require('./extension-storage.cjs');
 const { exerciseSidebar } = require('./sidebar.cjs');
+const { exerciseSidebarAccounts } = require('./sidebar-accounts.cjs');
+const { exerciseTabContext } = require('./tab-context.cjs');
 const bridgeManifest = require('./fixtures/extension-bridge/manifest.json');
 const BRIDGE_CHECKS = ['chrome-callback-query', 'browser-promise-query', 'first-tab-event', 'canonical-tabs', 'native-message-ids', 'bookmark-service', 'cookie-host-and-identity', 'foreign-tab-denied', 'callback-last-error', 'promise-rejection', 'action-state', 'action-icons', 'cleanup'];
 const BRIDGE_ICON_STAGES = [
@@ -1015,6 +1017,19 @@ async function firstLaunch() {
     await command('activate',previous);await command('close',id);
   });
   await exerciseSidebar({window,context,command,state,activate,partitionFor,check,expected});
+  await exerciseSidebarAccounts({window,context,command,state,activate,partitionFor,check,expected});
+  await exerciseTabContext({window,context,command,state,check});
+  await check('top-right browser menu opens Settings and the settings search filters real controls',async()=>{
+    const original=Menu.buildFromTemplate;let captured=null,shown=false;
+    Menu.buildFromTemplate=function(template){const menu=original.call(this,template);if(template.some(item=>item.label==='Settings')&&template.some(item=>item.label==='Accounts and identities')){captured=menu;menu.once('menu-will-show',()=>{shown=true;});}return menu;};
+    try{
+      await window.webContents.executeJavaScript("document.getElementById('open-tools').click()");await until(()=>shown&&captured,'the native top-right browser menu');captured.closePopup(window);
+      const settings=captured.items.find(item=>item.label==='Settings');assert.ok(settings&&settings.enabled);settings.click(settings,window,{});await until(async()=>(await state()).panel==='settings','Settings opened from the native browser menu');
+      await window.webContents.executeJavaScript("const search=document.getElementById('settings-search');search.value='sidebar pin';search.dispatchEvent(new Event('input',{bubbles:true}));true");
+      const result=await window.webContents.executeJavaScript("({sidebarVisible:!document.querySelector('fieldset[data-settings-category=sidebar]').hidden, status:document.getElementById('settings-search-status').textContent})");assert.equal(result.sidebarVisible,true);assert.match(result.status,/matching section/);
+      await command('panel-close');
+    }finally{if(captured)captured.closePopup(window);Menu.buildFromTemplate=original;}
+  });
   await check('actual DownloadItem completion, pause/resume and cancellation are reflected by browser commands', async () => {
     const view = await activate(expected.personalTab);
     const completed = await selectDownload(view, '/download?identity=personal', 'complete-personal.txt');
@@ -1216,6 +1231,7 @@ async function firstLaunch() {
     await command('tab-assign',{id:first,workspaceId:workspace.id});await command('tab-assign',{id:last,workspaceId:workspace.id});await command('activate',first);await command('activate',last);await command('activate',previous);
     expected.workspaceFocus={workspaceId:workspace.id,first,last,previous,previousWorkspace};
   });
+  await command('settings-save',{sidebarPanelPinned:false});
   const final = await state();
   expected.tabs = final.tabs.map(({ id, url, identity }) => ({ id, url, identity }));
   expected.profiles = final.profiles;
@@ -1227,6 +1243,7 @@ async function firstLaunch() {
 
 async function secondLaunch() {
   const expected = JSON.parse(fs.readFileSync(path.join(context.directory, 'restart-expectations.json'), 'utf8'));
+  await check('the sidebar pin choice survives a real process restart',async()=>{assert.equal((await state()).preferences.sidebarPanelPinned,false);await command('settings-save',{sidebarPanelPinned:true});});
   await check('follow source and pause choice survive a real process restart', async () => {
     const data=JSON.parse(fs.readFileSync(path.join(context.profile,'browser-follows.json'),'utf8'));
     const saved=data.sources.find(row=>row.id===expected.followId);assert.ok(saved);assert.equal(saved.paused,true);assert.equal(saved.automatic,false);assert.equal(saved.provider,'manual');

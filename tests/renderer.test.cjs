@@ -117,6 +117,13 @@ test('DOM: sidebar site icons keep focus, respect identity and reject remote ima
   h.update({currentIdentity:'work'});assert.equal(control.querySelector('img'),null);assert.equal(control.querySelector('.sidebar-app-icon').textContent,'CH');
   h.emit('onSidebarWebState',{identity:'work',icons:[{site:'https://example.test/',icon:'https://tracker.test/icon.png'}]});assert.equal(control.querySelector('img'),null);
 });
+test('DOM: account sidebar shows scoped metadata, identity controls and honest password status',async t=>{
+ const initial=state({sidebarGeometry:{rail:48,panel:320,panelTarget:320,railX:0,panelX:48,tabX:368,pageX:368,pageRight:0},preferences:{searchEngine:'duckduckgo',tabLayout:'horizontal',sidebarVisible:true,sidebarExpanded:true,sidebarActive:'accounts'}});
+ const h=await harness(t,{initial,command:async name=>name==='sidebar-data'?{identity:'personal',items:[{id:'one',label:'Example',handle:'synthetic',origin:'https://example.test',identity:'personal'}]}:undefined});await tick();
+ assert.equal(h.$('sidebar-account-controls').hidden,false);assert.match(h.$('sidebar-account-controls').textContent,/Password manager not yet available/);assert.match(h.$('sidebar-items').textContent,/synthetic/);
+ h.$('sidebar-items').querySelector('button').click();await tick();assert.deepEqual(h.calls.find(call=>call.name==='sidebar-account-open').value,{id:'one',identity:'personal'});
+ h.$('sidebar-account-identity').value='work';h.$('sidebar-account-identity').dispatchEvent(new h.window.Event('change',{bubbles:true}));await tick();assert.equal(h.calls.find(call=>call.name==='identity-switch').value,'work');
+});
 test('DOM: workspace launcher follows canonical workspace updates without replacing focused buttons',async t=>{
   const h=await harness(t,{initial:state({activeWorkspaceId:'default',sidebarGeometry:{rail:48,panel:0,railX:0,panelX:48,tabX:48,pageX:48,pageRight:0}})});
   const items=[{id:'default',name:'Default',color:'purple'},{id:'work',name:'Creative work',color:'blue'}];h.emit('onWorkspaces',{items,groups:[]});
@@ -129,11 +136,11 @@ test('DOM: workspace launcher follows canonical workspace updates without replac
 test('DOM: sidebar tool visibility and ordering are saved through the real settings form',async t=>{
   const h=await harness(t,{initial:state({panel:'settings'})});
   const rows=()=>[...h.document.querySelectorAll('.sidebar-tool-row')];
-  assert.equal(rows().length,4);const history=rows().find(row=>row.textContent.includes('History'));
+  assert.equal(rows().length,5);const history=rows().find(row=>row.textContent.includes('History'));
   const checkbox=history.querySelector('input');checkbox.checked=false;checkbox.dispatchEvent(new h.window.Event('change',{bubbles:true}));
   history.querySelector('[aria-label="Move History up"]').click();await tick();
   h.submit(h.$('settings-form'));await tick();const saved=h.calls.find(call=>call.name==='settings-save').value.sidebarTools;
-  assert.deepEqual(saved.map(item=>item.id),['tabs','history','bookmarks','downloads']);assert.equal(saved.find(item=>item.id==='history').visible,false);
+  assert.deepEqual(saved.map(item=>item.id),['tabs','history','bookmarks','downloads','accounts']);assert.equal(saved.find(item=>item.id==='history').visible,false);
 });
 function findButton(root, label) {
   const found = [...root.querySelectorAll('button')].find(button => button.textContent === label);
@@ -263,7 +270,7 @@ test('DOM: panel commands and state visibility cover every implemented panel, in
     assert.equal(h.$(panel).hidden, false, `${panel} is shown by actual renderer state`);
     for (const section of h.document.querySelectorAll('#workspace > section')) if (section.id !== panel) assert.equal(section.hidden, true);
   }
-  h.$('open-tools').click(); await tick(); assert.equal(h.calls.at(-1).name, 'tools');
+  h.$('open-tools').click(); await tick(); assert.equal(h.calls.at(-1).name, 'browser-menu');assert.ok(h.calls.at(-1).value.anchor);
   h.update({panel: 'tools'}); assert.equal(h.$('tools').hidden, false);
   h.$('tools').querySelector('[data-command="panel-close"]').click(); await tick(); assert.equal(h.calls.at(-1).name, 'panel-close');
   h.update({panel: null, tabs: [{...state().tabs[0], url: 'about:blank'}]});

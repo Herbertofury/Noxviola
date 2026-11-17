@@ -10,7 +10,7 @@ const APP_FILES = [
   'browser/index.html', 'browser/style.css', 'browser/assets/noxviola.png',
   'browser/tab-preview-host.cjs', 'browser/tab-preview-preload.cjs', 'browser/tab-preview.html', 'browser/tab-preview.js', 'browser/tab-preview.css',
   'browser/tab-search-host.cjs', 'browser/tab-search-preload.cjs', 'browser/tab-search.html', 'browser/tab-search.js', 'browser/tab-search.css',
-  'browser/sidebar-layout.cjs', 'browser/sidebar-web-panel.cjs',
+  'browser/sidebar-layout.cjs', 'browser/sidebar-motion.cjs', 'browser/sidebar-web-panel.cjs', 'browser/sidebar-accounts.cjs',
   'browser/capabilities.json', 'browser/state.cjs', 'browser/favicons.cjs', 'browser/find-session.cjs',
   'browser/storage.cjs', 'browser/session-writer.cjs', 'browser/session-path.cjs',
   'browser/permissions.cjs', 'browser/downloads.cjs', 'browser/extensions.cjs', 'browser/extension-runtime.cjs',

@@ -1092,7 +1092,9 @@ async function firstLaunch() {
     await command('extension-enable',{id:installed.id,identity,enabled:false});
     assert.equal((await state()).sidebarExtension.visible,false);
     assert.ok(chromiumContents.isDestroyed());
+    dialogAction='Uninstall';
     await command('extension-uninstall',installed.id);
+    assert.equal(dialogAction,null);
     assert.ok(!(await command('extension-list')).some(item=>item.id===installed.id),'Only the synthetic sidebar package is removed after its test');
     await command('sidebar-close');
   });

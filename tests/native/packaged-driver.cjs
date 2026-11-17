@@ -496,6 +496,7 @@ async function runPackagedPhase(packaged, context, phase, { publicHttps = false 
         await command('activate',expected.personal);
         if((await state()).splitId)await command('split');
         const target = await targetAt(personalUrl);
+        await connection.send('Page.bringToFront',{},target.sessionId);
         await until(async () => {
           const outer = await evaluate(shell, '({width:innerWidth,height:innerHeight})');
           const page = await evaluate(target, '({width:innerWidth,height:innerHeight})');

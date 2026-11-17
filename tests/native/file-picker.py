@@ -473,7 +473,15 @@ def windows_picker(args):
             raise RuntimeError('Owned filename control changed')
         if method == 'LegacyIAccessiblePattern' and not legacy_allowed('value', pattern.Name, {'File name:', 'File name', 'Filename:', 'Filename'}, pattern.Role, pattern.State, pattern.DefaultAction or ''):
             raise RuntimeError('Legacy filename semantics changed')
-        phase('before-filename-set', method=method)
+        # A common-dialog edit's provider value can change while its active
+        # filename remains the default. Follow Microsoft's UIA input sequence:
+        # focus the exact owned editor before setting its value. No global keys.
+        if not node.IsKeyboardFocusable:
+            raise RuntimeError('Owned filename editor is not keyboard-focusable')
+        node.SetFocus()
+        if not node.HasKeyboardFocus or not dialog() or node.ProcessId != args.pid:
+            raise RuntimeError('Owned filename editor did not receive focus')
+        phase('before-filename-set', method=method, editorFocused=True)
         pattern.SetValue(args.file, waitTime=0)
         if pattern.Value != args.file:
             raise RuntimeError('Filename readback mismatch')

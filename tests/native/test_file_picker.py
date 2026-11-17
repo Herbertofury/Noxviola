@@ -146,7 +146,7 @@ class FilePickerContracts(unittest.TestCase):
         self.assertFalse(picker.legacy_allowed('value','File name:',{'File name:'},42,0x40,''))
 
     def test_native_wrapper_actual_route_with_fake_owned_tree(self):
-        for cancel, duplicate, field_mode in [(True,False,'single'),(False,False,'single'),(True,True,'single'),(False,False,'nested'),(False,False,'siblings'),(False,False,'foreign'),(False,False,'export')]:
+        for cancel, duplicate, field_mode in [(True,False,'single'),(False,False,'single'),(True,True,'single'),(False,False,'nested'),(False,False,'siblings'),(False,False,'foreign'),(False,False,'export'),(False,False,'not-focusable'),(False,False,'focus-rejected')]:
             actions=[]
             args=SimpleNamespace(pid=314,title=('Export all saved collections for this identity; choose a NEW filename' if field_mode=='export' else 'Add collections from a same-identity backup; existing collections stay untouched'),file=os.path.abspath('fixture.noxlibrary'),cancel=cancel,timeout=2)
             class Legacy:
@@ -160,6 +160,9 @@ class FilePickerContracts(unittest.TestCase):
                 IsEnabled=True
                 IsOffscreen=False
                 AutomationId=''
+                IsKeyboardFocusable=True
+                HasKeyboardFocus=False
+                def SetFocus(self): self.HasKeyboardFocus=True; actions.append('focus')
                 def __init__(self,name,pid=314,kind=0,pattern=None):
                     self.Name,self.ProcessId,self.ControlType,self.pattern=name,pid,kind,pattern
                     self.children=[];self.sibling=None
@@ -177,6 +180,8 @@ class FilePickerContracts(unittest.TestCase):
                 field=Node('File name:',kind=50003,pattern=Legacy('File name:',42)).add(field)
             elif field_mode == 'foreign':
                 field.ProcessId=999
+            if field_mode == 'not-focusable': field.IsKeyboardFocusable=False
+            if field_mode == 'focus-rejected': field.SetFocus=lambda:None
             picker_node=Node(args.title,kind=32).add(field,button)
             if duplicate: picker_node.add(field,button,Node(button_name,pattern=Legacy(button_name,43)))
             if field_mode == 'siblings': picker_node.add(field,button,Node('File name:',kind=50003,pattern=Legacy('File name:',42)))
@@ -190,11 +195,15 @@ class FilePickerContracts(unittest.TestCase):
                     with self.assertRaisesRegex(RuntimeError,'Expected one exact owned'):
                         picker.windows_picker(args)
                     self.assertEqual(actions,[])
+                elif field_mode in ('not-focusable','focus-rejected'):
+                    with self.assertRaisesRegex(RuntimeError, 'focus'):
+                        picker.windows_picker(args)
+                    self.assertEqual(actions,[])
                 else:
                     result=picker.windows_picker(args)
                     self.assertTrue(result['dialogDismissed'])
                     self.assertIn('LegacyIAccessiblePattern',result['delivery'])
-                    self.assertEqual(actions,['action'] if cancel else ['value','action'])
+                    self.assertEqual(actions,['action'] if cancel else ['focus','value','action'])
 
     def test_windows_action_is_bound_to_exact_operation_title(self):
         self.assertEqual(picker.windows_action_names('Export all saved collections for this identity; choose a NEW filename', False), {'Save'})
@@ -216,7 +225,7 @@ class FilePickerContracts(unittest.TestCase):
         source = inspect.getsource(picker.windows_picker)
         for required in ['node.ProcessId != args.pid', 'node.Name == args.title', 'visited > 64', 'visited > 2048', 'len(found) > 1', 'len(matches) != 1', 'pattern.Value != args.file', 'legacy_allowed', 'pattern.DoDefaultAction(waitTime=0)']:
             self.assertIn(required, source)
-        for forbidden in ['SendKeys', '.Click(', 'SetFocus', 'SetForegroundWindow']:
+        for forbidden in ['SendKeys', '.Click(', 'SetForegroundWindow']:
             self.assertNotIn(forbidden, source)
 
 

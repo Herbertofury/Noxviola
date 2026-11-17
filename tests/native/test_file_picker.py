@@ -48,6 +48,17 @@ class FilePickerContracts(unittest.TestCase):
         self.assertEqual(picker.x11_search_arguments(314,'Pick (fixture).*'),
                          ['xdotool','search','--onlyvisible','--pid','314','--name',r'^Pick\ \(fixture\)\.\*$'])
 
+    def test_windows_diagnostics_are_bounded_and_owned_only(self):
+        script = picker.WINDOWS_SCRIPT
+        block = script.split('function OwnedDiagnostics {', 1)[1].split('function Dialog {', 1)[0]
+        self.assertIn('$visited -lt 64', block)
+        self.assertIn('$depth -lt 3', block)
+        self.assertIn('AddMilliseconds(700)', block)
+        self.assertLess(block.index('ProcessId -ne [int]$r.pid'), block.index('$element.Current.Name'))
+        self.assertIn('[Console]::Error.WriteLine', block)
+        for forbidden in ['Invoke()', 'SetValue(', 'SendKeys', 'SendInput']:
+            self.assertNotIn(forbidden, block)
+
     def test_windows_uses_scoped_accessibility_not_global_keys(self):
         script=picker.WINDOWS_SCRIPT
         for required in ['ProcessIdProperty','NameProperty','$T::Children','ValuePattern','InvokePattern']:

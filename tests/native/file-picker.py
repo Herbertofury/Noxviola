@@ -201,6 +201,33 @@ $r = $env:NOXVIOLA_PICKER_REQUEST | ConvertFrom-Json
 $deadline = [DateTime]::UtcNow.AddSeconds([double]$r.timeout)
 $A = [System.Windows.Automation.AutomationElement]
 $T = [System.Windows.Automation.TreeScope]
+# Read-only diagnostics: names are read only AFTER exact PID verification.
+# Never use these candidates as alternate action targets.
+function OwnedDiagnostics {
+  $items = New-Object System.Collections.ArrayList
+  $condition = New-Object System.Windows.Automation.PropertyCondition($A::ProcessIdProperty, [int]$r.pid)
+  $roots = $A::RootElement.FindAll($T::Children, $condition)
+  $queue = New-Object System.Collections.Queue
+  foreach ($root in $roots) { $queue.Enqueue(@($root, 0)) }
+  $visited = 0
+  $until = [DateTime]::UtcNow.AddMilliseconds(700)
+  while ($queue.Count -gt 0 -and $visited -lt 64 -and [DateTime]::UtcNow -lt $until) {
+    $pair = $queue.Dequeue(); $element = $pair[0]; $depth = [int]$pair[1]; $visited++
+    try {
+      if ($element.Current.ProcessId -ne [int]$r.pid) { continue }
+      if ($depth -eq 0 -or $element.Current.ControlType -eq [System.Windows.Automation.ControlType]::Window) {
+        $name = [string]$element.Current.Name
+        if ($name.Length -gt 512) { $name = $name.Substring(0,512) }
+        [void]$items.Add(@{title=$name;depth=$depth;offscreen=$element.Current.IsOffscreen;type=$element.Current.ControlType.ProgrammaticName;handle=$element.Current.NativeWindowHandle})
+      }
+      if ($depth -lt 3) {
+        $children = $element.FindAll($T::Children, $condition)
+        for ($i=0; $i -lt $children.Count -and $queue.Count -lt 64; $i++) { $queue.Enqueue(@($children[$i], ($depth+1))) }
+      }
+    } catch { }
+  }
+  [Console]::Error.WriteLine((@{diagnostic='owned-picker-windows';pid=[int]$r.pid;windows=@($items);visited=$visited;bounded=$true} | ConvertTo-Json -Depth 5 -Compress))
+}
 function Dialog {
   $condition = New-Object System.Windows.Automation.AndCondition(
     (New-Object System.Windows.Automation.PropertyCondition($A::ProcessIdProperty, [int]$r.pid)),
@@ -215,8 +242,9 @@ function Descendants($d, $type) {
   return @($d.FindAll($T::Descendants, $condition) | Where-Object { $_.Current.ProcessId -eq [int]$r.pid -and -not $_.Current.IsOffscreen -and $_.Current.IsEnabled })
 }
 $d=$null
+OwnedDiagnostics
 while ([DateTime]::UtcNow -lt $deadline) { $d=Dialog; if ($d) {break}; Start-Sleep -Milliseconds 50 }
-if (-not $d) { throw 'Exact owned native picker did not appear' }
+if (-not $d) { OwnedDiagnostics; throw 'Exact owned native picker did not appear' }
 if (-not $r.cancel) {
   $edits = @(Descendants $d ([System.Windows.Automation.ControlType]::Edit) | Where-Object { $_.Current.Name -in @('File name:', 'File name', 'Filename:', 'Filename') })
   if ($edits.Count -ne 1) { throw "Expected one filename Edit control, found $($edits.Count)" }
@@ -251,10 +279,18 @@ throw 'Picker did not dismiss; secondary prompts are not automatically approved'
 
 def windows_picker(args):
     env = dict(os.environ, NOXVIOLA_PICKER_REQUEST=json.dumps(vars(args)))
-    outcome = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", WINDOWS_SCRIPT],
-                             env=env, capture_output=True, text=True, encoding="utf-8", timeout=args.timeout+1)
+    try:
+        outcome = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", WINDOWS_SCRIPT],
+                                 env=env, capture_output=True, text=True, encoding="utf-8", timeout=args.timeout+1)
+    except subprocess.TimeoutExpired as error:
+        diagnostics = error.stderr or ""
+        if isinstance(diagnostics, bytes):
+            diagnostics = diagnostics.decode("utf-8", errors="replace")
+        raise TimeoutError("Windows native picker timed out; owned diagnostics: " + diagnostics[:1600]) from error
     if outcome.returncode:
         raise RuntimeError("Windows native picker automation failed: " + outcome.stderr.strip()[:1600])
+    if outcome.stderr.strip():
+        print(outcome.stderr.strip(), file=sys.stderr)
     return json.loads(outcome.stdout.lstrip("\ufeff"))
 
 

@@ -484,10 +484,11 @@ async function runPackagedPhase(packaged, context, phase, { publicHttps = false 
         const choose=async(kind,file=null)=>{
           const title=kind==='export'?'Export all saved collections for this identity; choose a NEW filename':'Add collections from a same-identity backup; existing collections stay untouched';
           const label=kind==='export'?'Export library backup':'Add from library backup';
-          await evaluate(shell,`[...document.querySelectorAll('#${root} button')].find(b=>b.textContent===${JSON.stringify(label)}).click()`);
           const args=['-B',path.join(__dirname,'file-picker.py'),'--pid',String(child.pid),'--title',title,...(file?['--file',file]:['--cancel'])];
-          const {stdout}=await executeFile('python',args,{encoding:'utf8',windowsHide:true,timeout:30_000});
-          const receipt=JSON.parse(stdout);assert.equal(receipt.pid,child.pid);
+          const picker=executeFile('python',args,{encoding:'utf8',windowsHide:true,timeout:30_000}).catch(error=>{throw new Error(`Native picker failed: ${String(error.stdout||'').slice(0,4000)} ${String(error.stderr||'').slice(0,2000)}`,{cause:error});});
+          // Start the owned-dialog observer before opening a modal: GTK can hold CDP dispatch until dismissal.
+          const [{stdout}]=await Promise.all([picker,evaluate(shell,`[...document.querySelectorAll('#${root} button')].find(b=>b.textContent===${JSON.stringify(label)}).click()`)]);
+          const receipt=JSON.parse(stdout);assert.equal(receipt.pid,child.pid);assert.equal(receipt.title,title);assert.equal(receipt.action,file?'submit':'cancel');assert.equal(receipt.dialogDismissed,true);
           (result.nativePickerActions||=[]).push(receipt);
           await until(()=>evaluate(shell,`!document.getElementById('${root}').hasAttribute('aria-busy')`),'native picker backup settled');
           return evaluate(shell,`document.querySelector('#${root} [role=status]').textContent`);

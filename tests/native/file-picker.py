@@ -118,69 +118,90 @@ def x11_picker(args, deadline):
         if not output.is_file() or output.stat().st_size < 100:
             raise RuntimeError('Owned picker XWD capture unavailable')
 
-    capture('opened')
-    # GTK must process its initial focus and activation guard before synthetic keys.
-    # XSendEvent completion is not GTK event-loop completion (captured fixture evidence).
-    time.sleep(.6)
-    accept_key = None
-    if not args.cancel:
-        if args.title == "Export all saved collections for this identity; choose a NEW filename":
-            if os.path.lexists(args.file):
-                raise RuntimeError("Keyboard export requires a new nonexistent target")
-            accept_key = "alt+s"
-        elif args.title == "Add collections from a same-identity backup; existing collections stay untouched":
-            accept_key = "alt+o"
-        else:
-            raise RuntimeError("No explicitly known GTK accept mnemonic for this picker")
-    if args.cancel:
-        verify()
-        run(["key", "--window", xid, "Escape"])
-    else:
-        verify()
-        run(["key", "--window", xid, "ctrl+l"])
-        time.sleep(.25)  # Let the real location field be created/focused.
-        verify()
-        run(["key", "--window", xid, "ctrl+a"])
-        verify()
-        run(["type", "--window", xid, "--delay", "0", "--", args.file])
-        time.sleep(.25)  # Let GTK consume text before activating the default action.
-        capture("path-entered")
-        verify()
-        run(["key", "--window", xid, "Return"])
-    accept_sent = False
-    earliest_accept = time.monotonic() + .25
-    while time.monotonic() < deadline:
-        current = run(x11_search_arguments(args.pid, args.title)[1:], check=False)
-        if current.returncode == 1 and not current.stdout.strip():
-            return {"pid": args.pid, "title": args.title, "action": "cancel" if args.cancel else "submit",
-                    "delivery": "X11 targeted GTK keyboard", "window": xid, "dialogDismissed": True,
-                    "accessibilityQualified": False, "accessibilityGap": "AT-SPI application registry empty"}
-        current.check_returncode()
-        if current.stdout.strip().splitlines() != [xid]:
-            raise RuntimeError("Owned picker changed during keyboard completion")
-        if accept_key and not accept_sent and time.monotonic() >= earliest_accept:
-            # Do not send even an accept mnemonic while a secondary owned modal exists.
-            visible = run(["search", "--onlyvisible", "--pid", str(args.pid)]).stdout.strip().splitlines()
-            if len(visible) > 32:
-                raise RuntimeError("Owned window inspection exceeds budget")
-            for other in visible:
-                if not other.isdigit() or other == xid:
-                    continue
-                if run(["getwindowpid", other]).stdout.strip() != str(args.pid):
-                    continue
-                prop = subprocess.run(["xprop", "-id", other, "WM_TRANSIENT_FOR"], check=True,
-                                      capture_output=True, text=True, timeout=max(.05, deadline-time.monotonic())).stdout
-                targets = re.findall(r"0x[0-9a-fA-F]+", prop)
-                if any(int(target, 16) == int(xid) for target in targets):
-                    raise RuntimeError("Secondary owned modal present; refusing accept mnemonic")
-            if accept_key == "alt+s" and os.path.lexists(args.file):
-                raise RuntimeError("Export target appeared; refusing accept mnemonic")
-            capture("before-accept")
+    # Read-only events from this exact synthetic dialog distinguish stale key
+    # delivery from a native window lifecycle close. Never observes the desktop.
+    event_log, observer = None, None
+    try:
+        if getattr(args, 'evidence_dir', None):
             verify()
-            run(["key", "--window", xid, accept_key])
-            accept_sent = True
-        time.sleep(.05)
-    raise TimeoutError("Owned X11 picker did not dismiss; no secondary prompt or overwrite is approved")
+            event_log = open(Path(args.evidence_dir) / 'owned-window-events.txt', 'x')
+            observer = subprocess.Popen(['stdbuf', '-oL', 'xev', '-id', xid,
+                                         '-event', 'keyboard', '-event', 'structure', '-event', 'focus'],
+                                        stdout=event_log, stderr=subprocess.STDOUT)
+        capture('opened')
+        # GTK must process its initial focus and activation guard before synthetic keys.
+        # XSendEvent completion is not GTK event-loop completion (captured fixture evidence).
+        time.sleep(.6)
+        accept_key = None
+        if not args.cancel:
+            if args.title == "Export all saved collections for this identity; choose a NEW filename":
+                if os.path.lexists(args.file):
+                    raise RuntimeError("Keyboard export requires a new nonexistent target")
+                accept_key = "alt+s"
+            elif args.title == "Add collections from a same-identity backup; existing collections stay untouched":
+                accept_key = "alt+o"
+            else:
+                raise RuntimeError("No explicitly known GTK accept mnemonic for this picker")
+        if args.cancel:
+            verify()
+            run(["key", "--window", xid, "Escape"])
+        else:
+            verify()
+            run(["key", "--window", xid, "ctrl+l"])
+            time.sleep(.25)  # Let the real location field be created/focused.
+            verify()
+            run(["key", "--window", xid, "ctrl+a"])
+            verify()
+            run(["type", "--window", xid, "--delay", "0", "--", args.file])
+            time.sleep(.25)  # Let GTK consume text before activating the default action.
+            capture("path-entered")
+            verify()
+            run(["key", "--window", xid, "Return"])
+        accept_sent = False
+        earliest_accept = time.monotonic() + .25
+        while time.monotonic() < deadline:
+            current = run(x11_search_arguments(args.pid, args.title)[1:], check=False)
+            if current.returncode == 1 and not current.stdout.strip():
+                return {"pid": args.pid, "title": args.title, "action": "cancel" if args.cancel else "submit",
+                        "delivery": "X11 targeted GTK keyboard", "window": xid, "dialogDismissed": True,
+                        "accessibilityQualified": False, "accessibilityGap": "AT-SPI application registry empty"}
+            current.check_returncode()
+            if current.stdout.strip().splitlines() != [xid]:
+                raise RuntimeError("Owned picker changed during keyboard completion")
+            if accept_key and not accept_sent and time.monotonic() >= earliest_accept:
+                # Do not send even an accept mnemonic while a secondary owned modal exists.
+                visible = run(["search", "--onlyvisible", "--pid", str(args.pid)]).stdout.strip().splitlines()
+                if len(visible) > 32:
+                    raise RuntimeError("Owned window inspection exceeds budget")
+                for other in visible:
+                    if not other.isdigit() or other == xid:
+                        continue
+                    if run(["getwindowpid", other]).stdout.strip() != str(args.pid):
+                        continue
+                    prop = subprocess.run(["xprop", "-id", other, "WM_TRANSIENT_FOR"], check=True,
+                                          capture_output=True, text=True, timeout=max(.05, deadline-time.monotonic())).stdout
+                    targets = re.findall(r"0x[0-9a-fA-F]+", prop)
+                    if any(int(target, 16) == int(xid) for target in targets):
+                        raise RuntimeError("Secondary owned modal present; refusing accept mnemonic")
+                if accept_key == "alt+s" and os.path.lexists(args.file):
+                    raise RuntimeError("Export target appeared; refusing accept mnemonic")
+                capture("before-accept")
+                verify()
+                run(["key", "--window", xid, accept_key])
+                accept_sent = True
+            time.sleep(.05)
+        raise TimeoutError("Owned X11 picker did not dismiss; no secondary prompt or overwrite is approved")
+    finally:
+        if observer is not None:
+            if observer.poll() is None:
+                observer.terminate()
+            try:
+                observer.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                observer.kill()
+                observer.wait(timeout=1)
+        if event_log is not None:
+            event_log.close()
 
 
 def linux_picker(args):
@@ -359,7 +380,7 @@ def legacy_allowed(kind, name, expected, role, state, default_action):
 
 
 def filename_matches(matches):
-    """Only collapse a ComboBox's own single editable descendant, never siblings."""
+    """Resolve one composite filename editor, never unrelated or sibling fields."""
     if len(matches) != 2:
         return matches
     combos = [item for item in matches if item[0].ControlType == 50003]
@@ -368,6 +389,11 @@ def filename_matches(matches):
         return matches
     ancestor, descendant = combos[0][3], edits[0][3]
     if len(descendant) > len(ancestor) and descendant[:len(ancestor)] == ancestor:
+        # Native common dialogs can expose a nonfocusable internal Edit proxy.
+        # Its Value readback is not the ComboBox's committed filename. Use the
+        # unique focusable semantic owner, only for this verified parent/child pair.
+        if combos[0][0].IsKeyboardFocusable and not edits[0][0].IsKeyboardFocusable:
+            return combos
         return edits
     return matches
 
@@ -443,7 +469,8 @@ def windows_picker(args):
                         pattern, method = legacy, 'LegacyIAccessiblePattern'
                 evidence.append({'name': name[:96], 'type': node.ControlType, 'method': method if pattern else None,
                                  'legacyRole': legacy.Role if legacy else None,
-                                 'automationId': node.AutomationId, 'hierarchy': ancestry})
+                                 'automationId': node.AutomationId, 'hierarchy': ancestry,
+                                 'keyboardFocusable': node.IsKeyboardFocusable, 'keyboardFocus': node.HasKeyboardFocus})
                 if pattern:
                     if kind != 'value' or method == 'LegacyIAccessiblePattern' or not pattern.IsReadOnly:
                         matches.append((node, pattern, method, ancestry))

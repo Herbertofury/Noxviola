@@ -9,6 +9,7 @@ from unittest.mock import patch
 from types import SimpleNamespace
 import subprocess
 import time
+import tempfile
 sys.dont_write_bytecode = True
 spec = importlib.util.spec_from_file_location("file_picker", Path(__file__).with_name("file-picker.py"))
 picker = importlib.util.module_from_spec(spec)
@@ -124,6 +125,30 @@ class FilePickerContracts(unittest.TestCase):
         for forbidden in ['foreign_new_for_display', 'display.close', 'DestroyWindow', 'windowclose']:
             self.assertNotIn(forbidden,block)
 
+    def test_owned_event_observer_is_stopped_even_when_picker_disappears(self):
+        with tempfile.TemporaryDirectory() as directory:
+            args = SimpleNamespace(pid=314, title='Exact picker', file=None, cancel=True, evidence_dir=directory)
+            observer = SimpleNamespace(poll=lambda:None, terminate=lambda:stopped.append('terminate'),
+                                       wait=lambda timeout:stopped.append('wait'))
+            stopped, launched = [], []
+            def run(cmd, **kwargs):
+                if cmd[0] == 'xwd':
+                    Path(cmd[-1]).write_bytes(b'X'*101)
+                    return subprocess.CompletedProcess(cmd,0,'','')
+                if cmd[1] == 'search': value='123\n'
+                elif cmd[1] == 'getwindowpid': value='314\n'
+                elif cmd[1] == 'getwindowname': value='Exact picker\n'
+                else: self.fail('No keyboard input permitted before lifecycle failure')
+                return subprocess.CompletedProcess(cmd,0,value,'')
+            def launch(cmd, **kwargs):
+                launched.append(cmd)
+                return observer
+            with patch.object(picker.subprocess,'run',side_effect=run), patch.object(picker.subprocess,'Popen',side_effect=launch), patch.object(picker.time,'sleep',side_effect=RuntimeError('picker gone')):
+                with self.assertRaisesRegex(RuntimeError,'picker gone'):
+                    picker.x11_picker(args,time.monotonic()+10)
+            self.assertEqual(stopped,['terminate','wait'])
+            self.assertEqual(launched,[['stdbuf','-oL','xev','-id','123','-event','keyboard','-event','structure','-event','focus']])
+
     def test_x11_fallback_rejects_changed_owner_before_input(self):
         commands = []
         def run(cmd, **kwargs):
@@ -146,7 +171,7 @@ class FilePickerContracts(unittest.TestCase):
         self.assertFalse(picker.legacy_allowed('value','File name:',{'File name:'},42,0x40,''))
 
     def test_native_wrapper_actual_route_with_fake_owned_tree(self):
-        for cancel, duplicate, field_mode in [(True,False,'single'),(False,False,'single'),(True,True,'single'),(False,False,'nested'),(False,False,'siblings'),(False,False,'foreign'),(False,False,'export'),(False,False,'not-focusable'),(False,False,'focus-rejected')]:
+        for cancel, duplicate, field_mode in [(True,False,'single'),(False,False,'single'),(True,True,'single'),(False,False,'nested'),(False,False,'siblings'),(False,False,'foreign'),(False,False,'export'),(False,False,'not-focusable'),(False,False,'focus-rejected'),(False,False,'combo-focus')]:
             actions=[]
             args=SimpleNamespace(pid=314,title=('Export all saved collections for this identity; choose a NEW filename' if field_mode=='export' else 'Add collections from a same-identity backup; existing collections stay untouched'),file=os.path.abspath('fixture.noxlibrary'),cancel=cancel,timeout=2)
             class Legacy:
@@ -176,7 +201,8 @@ class FilePickerContracts(unittest.TestCase):
             button_name='Cancel' if cancel else ('Save' if field_mode=='export' else 'Open')
             button=Node(button_name,pattern=Legacy(button_name,43))
             field=Node('File name:',kind=50004,pattern=Legacy('File name:',42))
-            if field_mode == 'nested':
+            if field_mode in ('nested','combo-focus'):
+                if field_mode == 'combo-focus': field.IsKeyboardFocusable=False
                 field=Node('File name:',kind=50003,pattern=Legacy('File name:',42)).add(field)
             elif field_mode == 'foreign':
                 field.ProcessId=999
@@ -212,9 +238,12 @@ class FilePickerContracts(unittest.TestCase):
         with self.assertRaises(RuntimeError): picker.windows_action_names('Other export title', False)
 
     def test_filename_combo_collapses_only_its_unique_edit_descendant(self):
-        def match(kind, ancestry): return (SimpleNamespace(ControlType=kind), object(), 'ValuePattern', ancestry)
+        def match(kind, ancestry): return (SimpleNamespace(ControlType=kind,IsKeyboardFocusable=True), object(), 'ValuePattern', ancestry)
         combo, edit = match(50003,(1,)), match(50004,(1,0))
         self.assertEqual(picker.filename_matches([combo,edit]),[edit])
+        edit[0].IsKeyboardFocusable=False
+        self.assertEqual(picker.filename_matches([combo,edit]),[combo])
+        edit[0].IsKeyboardFocusable=True
         for other in [match(50004,(2,)), match(50004,(0,)), match(50003,(1,0))]:
             candidates=[combo,other]
             self.assertEqual(picker.filename_matches(candidates),candidates)

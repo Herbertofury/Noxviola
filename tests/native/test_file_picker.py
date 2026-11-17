@@ -1,4 +1,5 @@
 """Portable safety contracts; these do not claim native picker acceptance."""
+import io
 import importlib.util
 import inspect
 from pathlib import Path
@@ -17,6 +18,18 @@ spec.loader.exec_module(picker)
 
 
 class FilePickerContracts(unittest.TestCase):
+    def test_successful_worker_preserves_owned_diagnostics_on_stderr(self):
+        stdout = '{"platform":"win32","dialogDismissed":true}\n'
+        stderr = '{"diagnostic":"native-uia","phase":"named-controls"}\n'
+        receipt = subprocess.CompletedProcess([], 0, stdout, stderr)
+        out, err = io.StringIO(), io.StringIO()
+        argv = ['file-picker.py', '--pid', '314', '--title', 'Exact fixture title', '--cancel']
+        with patch.object(picker.sys, 'argv', argv), patch.object(picker.subprocess, 'run', return_value=receipt), \
+                patch.object(picker.sys, 'stdout', out), patch.object(picker.sys, 'stderr', err):
+            picker.main()
+        self.assertEqual(out.getvalue(), stdout)
+        self.assertEqual(err.getvalue(), stderr)
+
     def test_requires_exact_pid_title_action_and_absolute_path(self):
         path = os.path.abspath("fixture.noxlibrary")
         picker.validate(314, "Exact fixture title", path, False, 15)

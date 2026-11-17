@@ -595,6 +595,11 @@ def main():
         if worker.returncode:
             evidence = (worker.stdout + worker.stderr).strip()
             raise RuntimeError("Native picker helper failed: " + (evidence[:1600] + " ... " + evidence[-2400:] if len(evidence) > 4000 else evidence))
+        # Successful dismissal is not proof of a committed filename. Preserve
+        # the bounded owned-dialog diagnostics for the outer exact-path check,
+        # which can still fail after this helper exits successfully.
+        if worker.stderr:
+            print(worker.stderr, end="", file=sys.stderr, flush=True)
         print(worker.stdout.strip())
         return
     if sys.platform == "win32":

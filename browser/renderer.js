@@ -19,7 +19,7 @@ let lastProfiles = '', lastSettings = '', lastSaveError = '', addressDirty = fal
 const tabNodes = new Map(), groupNodes=new Map(), painting = new WeakMap();
 let hideTabPreview = () => {};
 let revealedTabKey = '';
-const SIDEBAR_TOOLS=[['tabs','Open tabs'],['bookmarks','Bookmarks'],['history','History'],['downloads','Downloads'],['passwords','Passwords'],['accounts','Accounts & identities'],['media','Media player'],['notifications','Notifications'],['extension-panels','Extension panels'],['extensions','Extensions','extensions'],['settings','Settings','settings'],['vault','Library','vault'],['following','Following','following',false],['resources','Resource monitor','resources',false],['start','New tab','new',false]];
+const SIDEBAR_TOOLS=[['tabs','Open tabs'],['bookmarks','Bookmarks'],['history','History'],['downloads','Downloads'],['passwords','Passwords'],['accounts','Accounts & identities'],['media','Media player'],['notifications','Notifications'],['extension-panels','Extension panels'],['extensions','Extensions','extensions'],['settings','Settings','settings'],['mods','Mods','mods'],['vault','Library','vault'],['following','Following','following',false],['resources','Resource monitor','resources',false],['start','New tab','new',false]];
 const defaultSidebarTools=()=>SIDEBAR_TOOLS.map(([id,,,visible])=>({id,visible:visible!==false}));
 const SIDEBAR_WEBSITES=[['ChatGPT','https://chatgpt.com/'],['Gemini','https://gemini.google.com/'],['Discord','https://discord.com/app'],['WhatsApp','https://web.whatsapp.com/'],['Telegram','https://web.telegram.org/'],['Instagram','https://www.instagram.com/'],['X','https://x.com/'],['Bluesky','https://bsky.app/'],['TikTok','https://www.tiktok.com/'],['Spotify','https://open.spotify.com/'],['Twitch','https://www.twitch.tv/'],['YouTube','https://www.youtube.com/'],['Gmail','https://mail.google.com/'],['Google Calendar','https://calendar.google.com/']];
 let sidebarData={},sidebarWebState={},sidebarRequest=0,sidebarDraftApps=[],sidebarDraftTools=[],sidebarAppsKey='';
@@ -177,6 +177,7 @@ function applyAppearance(preferences) {
   $('bookmarks-bar').hidden=!preferences.showBookmarksBar;
   $('extension-actions').hidden=preferences.toolbar?.extensions===false||!extensionActions.length;
   for(const badge of document.querySelectorAll('.extension-badge'))styleExtensionBadge(badge,JSON.parse(badge.dataset.color));
+  applyModAppearance();
 }
 themeMedia?.addEventListener('change',()=>applyAppearance(currentState.preferences));
 function updateSidebarGeometry(g){
@@ -185,7 +186,7 @@ function updateSidebarGeometry(g){
   $('sidebar-rail').hidden=!g.rail;$('sidebar-panel').hidden=!g.panel;
 }
 function renderSidebarChrome(){
-  const pref=currentState.preferences,active=pref.sidebarActive||'bookmarks',apps=pref.sidebarApps||[],tools=pref.sidebarTools||defaultSidebarTools(),web=active.startsWith('app:');
+  const pref=currentState.preferences,active=pref.sidebarActive||'bookmarks',apps=pref.sidebarApps||[],tools=pref.sidebarTools||defaultSidebarTools(),player=active.startsWith('player:'),web=active.startsWith('app:')||player;
   document.body.dataset.sidebarSide=pref.sidebarSide||'left';
   document.body.dataset.sidebarRailExpanded=String(Boolean(pref.sidebarRailExpanded));
   const expand=$('sidebar-rail-expand'),expandLabel=pref.sidebarRailExpanded?'Collapse sidebar':'Expand sidebar';expand.title=expandLabel;expand.setAttribute('aria-label',expandLabel);expand.setAttribute('aria-pressed',String(Boolean(pref.sidebarRailExpanded)));
@@ -216,14 +217,19 @@ function renderSidebarChrome(){
   $('sidebar-title').title=sidebarWebState.error||sidebarWebState.url||'';
   const pinned=pref.sidebarPanelPinned!==false,pinLabel=pinned?'Unpin panel (close after interacting with a page)':'Pin panel (keep open while browsing)';$('sidebar-pin').title=pinLabel;$('sidebar-pin').setAttribute('aria-label',pinLabel);$('sidebar-pin').setAttribute('aria-pressed',String(pinned));
   $('sidebar-resize').setAttribute('aria-valuenow',String(pref.sidebarWidth||320));
-  $('sidebar-web-controls').hidden=!web;$('sidebar-extension-controls').hidden=!extension;$('sidebar-browser-content').hidden=web||extension;
+  $('sidebar-web-controls').hidden=!web||player;$('sidebar-extension-controls').hidden=!extension;$('sidebar-browser-content').hidden=web||extension;
+  $('sidebar-player-controls').hidden=!player;
+  if(player){
+    $('sidebar-title').textContent=sidebarWebState.error?'Page failed':'Player';
+    void loadPlayerOptions().then(options=>{const select=$('sidebar-player-service');if(!select.options.length)setOptions(select,options.services,active.slice(7));select.value=currentState.preferences.sidebarActive.slice(7);}).catch(error=>announce(error.message));
+  }
   if(extension)$('sidebar-title').textContent=sidebarExtensionState.title||'Extension panel';
   $('sidebar-account-controls').hidden=active!=='accounts';const identitySelect=$('sidebar-account-identity'),profileKey=JSON.stringify(currentState.profiles.map(item=>[item.id,item.name]));if(identitySelect.dataset.options!==profileKey){setOptions(identitySelect,currentState.profiles,currentState.currentIdentity);identitySelect.dataset.options=profileKey;}else identitySelect.value=currentState.currentIdentity;
   $('sidebar-back').disabled=!sidebarWebState.canGoBack;$('sidebar-forward').disabled=!sidebarWebState.canGoForward;
   $('sidebar-mute').textContent=sidebarWebState.muted?'♬̸':'♬';$('sidebar-mute').setAttribute('aria-label',sidebarWebState.muted?'Unmute sidebar page':'Mute sidebar page');
 }
 async function refreshSidebar(){
-  const pref=currentState.preferences,type=pref.sidebarActive||'bookmarks';if(pref.sidebarVisible===false||!pref.sidebarExpanded||type.startsWith('app:')||type.startsWith('extension:'))return;
+  const pref=currentState.preferences,type=pref.sidebarActive||'bookmarks';if(pref.sidebarVisible===false||!pref.sidebarExpanded||type.startsWith('app:')||type.startsWith('extension:')||type.startsWith('player:'))return;
   if(type==='tabs'){sidebarData={identity:currentState.currentIdentity,tabs:currentState.tabs,activeId:currentState.activeId};renderSidebarItems();return;}
   const ticket=++sidebarRequest,identity=currentState.currentIdentity;
   try{const data=await api.command('sidebar-data');if(ticket!==sidebarRequest||identity!==currentState.currentIdentity||type!==currentState.preferences.sidebarActive)return;sidebarData=data||{};renderSidebarItems();}
@@ -268,7 +274,7 @@ function renderSidebarToolEditor(){
     up.disabled=index===0;down.disabled=index===sidebarDraftTools.length-1;up.setAttribute('aria-label',`Move ${name} up`);down.setAttribute('aria-label',`Move ${name} down`);row.append(label,up,down);return row;
   }));
 }
-api.onPaneLayout?.(value=>{paneGeometry=value;renderPanes();});api.onSidebarLayout?.(updateSidebarGeometry);api.onSidebarWebState?.(value=>{sidebarWebState=value||{};renderSidebarChrome();});
+api.onPaneLayout?.(value=>{paneGeometry=value;renderPanes();});api.onSidebarLayout?.(updateSidebarGeometry);api.onSidebarWebState?.(value=>{const changed=sidebarWebState.audible!==value?.audible;sidebarWebState=value||{};renderSidebarChrome();if(changed)applyModAppearance();});
 $('sidebar-toggle').onclick=()=>run('sidebar-toggle');$('sidebar-rail-expand').onclick=()=>run('sidebar-rail-expand');$('sidebar-workspace-manage').onclick=()=>run('workspaces');$('sidebar-pin').onclick=()=>run('sidebar-pin');$('sidebar-close').onclick=()=>run('sidebar-close');$('sidebar-manage').onclick=()=>{settingsCategory='sidebar';$('settings-search').value='';applySettingsSearch();if(currentState.panel!=='settings')return run('settings');};
 for(const control of $('sidebar-rail').querySelectorAll('[data-sidebar]'))control.onclick=()=>{const command=SIDEBAR_TOOLS.find(([id])=>id===control.dataset.sidebar)?.[2];return command?run(command):run('sidebar-select',control.dataset.sidebar);};
 $('sidebar-search').oninput=renderSidebarItems;
@@ -323,6 +329,9 @@ function renderPanes(){
 }
 function renderState(state) {
   const old = currentState; currentState = state;if(state.paneGeometry)paneGeometry=state.paneGeometry;renderPanes();
+  const currentTabs=new Set(state.tabs.map(tab=>tab.id)),priorTabs=new Set(old.tabs.map(tab=>tab.id));
+  if(old.engine&&state.tabs.some(tab=>!priorTabs.has(tab.id)))playModSound('browser_sounds','TAB_INSERT');
+  if(old.tabs.some(tab=>!currentTabs.has(tab.id)))playModSound('browser_sounds','TAB_CLOSE');
   if(old.currentIdentity!==state.currentIdentity||state.preferences.sidebarActive!=='passwords'||!state.preferences.sidebarExpanded||!state.preferences.sidebarVisible||state.closing){
     if(passwordFormIdentity!==null||sidebarServiceType==='passwords')clearPasswordSecrets();
   }
@@ -375,6 +384,7 @@ function renderPanel(panel) {
   else if(panel==='bookmarks')renderBookmarks();
   else if(panel==='workspaces')renderWorkspaces();
   else if(panel==='resources')renderResources();
+  else if(panel==='mods')void run('mods-state').then(data=>{if(data&&currentState.panel==='mods')renderMods(data);});
 }
 
 // IME candidate confirmation/cancellation belongs to the input method, not to
@@ -945,6 +955,12 @@ $('follow-form').onsubmit=event=>{event.preventDefault();const form=event.curren
 
 // Trusted chrome only. Secrets are returned solely after explicit user actions.
 let sidebarServiceType='',passwordFormIdentity=null,sidebarExtensionState={};
+let playerOptionsRequest;
+const audioDrafts=new Map();
+function loadPlayerOptions(){return playerOptionsRequest||=(api.command('player-options').catch(error=>{playerOptionsRequest=null;throw error;}));}
+$('sidebar-player-service').onchange=event=>run('sidebar-select',`player:${event.currentTarget.value}`);
+$('sidebar-player-mixer').onclick=()=>run('sidebar-select','media');
+$('sidebar-player-stop').onclick=()=>run('sidebar-web-unload');
 function clearPasswordSecrets(){
   for(const input of $('sidebar-services').querySelectorAll('input'))input.value='';
   $('sidebar-services').replaceChildren();passwordFormIdentity=null;sidebarServiceType='';
@@ -959,15 +975,43 @@ function renderSidebarServices(type,data){
   root.replaceChildren();root.append(node('p',identityName(identity),'sidebar-service-identity'),button('Refresh',serviceRefresh));
   if(data.error)root.append(serviceParagraph(data.error));
   if(type==='media'){
-    root.append(serviceParagraph('Control media in this identity’s tabs and sidebar pages.'));
+    const providers=node('div',undefined,'sidebar-player-services');
+    root.append(providers,serviceParagraph('Control media in this identity’s tabs and sidebar pages.'));
+    void loadPlayerOptions().then(({services})=>{for(const {id,name} of services)providers.append(button(name,()=>api.command('sidebar-select',`player:${id}`)));}).catch(error=>announce(error.message));
+    const mediaIds=new Set((data.items||[]).map(item=>item.id));
+    for(const id of audioDrafts.keys())if(!mediaIds.has(id))audioDrafts.delete(id);
     for(const item of data.items||[]){
       const card=node('article',undefined,'sidebar-service-card');card.dataset.mediaId=item.id;
       card.append(node('strong',item.title||item.sourceTitle||'Media'),serviceParagraph([item.artist,item.origin,item.kind].filter(Boolean).join(' · ')));
       const act=async(action,value)=>{await api.command('media-action',{identity,id:item.id,action,value});await serviceRefresh();};
       const controls=node('div',undefined,'sidebar-service-actions');controls.append(button(item.paused?'Play':'Pause',()=>act(item.paused?'play':'pause')),button(item.muted?'Unmute':'Mute',()=>act(item.muted?'unmute':'mute')));
       const volume=node('input');volume.type='range';volume.min='0';volume.max='1';volume.step='.01';volume.value=item.volume??1;volume.setAttribute('aria-label','Media volume');volume.onchange=()=>act('volume',Number(volume.value)).catch(error=>announce(error.message));
-      card.append(controls,volume);
-      if(item.seekable?.length&&Number.isFinite(item.duration)&&item.duration>0){const seek=node('input');seek.type='range';seek.min='0';seek.max=String(item.duration);seek.step='.1';seek.value=item.currentTime||0;seek.setAttribute('aria-label','Media position');seek.onchange=()=>act('seek',Number(seek.value)).catch(error=>announce(error.message));card.append(seek);}
+      const volumeLabel=node('label','Volume');volumeLabel.append(volume);
+      card.append(controls,volumeLabel);
+      if(item.canProcess){
+        const draft=audioDrafts.get(item.id)||{gain:item.gain,preset:item.preset,open:item.gain!==1||item.preset!=='Flat'};
+        audioDrafts.set(item.id,draft);
+        const effects=node('details');effects.open=draft.open;
+        effects.ontoggle=()=>{draft.open=effects.open;};
+        effects.append(node('summary','Volume boost & equalizer'));
+        const gain=node('input');gain.type='range';gain.min='1';gain.max='5';gain.step='.1';gain.value=draft.gain;gain.setAttribute('aria-label','Volume boost');
+        const label=node('label',`Boost · ${Math.round(draft.gain*100)}%`);label.append(gain);
+        const eq=node('select');eq.setAttribute('aria-label','Equalizer preset');
+        const apply=async()=>{
+          await api.command('media-action',{identity,id:item.id,action:'effects',value:{gain:draft.gain,preset:draft.preset}});
+          audioDrafts.delete(item.id);
+          await serviceRefresh();
+        };
+        void loadPlayerOptions().then(options=>setOptions(eq,options.presets.map(name=>({id:name,name})),draft.preset)).catch(error=>announce(error.message));
+        const reset=button('Reset audio effects',async()=>{
+          await api.command('media-action',{identity,id:item.id,action:'effects',value:{gain:1,preset:'Flat'}});
+          audioDrafts.delete(item.id);await serviceRefresh();
+        });
+        gain.oninput=()=>{draft.gain=Number(gain.value);label.firstChild.textContent=`Boost · ${Math.round(draft.gain*100)}%`;};
+        eq.onchange=()=>{draft.preset=eq.value;};
+        effects.append(label,eq,button('Apply',apply),reset);card.append(effects);
+      }
+      if(item.seekable?.length&&Number.isFinite(item.duration)&&item.duration>0){const seek=node('input');seek.type='range';seek.min='0';seek.max=String(item.duration);seek.step='.1';seek.value=item.currentTime||0;seek.setAttribute('aria-label','Media position');seek.onchange=()=>act('seek',Number(seek.value)).catch(error=>announce(error.message));const position=node('label','Position');position.append(seek);card.append(position);}
       if(item.error)card.append(serviceParagraph(item.error.message));root.append(card);
     }
     for(const source of data.sources||[]){const row=node('div',undefined,'sidebar-service-card');row.append(node('strong',source.title||source.id),button(source.muted?'Unmute page':'Mute page',async()=>{await api.command('media-action',{identity,sourceId:source.id,action:source.muted?'page-unmute':'page-mute'});await serviceRefresh();}));root.append(row);}
@@ -1013,9 +1057,127 @@ function renderPasswordCards(data){
   if(!items.length)container.append(serviceParagraph('No saved logins match.'));
 }
 api.onPasswords?.(data=>{if(data.locked)clearPasswordSecrets();if(currentState.preferences.sidebarActive==='passwords'&&currentState.preferences.sidebarExpanded&&data.identity===currentState.currentIdentity){sidebarData=data;renderSidebarItems();}});
-let mediaRefreshQueued=false;
-api.onMediaChanged?.(()=>{if(currentState.preferences.sidebarActive!=='media'||!currentState.preferences.sidebarExpanded||mediaRefreshQueued)return;mediaRefreshQueued=true;queueMicrotask(()=>{mediaRefreshQueued=false;void refreshSidebar();});});
+let mediaRefreshQueued=false,mediaRefreshDeferred=false;
+function queueMediaRefresh(){
+  if(currentState.preferences.sidebarActive!=='media'||!currentState.preferences.sidebarExpanded||mediaRefreshQueued)return;
+  mediaRefreshQueued=true;
+  setTimeout(()=>{
+    mediaRefreshQueued=false;
+    if(currentState.preferences.sidebarActive!=='media'||!currentState.preferences.sidebarExpanded)return;
+    if(document.activeElement?.closest('[data-media-id]')){mediaRefreshDeferred=true;return;}
+    mediaRefreshDeferred=false;
+    void refreshSidebar();
+  },150);
+}
+api.onMediaChanged?.(queueMediaRefresh);
+$('sidebar-services').addEventListener('focusout',()=>{if(mediaRefreshDeferred)queueMediaRefresh();});
 api.onSidebarExtensionState?.(data=>{sidebarExtensionState=data;renderSidebarChrome();if(data.error)announce(data.error);if(currentState.preferences.sidebarExpanded&&currentState.preferences.sidebarActive==='extension-panels')void refreshSidebar();});
 $('sidebar-extension-reload').onclick=()=>run('sidebar-extension-reload');$('sidebar-extension-unload').onclick=()=>run('sidebar-extension-unload');
 $('sidebar-extension-back').onclick=()=>run('sidebar-select','extension-panels');
 document.querySelector('[data-password-link]').onclick=()=>run('sidebar-select','passwords');
+
+let wallpaperKey='',backgroundMusic,modAudioGesture=false;
+const soundPosition=new Map();
+function playModSound(category,event){
+  const files=currentState.modPresentation?.[category]?.[event];
+  if(!files?.length||!modAudioGesture)return;
+  const key=category+event,index=soundPosition.get(key)||0;
+  soundPosition.set(key,(index+1)%files.length);
+  const file=files[index%files.length];
+  if(file){
+    const audio=new Audio(file);
+    audio.volume=.25;
+    void audio.play().catch(()=>{});
+  }
+}
+function applyModAppearance(){
+  const appearance=currentState.modPresentation||{},tone=document.body.dataset.theme;
+  const theme=appearance.theme?.[tone],style=document.body.style;
+  if(theme){
+    document.body.dataset.modTheme='true';
+    const hsl=([h,s,l])=>`hsl(${h} ${s}% ${l}%)`;
+    style.setProperty('--accent',hsl(theme.accent));
+    style.setProperty('--mod-surface',hsl(theme.base));
+  }else{
+    delete document.body.dataset.modTheme;
+    style.removeProperty('--accent');style.removeProperty('--mod-surface');
+  }
+  const wallpaper=appearance.wallpaper?.[tone];
+  const active=currentState.tabs.find(tab=>tab.id===currentState.activeId);
+  const show=active?.url==='about:blank'&&!currentState.panel;
+  const key=show?wallpaper?.url||'':'';
+  if(wallpaperKey!==key){
+    wallpaperKey=key;
+    const host=$('mod-wallpaper');host.replaceChildren();
+    if(wallpaper&&show){
+      const element=node(wallpaper.video?'video':'img');
+      if(wallpaper.video){element.loop=true;element.muted=true;element.autoplay=true;element.playsInline=true;if(wallpaper.poster)element.poster=wallpaper.poster;}
+      else element.alt='';
+      element.src=wallpaper.url;host.append(element);
+    }
+  }
+  if(backgroundMusic&&backgroundMusic.getAttribute('src')!==appearance.music){backgroundMusic.pause();backgroundMusic=null;}
+  if(modAudioGesture&&appearance.music){
+    if(!backgroundMusic){backgroundMusic=new Audio(appearance.music);backgroundMusic.loop=true;backgroundMusic.volume=.18;}
+    if(currentState.tabs.some(tab=>tab.audible&&!tab.muted)||sidebarWebState.audible)backgroundMusic.pause();
+    else if(backgroundMusic.paused)void backgroundMusic.play().catch(()=>{});
+  }
+}
+function renderMods(data){
+  errorMessage('mods-error',data.error);
+  $('mods-recover').hidden=!data.recovery;
+  const labels=node('p','Select a category below to apply it. Imported mods start off.','subtle');
+  const review=$('mods-review');
+  review.hidden=!data.review;
+  review.replaceChildren();
+  if(data.review){
+    const item=data.review;
+    review.append(node('h2',`Review ${item.name}`),node('p',[item.author,item.version,'Local package'].filter(Boolean).join(' · ')),labels);
+    for(const category of item.categories){
+      review.append(node('p',`${category.label} · ${category.supported?'Available':'Unsupported'}${category.detail?' · '+category.detail:''}`));
+      if(category.matches?.length)review.append(node('p',category.matches.join(', '),'source'));
+    }
+    const actions=node('div',undefined,'card-actions');
+    actions.append(action('Import mod','mods-accept'),action('Cancel','mods-cancel'));review.append(actions);
+  }
+  for(const name of ['mods-folder','mods-zip'])$(name).disabled=Boolean(data.review||data.error||data.busy);
+  paintList($('mods-list'),data.mods,item=>{
+    const card=node('article');
+    card.append(node('h2',item.name),node('p',[item.author,item.version].filter(Boolean).join(' · '),'subtle'));
+    if(item.description)card.append(node('p',item.description));
+    if(item.error)card.append(node('p',item.error,'error'));
+    for(const category of item.categories){
+      const row=node('div',undefined,'mod-category'),label=node('span',category.label);
+      row.append(label);
+      if(category.supported){
+        const selected=data.active[category.key]===item.id;
+        const toggle=action(selected?'Turn off':'Use','mods-choose',{category:category.key,id:selected?null:item.id});
+        toggle.setAttribute('aria-label',`${selected?'Turn off':'Use'} ${category.label} from ${item.name}`);
+        toggle.setAttribute('aria-pressed',String(selected));toggle.title=category.detail||'';row.append(toggle);
+      }else row.append(node('span','Unsupported','subtle'));
+      card.append(row);
+    }
+    card.append(action('Remove from library','mods-remove',item.id));return card;
+  },'Import a GX mod folder or source ZIP to start.');
+}
+api.onMods?.(data=>{if(currentState.panel==='mods')renderMods(data);});
+$('mods-folder').onclick=()=>run('mods-inspect','directory');
+$('mods-zip').onclick=()=>run('mods-inspect','zip');
+$('mods-recover').onclick=()=>run('mods-recover');
+document.addEventListener('click',event=>{
+  if(!event.isTrusted)return;
+  if(!modAudioGesture){modAudioGesture=true;applyModAppearance();}
+  if(event.target.closest('button'))playModSound('browser_sounds','CLICK');
+});
+document.addEventListener('pointerover',event=>{
+  const hovered=event.target.closest('button');
+  if(event.isTrusted&&hovered&&!(event.relatedTarget instanceof Node&&hovered.contains(event.relatedTarget)))playModSound('browser_sounds','HOVER');
+});
+document.addEventListener('change',event=>{
+  if(event.isTrusted&&event.target.matches('input[type=checkbox]'))playModSound('browser_sounds','SWITCH_TOGGLE');
+});
+document.addEventListener('keydown',event=>{
+  if(!event.isTrusted||event.isComposing||event.ctrlKey||event.metaKey||event.altKey||!event.target.matches('input:not([type=password]),textarea'))return;
+  const suffix={Backspace:'BACKSPACE',Enter:'ENTER',' ':'SPACE'}[event.key]||(event.key.length===1?'LETTER':null);
+  if(suffix)playModSound('keyboard_sounds','TYPING_'+suffix);
+});

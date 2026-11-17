@@ -26,6 +26,8 @@ Historical evidence is preserved: the earlier baseline downloaded official Elect
 
 The [sidebar services guide](SIDEBAR-SERVICES.md) covers local passwords and autofill, HTML media controls, identity-scoped notification choices, and hosted extension panels.
 
+The [GX player and mods guide](GX-MODS-AND-PLAYER.md) covers music providers, volume boost and EQ, and local GX packages and their store compatibility.
+
 | Source | Responsibility |
 | --- | --- |
 | `browser/main.cjs` | Trusted browser commands, WebContentsView/tab lifecycle, identity sessions, native dialogs and close coordination. |

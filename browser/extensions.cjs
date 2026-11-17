@@ -926,4 +926,5 @@ class ExtensionManager {
   }
 }
 
-module.exports = {ExtensionManager, ExtensionError, inspectTree, validateManifest, parseJson};
+module.exports = {ExtensionManager, ExtensionError, inspectTree, validateManifest, parseJson,
+  packageFiles:{safeRelative,safeDirectory,copyDirectory,extractArchive,packageRoot,regularFile,walk}};

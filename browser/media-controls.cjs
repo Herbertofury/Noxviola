@@ -5,15 +5,16 @@
 // WebFrameMain exposes executeJavaScript (main world), so a hostile website can
 // affect its own reported media state. It receives no shell bridge or secrets.
 const {randomUUID} = require('node:crypto');
+const {presets,processElement}=require('./player-audio.cjs');
 
 const LIMITATION = 'Controls operate on real audio/video elements in page frames and open shadow roots. Closed shadow roots, Web Audio-only players, proprietary player commands, DRM authorization, and MediaSession next/previous handlers are not exposed by this adapter. Website playback restrictions and errors remain effective.';
 
 // Kept as a function so the same actual DOM operations can be exercised in tests.
-function inPage(key, operation, argument) {
+function inPage(key, operation, argument, processAudio) {
   const own = Object.getOwnPropertyDescriptor(globalThis, key);
   let registry = own?.value;
   if (!registry || registry.document !== document || !(registry.ids instanceof WeakMap) || !(registry.elements instanceof Map)) {
-    registry = {document, ids:new WeakMap(), elements:new Map(), serial:0};
+    registry = {document, ids:new WeakMap(), elements:new Map(), effects:new Map(), processing:new WeakSet(), serial:0};
     Object.defineProperty(globalThis, key, {value:registry, configurable:true});
   }
   function elements(root, found = []) {
@@ -27,16 +28,18 @@ function inPage(key, operation, argument) {
     const finite = value => Number.isFinite(value) ? value : null;
     const ranges = [];
     for (let index=0; index<element.seekable.length; index++) ranges.push([element.seekable.start(index),element.seekable.end(index)]);
-    const metadata = navigator.mediaSession?.metadata;
+    const metadata = navigator.mediaSession?.metadata,effect=registry.effects.get(element);
     return {elementId,tag:element.tagName.toLowerCase(),hasSource:Boolean(element.currentSrc || element.src || element.srcObject),
       title:String(metadata?.title || element.getAttribute('aria-label') || element.title || '').slice(0,2048),
       artist:String(metadata?.artist || '').slice(0,2048),album:String(metadata?.album || '').slice(0,2048),
-      paused:element.paused,ended:element.ended,muted:element.muted,volume:finite(element.volume),
+      paused:element.paused,ended:element.ended,muted:effect?.userMuted??element.muted,volume:finite(element.volume),
+      gain:effect?.gain??1,preset:effect?.preset??'Flat',canProcess:typeof element.captureStream==='function'&&!element.mediaKeys&&!element.srcObject,
       currentTime:finite(element.currentTime),duration:finite(element.duration),playbackRate:finite(element.playbackRate),
       seekable:ranges,error:element.error ? {code:element.error.code,message:String(element.error.message || '').slice(0,2048)} : null};
   }
   if (operation === 'list') {
     const all = elements(document), present = new Set(all), items = [];
+    for(const [element,effect] of registry.effects)if(!present.has(element))effect.stop();
     for (const [id, reference] of registry.elements) {
       const element = reference.deref(); if (!element || !present.has(element)) registry.elements.delete(id);
     }
@@ -54,8 +57,18 @@ function inPage(key, operation, argument) {
       case 'play': await element.play(); break;
       case 'pause': element.pause(); break;
       case 'toggle': if (element.paused || element.ended) await element.play(); else element.pause(); break;
-      case 'mute': element.muted=true; break;
-      case 'unmute': element.muted=false; break;
+      case 'mute': case 'unmute': {
+        const muted=operation==='mute',effect=registry.effects.get(element);
+        if(effect){effect.userMuted=muted;effect.update({gain:effect.gain,preset:effect.preset,filters:effect.filters});}
+        else element.muted=muted;
+        break;
+      }
+      case 'effects':
+        if(registry.processing.has(element))throw new Error('Wait for audio processing to start.');
+        registry.processing.add(element);
+        try{await processAudio(element,registry,argument.value);}
+        finally{registry.processing.delete(element);}
+        break;
       case 'volume': element.volume=argument.value; break;
       case 'seek': {
         let seekable=false;
@@ -88,6 +101,7 @@ function publicState(item) {
   const number=value=>typeof value==='number'&&Number.isFinite(value)?value:null;
   return {tag:item.tag,hasSource:item.hasSource===true,title:safeText(item.title),artist:safeText(item.artist),album:safeText(item.album),
     paused:item.paused===true,ended:item.ended===true,muted:item.muted===true,volume:number(item.volume),
+    gain:number(item.gain)??1,preset:Object.hasOwn(presets,item.preset)?item.preset:'Flat',canProcess:item.canProcess===true,
     currentTime:number(item.currentTime),duration:number(item.duration),playbackRate:number(item.playbackRate),
     seekable:Array.isArray(item.seekable)?item.seekable.filter(range=>Array.isArray(range)&&range.length===2&&range.every(value=>number(value)!==null)&&range[0]>=0&&range[1]>=range[0]).map(range=>[...range]):[],
     error:item.error?{code:number(item.error.code),message:safeText(item.error.message)}:null};
@@ -167,13 +181,19 @@ function createMediaControls({getSources,onChange=()=>{}}) {
       const source=live.find(source=>source.id===request.sourceId);if(!source)throw new Error('This media source is no longer available in this identity.');
       source.webContents.setAudioMuted(action==='page-mute');notify();return sourceState(source);
     }
-    if(!['play','pause','toggle','mute','unmute','volume','seek'].includes(action))throw new Error('Unsupported media action.');
+    if(!['play','pause','toggle','mute','unmute','volume','seek','effects'].includes(action))throw new Error('Unsupported media action.');
     if(action==='volume'&&!(Number.isFinite(request.value)&&request.value>=0&&request.value<=1))throw new Error('Volume must be between 0 and 1.');
     if(action==='seek'&&!(Number.isFinite(request.value)&&request.value>=0))throw new Error('A nonnegative seek position is required.');
     const target=targets.get(request.id);
     if(!target||!valid(target,identity))throw new Error('This media item is no longer available in this identity. Refresh the media list.');
     const source=live.find(source=>source.id===target.sourceId&&source.webContents===target.wc);
-    const result=await target.frame.frame.executeJavaScript(`(${inPage.toString()})(${JSON.stringify(registryKey)},${JSON.stringify(action)},${JSON.stringify({elementId:target.elementId,value:request.value})})`,action==='play'||action==='toggle');
+    let value=request.value,processor='undefined';
+    if(action==='effects'){
+      if(!value||!Number.isFinite(value.gain)||value.gain<1||value.gain>5||!Object.hasOwn(presets,value.preset))throw new Error('Choose gain between 100% and 500% and an available equalizer preset.');
+      value={gain:value.gain,preset:value.preset,filters:presets[value.preset]};
+      processor=processElement.toString();
+    }
+    const result=await target.frame.frame.executeJavaScript(`(${inPage.toString()})(${JSON.stringify(registryKey)},${JSON.stringify(action)},${JSON.stringify({elementId:target.elementId,value})},${processor})`,['play','toggle','effects'].includes(action));
     if(!valid(target,identity))throw new Error('The media document changed while the action was running.');
     notify();return card(target,result,source);
   }

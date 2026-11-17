@@ -1,10 +1,11 @@
 'use strict';
 // Browser lifecycle adapted from Herbertofury/Enderloom main.js (GPL-3.0-only).
-const {app, BrowserWindow, WebContentsView, ipcMain, session, dialog, Menu, shell, webContents, nativeImage, screen, systemPreferences, safeStorage} = require('electron');
+const {app, BrowserWindow, WebContentsView, ipcMain, session, dialog, Menu, shell, webContents, nativeImage, screen, systemPreferences, safeStorage, protocol,net} = require('electron');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const {EventEmitter} = require('node:events');
+const {pathToFileURL}=require('node:url');
 const {address, httpUrl, extensionUrl, cleanState, inspectState, recoverState, SEARCH} = require('./state.cjs');
 const preferenceStore = require('./preferences.cjs');
 const {ResourceMonitor} = require('./resources.cjs');
@@ -29,12 +30,16 @@ const {sidebarAccountData,sidebarAccountRoute} = require('./sidebar-accounts.cjs
 const {PasswordStore}=require('./passwords.cjs');
 const passwordPage=require('./password-page.cjs');
 const {createMediaControls}=require('./media-controls.cjs');
+const {services:playerServices,presets:audioPresets}=require('./player-audio.cjs');
+const {GxModLibrary}=require('./gx-mods.cjs');
+const {mountStyles}=require('./gx-web-styles.cjs');
 const {createSidebarExtensionPanel}=require('./sidebar-extension-panel.cjs');
 const {createSidebarExtensionAPI}=require('./sidebar-extension-api.cjs');
 const findSession = require('./find-session.cjs').createFindSession();
 const accountStore = require('./accounts.cjs');
 const vaultStore = require('./vault.cjs');
 app.enableSandbox();
+protocol.registerSchemesAsPrivileged([{scheme:'nox-mod',privileges:{standard:true,secure:true,stream:true}}]);
 
 let win, tabs = [], profiles = [{id:'personal', name:'Personal'}], activeId, currentIdentity = 'personal';
 let originalSession = cleanState({}), preferences = originalSession.preferences;
@@ -44,7 +49,8 @@ let writer, saveError = '', sessionFile, dataDirectory, downloads, permissions, 
 let vaultFile, vaultDocument = {version:1, items:[]}, vaultError = '', vaultRecovery = null, vaultImport = null;
 let accountFile, accounts = [], accountError = '', accountRecovery = null;
 let permissionOpening = null, extensionBusy = false;
-let passwords,sidebarExtension,sidebarExtensionAPI;
+let passwords,sidebarExtension,sidebarExtensionAPI,mods,modPresentation={};
+let activeWebMod;
 let resolveIdentitySession, history, bookmarks, workspaces, follows, followTimer, resourceMonitor, extensionBridge, spellcheck;
 let activeWorkspaceId = 'default', nextRuntimeTabId = 1, preferencePreview = null;
 let sidebarProgress=0,sidebarRailProgress=0,sidebarTimer=null,sidebarDismissTimer=null,sidebarDismissGeneration=0;
@@ -56,7 +62,8 @@ const active = () => tabs.find(tab => tab.id === activeId);
 const tabWorkspace = tab => tab.saved.workspaceId || 'default';
 const visibleTabs = () => tabs.filter(tab => tabWorkspace(tab) === activeWorkspaceId);
 const favicons = createFaviconLoader({nativeImage});
-const sidebarWeb=createSidebarWebPanel({WebContentsView,getWindow:()=>win,getSession:identitySession,identityReady,loadFavicon:favicons.load,onInteraction:cancelSidebarDismiss,onChange:value=>send('sidebar-web-state',value)});
+const gxStyles=mountStyles(url=>mods.styles(url),error=>notice(error.message));
+const sidebarWeb=createSidebarWebPanel({WebContentsView,getWindow:()=>win,getSession:identitySession,identityReady,loadFavicon:favicons.load,onInteraction:cancelSidebarDismiss,onChange:value=>send('sidebar-web-state',value),onContents:gxStyles.attach});
 const mediaControls=createMediaControls({getSources:()=>[
   ...tabs.filter(tab=>tab.view&&!tab.view.webContents.isDestroyed()).map(tab=>({id:`tab:${tab.id}`,identity:tab.identity,kind:'tab',title:tab.title,webContents:tab.view.webContents})),
   ...sidebarWeb.sources(),
@@ -94,7 +101,7 @@ function tabDescriptor(tab) {
 }
 function stateView() {
   return {version:1, profiles, preferences, activeId, currentIdentity, splitId, paneTree, paneLayouts, paneGeometry:currentPaneGeometry(), panel, closing, saveError,
-    activeWorkspaceId,chromeHeight:chromeHeight(),sidebarGeometry:currentSidebarGeometry(),sidebarWeb:sidebarWeb.state(),sidebarExtension:sidebarExtension?.state(),shortcuts:preferenceStore.shortcutList(preferences),downloadHistory:downloads?.getStatus(),
+    activeWorkspaceId,chromeHeight:chromeHeight(),sidebarGeometry:currentSidebarGeometry(),sidebarWeb:sidebarWeb.state(),sidebarExtension:sidebarExtension?.state(),modPresentation,shortcuts:preferenceStore.shortcutList(preferences),downloadHistory:downloads?.getStatus(),
     canRestore:closed.length > 0, tabs:tabs.map(tab => ({id:tab.id,url:tab.url,title:tab.title,identity:tab.identity,loading:tab.loading,live:!!tab.view,favicon:tab.favicon,
       workspaceId:tabWorkspace(tab),groupId:tab.saved.groupId||null,pinned:!!tab.saved.pinned,muted:tab.view?.webContents.isAudioMuted()??!!tab.saved.muted,audible:tab.view?.webContents.isCurrentlyAudible()||false})),
     canBack:active()?.view?.webContents.navigationHistory.canGoBack() || false,
@@ -122,6 +129,13 @@ function publishVault() { send('vault', {items:vaultDocument.items, open:panel =
 function publishAccounts() { send('accounts', {accounts,profiles,open:panel === 'accounts',error:accountError,recoveryAvailable:!!accountRecovery}); }
 function passwordData(){const state=passwords?.state()||{locked:true};return {...state,identity:currentIdentity,items:state.locked?[]:passwords.list(currentIdentity)};}
 function publishPasswords(){send('passwords',passwordData());}
+function publishMods(){
+  modPresentation=mods.presentation();
+  const selected=mods.data.active.page_styles;
+  if(selected!==activeWebMod){activeWebMod=selected;gxStyles.refresh();}
+  if(panel==='mods')send('mods',mods.snapshot());
+  publish(false);
+}
 function requireCurrentIdentity(value){if(value?.identity!==currentIdentity)throw new Error('The browser identity changed. Try again.');return currentIdentity;}
 function passwordTarget(identity){const tab=active(),contents=tab?.view?.webContents;if(!contents||contents.isDestroyed()||tab.identity!==identity||currentIdentity!==identity)throw new Error('Open a login page in the selected identity first.');return {tab,contents};}
 function requirePasswordTarget(target,identity){const current=passwordTarget(identity);if(current.tab!==target.tab||current.contents!==target.contents)throw new Error('The selected login page changed. Try again.');}
@@ -161,7 +175,8 @@ function syncSidebarWeb({skipExtension=false,tabChanged=false}={}){
       }
     }else if(state.visible)sidebarExtension.hide();
   }
-  const appEntry=preferences.sidebarActive.startsWith('app:')?preferences.sidebarApps.find(item=>item.id===preferences.sidebarActive.slice(4)):null;
+  const provider=preferences.sidebarActive.startsWith('player:')&&playerServices[preferences.sidebarActive.slice(7)];
+  const appEntry=provider?{url:provider[1]}:preferences.sidebarActive.startsWith('app:')?preferences.sidebarApps.find(item=>item.id===preferences.sidebarActive.slice(4)):null;
   const visible=preferences.sidebarVisible&&preferences.sidebarExpanded&&appEntry;
   const state=sidebarWeb.state();
   if(!visible){if(state.visible)sidebarWeb.hide();return;}
@@ -253,6 +268,7 @@ function ensureView(tab) {
   const view = new WebContentsView({webPreferences:{session:identitySession(tab.identity),nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true,allowRunningInsecureContent:false,spellcheck:true}});
   tab.view = view; tab.initializing = true; win.contentView.addChildView(view);
   const wc = view.webContents;
+  gxStyles.attach(wc);
   wc.on('before-mouse-event',(_event,input)=>{if(input.type==='mouseUp'&&input.button==='left')scheduleSidebarDismiss(tab,view);});
   wc.on('before-input-event',(_event,input)=>{if(input.type==='keyDown'&&!input.isAutoRepeat&&!input.control&&!input.meta&&!input.alt&&input.key&&!['Shift','Control','Meta','Alt','Escape'].includes(input.key))scheduleSidebarDismiss(tab,view);});
 wc.on('focus',()=>{if(activeId!==tab.id&&paneLayout.ids(paneTree).includes(tab.id))activate(tab.id);});
@@ -579,7 +595,7 @@ function buildMenu() {
 function showBrowserMenu(anchor){
   const invoke=(name,value)=>runBrowserOperation(name,value).catch(error=>{notice(error.message);layout();publish(false);});
   const shortcuts=new Map(preferenceStore.shortcutList(preferences).map(item=>[item.id,item.accelerator]));
-  const panels=new Set(['history','downloads','bookmarks','extensions','vault','workspaces','accounts','permissions','following','resources','tools','settings']);
+  const panels=new Set(['history','downloads','bookmarks','extensions','vault','workspaces','accounts','permissions','following','resources','tools','settings','mods']);
   const item=(label,name,extra={})=>({label,...(shortcuts.get(name)?{accelerator:shortcuts.get(name)}:{}),...extra,click:()=>{if(!panels.has(name)||panel!==name)invoke(name);}});
   const menu=Menu.buildFromTemplate([
     item('New tab','new'),item('Reopen closed tab','restore',{enabled:closed.length>0}),{type:'separator'},
@@ -587,7 +603,7 @@ function showBrowserMenu(anchor){
     {type:'separator'},item('History','history'),item('Downloads','downloads'),item('Bookmarks','bookmarks'),item('Extensions','extensions'),item('Library','vault'),
     item('Workspaces and tab groups','workspaces'),item('Accounts and identities','accounts'),item('Passwords','show-passwords'),item('Site permissions','permissions'),
     {label:'More tools',submenu:[item('Following','following'),item('Resource monitor','resources'),item('Save page as PDF','save-pdf'),item('Save visible screenshot','save-screenshot'),item('Developer tools','devtools'),item('All browser tools','tools')]},
-    {type:'separator'},item('Settings','settings'),{type:'separator'},{role:'quit',label:'Exit Noxviola'}
+    item('Mods','mods'),{type:'separator'},item('Settings','settings'),{type:'separator'},{role:'quit',label:'Exit Noxviola'}
   ]);
   const [width,height]=win.getContentSize(),valid=anchor&&['x','y','width','height'].every(key=>Number.isFinite(anchor[key]));
   const options={window:win};if(valid){options.x=Math.max(0,Math.min(width-1,Math.round(anchor.x+anchor.width-250)));options.y=Math.max(0,Math.min(height-1,Math.round(anchor.y+anchor.height)));}menu.popup(options);
@@ -619,9 +635,9 @@ async function perform(name, value) {
     case 'sidebar-web-forward':sidebarWeb.forward();break;
     case 'sidebar-web-mute':sidebarWeb.mute(value===true);break;
     case 'sidebar-web-unload':{
-      const item=preferences.sidebarApps.find(app=>`app:${app.id}`===preferences.sidebarActive);
-      if(!item)throw new Error('Choose an open sidebar application.');
-      changeSidebar({sidebarExpanded:false});sidebarWeb.release({identity:currentIdentity,url:item.url});break;
+      const opened=sidebarWeb.state();
+      if(!opened.visible||opened.identity!==currentIdentity)throw new Error('Choose an open sidebar application.');
+      changeSidebar({sidebarExpanded:false});sidebarWeb.release({identity:currentIdentity,url:opened.site});break;
     }
     case 'sidebar-data':{
       const type=preferences.sidebarActive;
@@ -653,6 +669,28 @@ async function perform(name, value) {
       if(choice.response!==1)return null;requireCurrentIdentity(value);const result=await passwords.reveal(identity,value.id);requireCurrentIdentity(value);return {identity,id:result.id,password:result.password};
     }
     case 'password-recover':{const choice=await dialog.showMessageBox(win,{type:'warning',message:'Restore the previous encrypted password checkpoint?',detail:'The current file will be preserved separately.',buttons:['Cancel','Restore'],defaultId:0,cancelId:0,noLink:true});if(choice.response===1)await passwords.recover();publishPasswords();break;}
+    case 'player-options':return {services:Object.entries(playerServices).map(([id,[name]])=>({id,name})),presets:Object.keys(audioPresets)};
+    case 'mods-state':return mods.snapshot();
+    case 'mods-store':return newTab('https://store.gx.me/mods/');
+    case 'mods-addons':return newTab('https://addons.opera.com/');
+    case 'mods-inspect':{
+      const archive=value==='zip';
+      const {canceled,filePaths}=await dialog.showOpenDialog(win,{title:archive?'Inspect a GX mod ZIP':'Inspect an unpacked GX mod',
+        properties:[archive?'openFile':'openDirectory'],...(archive?{filters:[{name:'GX mod source ZIP',extensions:['zip']}]}:{})});
+      if(canceled||!filePaths[0])return;
+      try{await mods.prepare(filePaths[0],archive);}
+      finally{publishMods();}
+      break;
+    }
+    case 'mods-accept':try{await mods.accept();}finally{publishMods();}break;
+    case 'mods-cancel':await mods.cancel();publishMods();break;
+    case 'mods-choose':mods.choose(value?.category,value?.id);publishMods();break;
+    case 'mods-remove':mods.remove(value);publishMods();break;
+    case 'mods-recover':{
+      const choice=await dialog.showMessageBox(win,{type:'question',message:'Restore the previous mod library?',detail:'The current checkpoint is preserved separately.',buttons:['Cancel','Restore'],defaultId:0,cancelId:0,noLink:true});
+      if(choice.response===1){await mods.recover();publishMods();}
+      break;
+    }
     case 'media-list':return mediaControls.list(currentIdentity);
     case 'media-action':{const identity=requireCurrentIdentity(value);return mediaControls.act(identity,value);}
     case 'sidebar-extension-open':{requireCurrentIdentity(value);return sidebarExtensionAPI.openFromUser(value);}
@@ -739,7 +777,7 @@ async function perform(name, value) {
     case 'settings-import-apply':if(!preferencePreview)throw new Error('Review a preference preset first.');if(preferencePreview.baseline!==JSON.stringify(preferences))throw new Error('Preferences changed after this review. Inspect the preset again.');await savePreferences(preferencePreview.preferences);send('settings-preview',null);break;
     case 'settings-import-cancel':preferencePreview=null;send('settings-preview',null);break;
     case 'save-session': writer.request(snapshot()); await writer.flush(); notice('Session saved.'); break;
-    case 'following':case 'tools':case 'vault':case 'accounts':case 'extensions':case 'downloads':case 'permissions':case 'settings':case 'capabilities':case 'bookmarks':case 'history':case 'workspaces':case 'resources':setPanel(name);break;
+    case 'following':case 'tools':case 'vault':case 'accounts':case 'extensions':case 'downloads':case 'permissions':case 'settings':case 'capabilities':case 'bookmarks':case 'history':case 'workspaces':case 'resources':case 'mods':setPanel(name);break;
     case 'resource-sample':return resourceMonitor.sample();
     case 'history-query':return history.query(currentIdentity,value||{});
     case 'history-settings':{const {identity=currentIdentity,...changes}=value||{};history.configure(identity,changes);publishHistory();break;}
@@ -921,6 +959,21 @@ async function requestClose() {
 }
 async function start() {
   app.setAppUserModelId('org.noxviola.browser'); dataDirectory = app.getPath('userData'); sessionFile = path.join(dataDirectory,'browser-session.json');
+  mods=new GxModLibrary(path.join(dataDirectory,'gx-mods'));
+  try{await mods.open();modPresentation=mods.presentation();activeWebMod=mods.data.active.page_styles;}catch(error){mods.error=error.message;}
+  session.defaultSession.protocol.handle('nox-mod',async request=>{
+    try{
+      if(!['GET','HEAD'].includes(request.method))return new Response(null,{status:405});
+      const asset=await mods.verifyAsset(request.url);
+      if(!asset)return new Response(null,{status:404});
+      const response=await net.fetch(pathToFileURL(asset.location).href,{method:request.method,signal:request.signal});
+      const headers=new Headers(response.headers);
+      headers.set('Content-Type',asset.format);
+      headers.set('Content-Security-Policy','sandbox');
+      headers.set('X-Content-Type-Options','nosniff');
+      return new Response(response.body,{status:response.status,headers});
+    }catch{return new Response(null,{status:404});}
+  });
   let restored = inspectState(sessionFile);
   if (restored.status === 'recovery') {
     const choice = await dialog.showMessageBox({type:'warning',title:'Recover your Noxviola session',message:'The current session needs recovery.',detail:`${restored.reason}\nRestore the previous checkpoint? The current file will be preserved separately.`,buttons:['Exit without changing files','Restore previous checkpoint'],defaultId:0,cancelId:0,noLink:true});

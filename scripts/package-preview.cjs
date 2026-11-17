@@ -13,6 +13,7 @@ const APP_FILES = [
   'browser/sidebar-layout.cjs', 'browser/sidebar-motion.cjs', 'browser/sidebar-web-panel.cjs', 'browser/sidebar-accounts.cjs',
   'browser/sidebar-extension-panel.cjs', 'browser/sidebar-extension-api.cjs',
   'browser/media-controls.cjs', 'browser/passwords.cjs', 'browser/password-page.cjs',
+  'browser/player-audio.cjs', 'browser/gx-mods.cjs', 'browser/gx-web-styles.cjs',
   'browser/capabilities.json', 'browser/state.cjs', 'browser/favicons.cjs', 'browser/find-session.cjs',
   'browser/storage.cjs', 'browser/session-writer.cjs', 'browser/session-path.cjs',
   'browser/permissions.cjs', 'browser/downloads.cjs', 'browser/extensions.cjs', 'browser/extension-runtime.cjs',

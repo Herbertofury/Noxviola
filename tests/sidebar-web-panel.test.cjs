@@ -6,7 +6,7 @@ function fixture({ready=async()=>{},loadFavicon=async()=>''}={}){
  const sessions={personal:{id:'personal'},work:{id:'work'}},views=[],events=[];
  class View{
   constructor(options){this.options=options;this.visible=false;this.webContents=new EventEmitter();const wc=this.webContents;wc.session=options.webPreferences.session;wc.destroyed=false;wc.muted=false;wc.isDestroyed=()=>wc.destroyed;wc.getURL=()=>wc.url||'';wc.isAudioMuted=()=>wc.muted;wc.setAudioMuted=v=>{wc.muted=v;};wc.focus=()=>{throw Error('sidebar must not steal focus');};wc.setWindowOpenHandler=fn=>{wc.popup=fn;};wc.loadURL=async url=>{wc.url=url;events.push(['load',wc.session.id,url]);};wc.reload=()=>events.push(['reload',wc.session.id]);wc.close=()=>{wc.destroyed=true;};views.push(this);}
-  setBackgroundColor(){} setVisible(v){this.visible=v;} setBounds(v){this.bounds=v;}
+  setBackgroundColor(){this.webContents.isCurrentlyAudible=()=>false;} setVisible(v){this.visible=v;} setBounds(v){this.bounds=v;}
  }
  const win={isDestroyed:()=>false,getContentSize:()=>[800,600],contentView:{addChildView:()=>{},removeChildView:()=>{}}};
  const host=createSidebarWebPanel({WebContentsView:View,getWindow:()=>win,getSession:id=>{if(!sessions[id])throw Error('Unknown identity');return sessions[id];},identityReady:ready,loadFavicon});

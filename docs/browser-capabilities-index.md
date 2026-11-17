@@ -95,17 +95,17 @@ Search by capability ID or name. The application exposes the same JSON in its ex
 | media-control-center | Cross-tab media controls | media | partial | Add media session transport commands, provider playback lifecycles, and verify independent sources across navigation and restart. |
 | drm-media | DRM-protected media compatibility | media | blocked | Audit Electron codec/DRM availability; retain explicit service/platform blockers. |
 | cast-media | Media casting | media | absent | Confirm supported runtime discovery and casting APIs before advertising availability. |
-| gx-volume | Per-tab volume amplification | media | absent | Evaluate a consented audio graph; expose real gain and quality cost rather than a decorative slider. |
-| gx-equalizer | Per-tab audio equalizer | media | absent | Prototype a genuine tab-scoped DSP path and compare fidelity/latency before integration. |
+| gx-volume | Per-tab volume amplification | media | partial | Evaluate native whole-tab audio for protected, Web Audio-only and provider streams. |
+| gx-equalizer | Per-tab audio equalizer | media | partial | Compare presets and latency with the installed GX version, then cover whole-tab audio. |
 | gx-rgx-enhancement | Image and video enhancement | media | absent | Evaluate an optional maintained filter pipeline with accessible bypass and no unverified quality claims. |
 | toolbar-customization | Customizable toolbar and sidebar | customization | partial | Implement and verify remaining launcher behavior, broader customization, focus/accessibility and equivalent-work transition tests. |
-| themes | Composable themes and colors | customization | partial | Qualify mixed appearance combinations, high contrast/reduced motion and complete accessibility; then add independently configurable fonts/assets with provenance. |
-| gx-mod-components | Composable GX-style mod components | customization | absent | Define a permissionless declarative mod schema and preserve licenses/provenance. |
-| live-wallpaper | Optional animated wallpaper | customization | absent | Load wallpaper on demand with pause and accessibility policy. |
+| themes | Composable themes and colors | customization | partial | Verify current store theme variants, window caption colors, and contrast against reference builds. |
+| gx-mod-components | Composable GX-style mod components | customization | partial | Verify publisher-signed acquisition and implement the remaining GX categories and variants. |
+| live-wallpaper | Optional animated wallpaper | customization | partial | Verify video formats, paused/reduced-motion behavior and richer wallpaper component variants. |
 | custom-cursor | Custom cursor presentation | customization | absent | Use standard cursor roles with safe validated assets. |
 | website-shaders | Optional webpage visual filters | customization | absent | Evaluate supported compositor paths and retain reversible per-site settings. |
-| keyboard-sounds | Optional typing and browser sounds | customization | absent | Use local event feedback without observing private text content. |
-| background-music | Adaptive background music | customization | absent | Use one optional audio service with explicit ducking and pause policy. |
+| keyboard-sounds | Optional typing and browser sounds | customization | partial | Expand browser sound event mappings and opt-in keyboard coverage without recording typing. |
+| background-music | Adaptive background music | customization | partial | Add verified vertical remixing, transitions, independent volume and persistence comparisons. |
 | forced-dark-pages | Per-site forced dark appearance | customization | absent | Evaluate CSS/engine darkening without changing page semantics. |
 | tab-emoji | Tab emoji labels | customization | absent | Add optional metadata to the tab model without replacing page titles for accessibility. |
 | shortcut-customization | User-configurable keyboard shortcuts | customization | partial | Exercise custom and cleared bindings with native page focus and non-US/IME input, then integrate extension commands with the same conflict resolver. |
@@ -130,7 +130,7 @@ Search by capability ID or name. The application exposes the same JSON in its ex
 | browser-games | Browser game discovery | optional-services | absent | Reuse ordinary sandboxed web tabs with explicit discovery providers. |
 | personal-news | Optional news feeds | optional-services | absent | Use an opt-in feed reader; avoid recommendation telemetry. |
 | smart-home-panel | Optional smart-home panel | optional-services | absent | Investigate provider-supported APIs; do not imply access from a browser feature label. |
-| music-sidebar | Shared music-service panel | optional-services | partial | Verify each provider workflow, authentication, notifications and identity-specific integration; preserve unsupported behavior as open. |
+| music-sidebar | Shared music-service panel | optional-services | partial | Qualify provider sign-in, protected playback, local controls and transport commands with synthetic accounts. |
 | messenger-sidebar | Shared messenger and social panel | optional-services | partial | Verify provider sign-in, push delivery, visible OS toast actions and sidebar unread states using synthetic accounts. |
 | flow-transfer | Optional cross-device transfer | optional-services | absent | Evaluate a consented encrypted transfer protocol rather than silently copying provider accounts. |
 | panel-twitch | Twitch panel variant | optional-services | absent | Audit provider-specific embedding, permissions and terms before enabling this adapter. |

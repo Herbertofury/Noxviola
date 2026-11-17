@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: nox-mod:; media-src 'self' nox-mod:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Noxviola</title><link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -50,6 +50,7 @@
   <button type="button" data-sidebar="extension-panels" title="Extension panels" aria-label="Extension panels"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M14 4v16m-7-9h3m-3 4h3"/></svg></button>
   <button type="button" data-sidebar="extensions" title="Extensions" aria-label="Extensions"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h5V5a3 3 0 0 1 6 0v4h5v5h-4a3 3 0 0 1 0 6H4Z"/></svg></button>
   <button type="button" data-sidebar="settings" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="m9 3 6 0 1 3 3 1 2 5-2 5-3 1-1 3H9l-1-3-3-1-2-5 2-5 3-1Z"/></svg></button>
+  <button type="button" data-sidebar="mods" title="Mods" aria-label="Mods"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 3 8v8l9 5 9-5V8Zm0 10 9-5m-9 5L3 8m9 5v8"/></svg></button>
   <button type="button" data-sidebar="vault" title="Library" aria-label="Library"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5zM9 4v16M12 8h4m-4 4h4"/></svg></button>
   <button type="button" data-sidebar="following" title="Following" aria-label="Following"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 8h8m-8 4h8m-8 4h5"/></svg></button>
   <button type="button" data-sidebar="resources" title="Resource monitor" aria-label="Resource monitor"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10h4v10m4 0V4h4v16m4 0V8"/></svg></button>
@@ -62,12 +63,14 @@
  <div class="sidebar-panel-inner">
   <div class="sidebar-panel-heading"><strong id="sidebar-title">Sidebar</strong><div id="sidebar-web-controls" hidden><button id="sidebar-back" type="button" title="Back" aria-label="Sidebar back">‹</button><button id="sidebar-forward" type="button" title="Forward" aria-label="Sidebar forward">›</button><button id="sidebar-reload" type="button" title="Reload" aria-label="Reload sidebar page">↻</button><button id="sidebar-mute" type="button" title="Mute sidebar page" aria-label="Mute sidebar page">♬</button><button id="sidebar-unload" type="button" title="Unload sidebar page" aria-label="Unload sidebar page">⊘</button></div><button id="sidebar-pin" type="button" title="Unpin panel" aria-label="Unpin panel" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3h8l-1 5 3 3v2H6v-2l3-3-1-5Zm4 10v8"/></svg></button><button id="sidebar-close" type="button" title="Close panel" aria-label="Close sidebar panel">×</button></div>
   <div id="sidebar-extension-controls" hidden><button id="sidebar-extension-back" type="button">All panels</button><button id="sidebar-extension-reload" type="button">Reload panel</button><button id="sidebar-extension-unload" type="button">Unload panel</button></div>
+  <div id="sidebar-player-controls" hidden><select id="sidebar-player-service" aria-label="Music service"></select><button id="sidebar-player-mixer" type="button">Mixer</button><button id="sidebar-player-stop" type="button">Unload</button></div>
   <div id="sidebar-browser-content"><div id="sidebar-account-controls" hidden><label for="sidebar-account-identity">Identity</label><select id="sidebar-account-identity" aria-label="Sidebar account identity"></select><button id="sidebar-account-manage" type="button">Manage accounts and identities</button><button type="button" data-password-link>Open passwords</button><p>Account metadata stays separate from encrypted passwords.</p></div><input id="sidebar-search" type="search" placeholder="Search" aria-label="Search sidebar"><p id="sidebar-message" role="status"></p><div id="sidebar-items"></div><div id="sidebar-services" hidden></div></div>
  </div>
  <div id="sidebar-resize" role="separator" tabindex="0" aria-label="Resize sidebar" aria-orientation="vertical" aria-valuemin="180" aria-valuemax="1600"></div>
 </aside>
 <main id="workspace">
 <section id="start" class="start-page" hidden>
+ <div id="mod-wallpaper" aria-hidden="true"></div>
  <img src="assets/noxviola.png" alt="Noxviola purple fox and globe" width="104" height="104">
  <h1>Make the web yours.</h1><p>A place for your identities, collections and ideas.</p>
  <button id="start-search" class="primary">Search or enter an address</button>
@@ -144,6 +147,13 @@
  <p class="subtle">Camera and microphone permissions are separate. Unknown permissions, screen capture and native device access remain blocked until their dedicated controls are implemented. Revoking a decision prevents future permission checks; close the page to stop an already active capture.</p>
  <p id="permission-error" class="error" hidden></p><button id="permission-recover" data-command="permission-recover" hidden>Review previous permission checkpoint</button>
  <div class="controls"><button id="permission-reset">Forget decisions for current identity</button></div><div id="permission-items" class="cards"></div>
+</section>
+<section id="mods" class="panel" hidden>
+ <div class="panel-heading"><div><h1>Mods</h1><p>Mix the look and sound of your browser, one category at a time.</p></div><button data-command="panel-close">Back to page</button></div>
+ <div class="controls"><button class="primary" data-command="mods-store">Browse GX Store</button><button data-command="mods-addons">Browse Opera Add-ons</button><button id="mods-folder" type="button">Inspect mod folder</button><button id="mods-zip" type="button">Inspect mod ZIP</button></div>
+ <p id="mods-error" class="error" hidden></p><button id="mods-recover" type="button" hidden>Recover previous mod checkpoint</button>
+ <div id="mods-review" class="review" hidden></div>
+ <div id="mods-list" class="cards"></div>
 </section>
 <section id="settings" class="panel" hidden>
  <div class="panel-heading settings-heading"><div><p class="settings-eyebrow">NOXVIOLA</p><h1>Settings</h1><p>Make your browser feel like yours.</p></div><button data-command="panel-close">Back to page</button></div>

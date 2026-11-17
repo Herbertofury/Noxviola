@@ -3,7 +3,7 @@
 // executes browser-shell code in the website. Popups remain in that identity.
 const {httpUrl}=require('./state.cjs');
 
-function createSidebarWebPanel({WebContentsView,getWindow,getSession,identityReady=async()=>{},loadFavicon=async()=>'',onInteraction=()=>{},onChange=()=>{}}){
+function createSidebarWebPanel({WebContentsView,getWindow,getSession,identityReady=async()=>{},loadFavicon=async()=>'',onInteraction=()=>{},onChange=()=>{},onContents=()=>{}}){
   const entries=new Map();let current=null,visible=false,bounds=null,disposed=false;
   const keyFor=(identity,url)=>JSON.stringify([identity,url]);
   function canTraverse(wc,direction){
@@ -19,7 +19,7 @@ function createSidebarWebPanel({WebContentsView,getWindow,getSession,identityRea
     const wc=current?.view.webContents;
     return {visible:Boolean(visible&&current),identity:current?.identity||null,site:current?.site||null,
       url:current?.url||null,title:current?.title||'',loading:Boolean(current?.loading),error:current?.error||'',
-      muted:Boolean(wc&&!wc.isDestroyed()&&wc.isAudioMuted()),canGoBack:canTraverse(wc,'back'),canGoForward:canTraverse(wc,'forward'),loadedPanels:entries.size,
+      muted:Boolean(wc&&!wc.isDestroyed()&&wc.isAudioMuted()),audible:[...entries.values()].some(item=>!item.view.webContents.isDestroyed()&&item.view.webContents.isCurrentlyAudible()&&!item.view.webContents.isAudioMuted()),canGoBack:canTraverse(wc,'back'),canGoForward:canTraverse(wc,'forward'),loadedPanels:entries.size,
       icons:current?[...entries.values()].filter(entry=>entry.identity===current.identity&&entry.favicon).map(entry=>({site:entry.site,icon:entry.favicon})):[]};
   }
   function notify(){onChange(snapshot());}
@@ -95,6 +95,8 @@ function createSidebarWebPanel({WebContentsView,getWindow,getSession,identityRea
     wc.on('page-title-updated',(_event,title)=>{entry.title=title;if(current===entry)notify();});
     wc.on('did-start-loading',()=>{entry.loading=true;entry.error='';if(current===entry)notify();});
     wc.on('did-stop-loading',()=>{entry.loading=false;if(current===entry)notify();});
+    wc.on('audio-state-changed',notify);
+    onContents(wc);
     const navigated=(_event,url,isMainFrame=true)=>{if(isMainFrame===false)return;const clean=httpUrl(url);if(clean){entry.url=clean;if(current===entry)notify();}};
     wc.on('did-navigate',(event,url)=>navigated(event,url,true));wc.on('did-navigate-in-page',(event,url,isMainFrame)=>navigated(event,url,isMainFrame));
     wc.on('did-fail-load',(_event,code,_description,_url,isMainFrame)=>{if(isMainFrame&&code!==-3){entry.loading=false;entry.error='This sidebar page could not load.';if(current===entry)notify();}});

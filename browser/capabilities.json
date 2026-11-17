@@ -14275,14 +14275,16 @@
         "permission service"
       ],
       "noxviola": {
-        "status": "absent",
+        "status": "partial",
         "codeOwner": "media/browser integration",
         "paths": [
           "browser/main.cjs",
-          "browser/renderer.js"
+          "browser/renderer.js",
+          "browser/player-audio.cjs",
+          "browser/media-controls.cjs"
         ],
         "integrationStrategy": "Use native engine media controls and isolate optional enhancements.",
-        "note": "No accepted end-to-end Noxviola evidence for this complete capability."
+        "note": "An explicit per-element 100–500% gain setting processes capture-compatible HTML media. Windows measured amplitude scales with gain."
       },
       "performance": "Measure decode, GPU, power and audio latency with equivalent media quality.",
       "privacy": "Do not capture, send, or retain media without explicit scope; respect service and DRM boundaries.",
@@ -14290,8 +14292,10 @@
         {
           "id": "accept-gx-volume",
           "procedure": "Play calibrated synthetic audio, test clipping and tab scope, reset, navigate and verify remembered settings without affecting other tabs.",
-          "result": "not-run",
-          "evidence": []
+          "result": "partial",
+          "evidence": [
+            "docs/browser/GX-MODS-AND-PLAYER.md"
+          ]
         }
       ],
       "evidence": {
@@ -14301,13 +14305,13 @@
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
-        "nativeRuntime": "not-run",
+        "nativeRuntime": "An explicit per-element 100–500% gain setting processes capture-compatible HTML media. Windows measured amplitude scales with gain.",
         "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Evaluate a consented audio graph; expose real gain and quality cost rather than a decorative slider.",
+      "nextAction": "Evaluate native whole-tab audio for protected, Web Audio-only and provider streams.",
       "priority": "P2",
       "updatedAt": "2026-11-15"
     },
@@ -14348,14 +14352,16 @@
         "permission service"
       ],
       "noxviola": {
-        "status": "absent",
+        "status": "partial",
         "codeOwner": "media/browser integration",
         "paths": [
           "browser/main.cjs",
-          "browser/renderer.js"
+          "browser/renderer.js",
+          "browser/player-audio.cjs",
+          "browser/media-controls.cjs"
         ],
         "integrationStrategy": "Use native engine media controls and isolate optional enhancements.",
-        "note": "No accepted end-to-end Noxviola evidence for this complete capability."
+        "note": "Eight presets use real Web Audio filtering. The Windows fixture measures the Bass preset in the resulting output."
       },
       "performance": "Measure decode, GPU, power and audio latency with equivalent media quality.",
       "privacy": "Do not capture, send, or retain media without explicit scope; respect service and DRM boundaries.",
@@ -14363,8 +14369,10 @@
         {
           "id": "accept-gx-equalizer",
           "procedure": "Measure audio output against known frequency sweeps with independent tab presets and bypass.",
-          "result": "not-run",
-          "evidence": []
+          "result": "partial",
+          "evidence": [
+            "docs/browser/GX-MODS-AND-PLAYER.md"
+          ]
         }
       ],
       "evidence": {
@@ -14374,13 +14382,13 @@
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
-        "nativeRuntime": "not-run",
+        "nativeRuntime": "Eight presets use real Web Audio filtering. The Windows fixture measures the Bass preset in the resulting output.",
         "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Prototype a genuine tab-scoped DSP path and compare fidelity/latency before integration.",
+      "nextAction": "Compare presets and latency with the installed GX version, then cover whole-tab audio.",
       "priority": "P2",
       "updatedAt": "2026-11-15"
     },
@@ -14843,10 +14851,11 @@
           "browser/main.cjs",
           "browser/renderer.js",
           "browser/index.html",
-          "browser/style.css"
+          "browser/style.css",
+          "browser/gx-mods.cjs"
         ],
         "integrationStrategy": "Use canonical services and existing durable storage; keep independent preferences and identity ownership explicit, preserve unknown metadata and require explicit recovery.",
-        "note": "Independent saved dark/light/system appearance, five accents and compact/comfortable density use local CSS variables. Preferences can be reviewed/imported/exported separately from browsing data and extension grants. Custom fonts, downloadable theme assets and rich modular visual effects remain open."
+        "note": "Imported GX light/dark HSL palettes update Noxviola chrome and persist separately from built-in appearance preferences."
       },
       "performance": "Disabled modules must create no ongoing work; pause decorative media when hidden.",
       "privacy": "Keep customization local; downloaded assets require provenance and permission.",
@@ -14854,8 +14863,10 @@
         {
           "id": "accept-themes",
           "procedure": "Apply mixed modules at high contrast and reduced motion; restart and reject malformed theme data.",
-          "result": "not-run",
-          "evidence": []
+          "result": "partial",
+          "evidence": [
+            "docs/browser/GX-MODS-AND-PLAYER.md"
+          ]
         }
       ],
       "evidence": {
@@ -14874,7 +14885,7 @@
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
-        "nativeRuntime": "0c25987e core receipts passed only the recorded scope on hosted Windows/Linux; the full declared capability and separate real-extension workflows remain unqualified.",
+        "nativeRuntime": "Imported GX light/dark HSL palettes update Noxviola chrome and persist separately from built-in appearance preferences.",
         "workingTreeReview": "2026-11-16 exact ff5432c source/native/archive readback; scoped workflow only, with 50431f7 continuation still unqualified.",
         "currentImplementation": {
           "inventoryVersion": "2026-11-16.3",
@@ -15025,7 +15036,7 @@
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Qualify mixed appearance combinations, high contrast/reduced motion and complete accessibility; then add independently configurable fonts/assets with provenance.",
+      "nextAction": "Verify current store theme variants, window caption colors, and contrast against reference builds.",
       "priority": "P2",
       "updatedAt": "2026-11-16"
     },
@@ -15076,15 +15087,17 @@
         "accessible defaults"
       ],
       "noxviola": {
-        "status": "absent",
+        "status": "partial",
         "codeOwner": "optional chrome settings",
         "paths": [
           "browser/index.html",
           "browser/style.css",
-          "browser/renderer.js"
+          "browser/renderer.js",
+          "browser/gx-mods.cjs",
+          "browser/gx-web-styles.cjs"
         ],
         "integrationStrategy": "Compose independent options over canonical services, with conflict handling and reset.",
-        "note": "No accepted end-to-end Noxviola evidence for this complete capability."
+        "note": "Local GX folders and ZIPs can enable verified category assets independently. The store catalog browses through a normal tab."
       },
       "performance": "Disabled modules must create no ongoing work; pause decorative media when hidden.",
       "privacy": "Keep customization local; downloaded assets require provenance and permission.",
@@ -15092,8 +15105,10 @@
         {
           "id": "accept-gx-mod-components",
           "procedure": "Mix modules from separate synthetic packages, disable each and verify no retained timers/assets or broken controls.",
-          "result": "not-run",
-          "evidence": []
+          "result": "partial",
+          "evidence": [
+            "docs/browser/GX-MODS-AND-PLAYER.md"
+          ]
         }
       ],
       "evidence": {
@@ -15104,13 +15119,13 @@
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
-        "nativeRuntime": "not-run",
+        "nativeRuntime": "Local GX folders and ZIPs can enable verified category assets independently. The store catalog browses through a normal tab.",
         "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Define a permissionless declarative mod schema and preserve licenses/provenance.",
+      "nextAction": "Verify publisher-signed acquisition and implement the remaining GX categories and variants.",
       "priority": "P2",
       "updatedAt": "2026-11-15"
     },
@@ -15155,15 +15170,16 @@
         "accessible defaults"
       ],
       "noxviola": {
-        "status": "absent",
+        "status": "partial",
         "codeOwner": "optional chrome settings",
         "paths": [
           "browser/index.html",
           "browser/style.css",
-          "browser/renderer.js"
+          "browser/renderer.js",
+          "browser/gx-mods.cjs"
         ],
         "integrationStrategy": "Compose independent options over canonical services, with conflict handling and reset.",
-        "note": "No accepted end-to-end Noxviola evidence for this complete capability."
+        "note": "New tabs use the selected GX light/dark image or animated video asset on demand. Windows decoding evidence covers still images."
       },
       "performance": "Disabled modules must create no ongoing work; pause decorative media when hidden.",
       "privacy": "Keep customization local; downloaded assets require provenance and permission.",
@@ -15171,8 +15187,10 @@
         {
           "id": "accept-live-wallpaper",
           "procedure": "Measure hidden-window idle and foreground frame pacing; disabling must stop animation and release buffers.",
-          "result": "not-run",
-          "evidence": []
+          "result": "partial",
+          "evidence": [
+            "docs/browser/GX-MODS-AND-PLAYER.md"
+          ]
         }
       ],
       "evidence": {
@@ -15183,13 +15201,13 @@
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
-        "nativeRuntime": "not-run",
+        "nativeRuntime": "New tabs use the selected GX light/dark image or animated video asset on demand. Windows decoding evidence covers still images.",
         "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Load wallpaper on demand with pause and accessibility policy.",
+      "nextAction": "Verify video formats, paused/reduced-motion behavior and richer wallpaper component variants.",
       "priority": "P2",
       "updatedAt": "2026-11-15"
     },
@@ -15390,15 +15408,16 @@
         "accessible defaults"
       ],
       "noxviola": {
-        "status": "absent",
+        "status": "partial",
         "codeOwner": "optional chrome settings",
         "paths": [
           "browser/index.html",
           "browser/style.css",
-          "browser/renderer.js"
+          "browser/renderer.js",
+          "browser/gx-mods.cjs"
         ],
         "integrationStrategy": "Compose independent options over canonical services, with conflict handling and reset.",
-        "note": "No accepted end-to-end Noxviola evidence for this complete capability."
+        "note": "Opt-in shell typing and browser sound events use local GX assets; password input is excluded. Windows observed actual sound playback."
       },
       "performance": "Disabled modules must create no ongoing work; pause decorative media when hidden.",
       "privacy": "Keep customization local; downloaded assets require provenance and permission.",
@@ -15406,8 +15425,10 @@
         {
           "id": "accept-keyboard-sounds",
           "procedure": "Type in chrome and pages; verify no keystrokes are recorded or transmitted and mute stops all audio work.",
-          "result": "not-run",
-          "evidence": []
+          "result": "partial",
+          "evidence": [
+            "docs/browser/GX-MODS-AND-PLAYER.md"
+          ]
         }
       ],
       "evidence": {
@@ -15418,13 +15439,13 @@
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
-        "nativeRuntime": "not-run",
+        "nativeRuntime": "Opt-in shell typing and browser sound events use local GX assets; password input is excluded. Windows observed actual sound playback.",
         "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Use local event feedback without observing private text content.",
+      "nextAction": "Expand browser sound event mappings and opt-in keyboard coverage without recording typing.",
       "priority": "P2",
       "updatedAt": "2026-11-15"
     },
@@ -15469,15 +15490,16 @@
         "accessible defaults"
       ],
       "noxviola": {
-        "status": "absent",
+        "status": "partial",
         "codeOwner": "optional chrome settings",
         "paths": [
           "browser/index.html",
           "browser/style.css",
-          "browser/renderer.js"
+          "browser/renderer.js",
+          "browser/gx-mods.cjs"
         ],
         "integrationStrategy": "Compose independent options over canonical services, with conflict handling and reset.",
-        "note": "No accepted end-to-end Noxviola evidence for this complete capability."
+        "note": "An independently selected local GX track loops with website-audio ducking. Windows observed playback of the local track."
       },
       "performance": "Disabled modules must create no ongoing work; pause decorative media when hidden.",
       "privacy": "Keep customization local; downloaded assets require provenance and permission.",
@@ -15485,8 +15507,10 @@
         {
           "id": "accept-background-music",
           "procedure": "Test coexistence with tab audio, calls and screen readers; disabled mode has no playback process.",
-          "result": "not-run",
-          "evidence": []
+          "result": "partial",
+          "evidence": [
+            "docs/browser/GX-MODS-AND-PLAYER.md"
+          ]
         }
       ],
       "evidence": {
@@ -15497,13 +15521,13 @@
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
-        "nativeRuntime": "not-run",
+        "nativeRuntime": "An independently selected local GX track loops with website-audio ducking. Windows observed playback of the local track.",
         "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Use one optional audio service with explicit ducking and pause policy.",
+      "nextAction": "Add verified vertical remixing, transitions, independent volume and persistence comparisons.",
       "priority": "P2",
       "updatedAt": "2026-11-15"
     },
@@ -17597,10 +17621,11 @@
           "browser/renderer.js",
           "browser/sidebar-layout.cjs",
           "browser/sidebar-web-panel.cjs",
-          "browser/preferences.cjs"
+          "browser/preferences.cjs",
+          "browser/player-audio.cjs"
         ],
         "integrationStrategy": "Use a shared opt-in panel/adaptor service; preserve provider-specific behavior as variants.",
-        "note": "A user can explicitly add a provider website to an identity-scoped sidebar WebContentsView. This is a generic website panel, not a verified provider-specific integration; synthetic identity-isolated login popups work; real provider login flows, notifications, service controls and extension integration remain open."
+        "note": "Six named music service routes share the current identity’s existing web panel host and media mixer."
       },
       "performance": "No startup, polling or hidden page processes for disabled integrations.",
       "privacy": "Disclose data recipients and account scope; never transmit browsing or extension inventories to Noxviola.",
@@ -17608,8 +17633,10 @@
         {
           "id": "accept-music-sidebar",
           "procedure": "Test one active provider, playback controls and disabled background behavior; preserve service-specific login and DRM boundaries.",
-          "result": "not-run",
-          "evidence": []
+          "result": "partial",
+          "evidence": [
+            "docs/browser/GX-MODS-AND-PLAYER.md"
+          ]
         }
       ],
       "evidence": {
@@ -17619,14 +17646,14 @@
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "partial: installed Firefox 160.0 and Opera GX 139.0.6053.42 sidebar resources and synthetic-profile behaviors; not a complete browser audit",
-        "nativeRuntime": "partial: synthetic website panel and identity storage checks; provider-specific full workflows remain unverified",
+        "nativeRuntime": "Six named music service routes share the current identity’s existing web panel host and media mixer.",
         "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established",
         "sidebarResearch": "docs/browser/SIDEBAR-REFERENCE-2026-11-16.md"
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Verify each provider workflow, authentication, notifications and identity-specific integration; preserve unsupported behavior as open.",
+      "nextAction": "Qualify provider sign-in, protected playback, local controls and transport commands with synthetic accounts.",
       "priority": "P2",
       "updatedAt": "2026-11-16"
     },

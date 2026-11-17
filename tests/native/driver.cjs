@@ -894,6 +894,19 @@ async function firstLaunch() {
     await until(()=>window.webContents.executeJavaScript("document.getElementById('follow-items').textContent.includes('declare') || document.getElementById('follow-items').textContent.includes('declared metadata')"),'explicit metadata-only compatibility scope');
     await command('panel-close');
   });
+  await check('native ModHold author follow saves independently without claiming ban or starting automatic fetches', async () => {
+    await command('following');
+    await until(()=>window.webContents.executeJavaScript("Boolean(document.getElementById('follow-form').getClientRects().length)"),'ModHold follow form');
+    await window.webContents.executeJavaScript(`(() => {const form=document.getElementById('follow-form');form.elements.namedItem('name').value='Synthetic ModHold author';form.elements.namedItem('url').value='https://modholdmods.com/u/NativeFixture';form.requestSubmit();})()`);
+    const saved=await until(()=>JSON.parse(fs.readFileSync(path.join(context.profile,'browser-follows.json'),'utf8')).sources.find(row=>row.name==='Synthetic ModHold author'),'durable native ModHold follow');
+    assert.equal(saved.provider,'modhold-author');assert.equal(saved.automatic,false);assert.equal(saved.lastSuccess,0);expected.modholdFollowId=saved.id;
+    await until(()=>window.webContents.executeJavaScript("document.getElementById('follow-items').textContent.includes('Missing data does not verify a ban')"),'ModHold uncertainty scope');
+    const observed=Math.floor(Date.now()/1000),report={schema_version:1,id:'native:report',creator_id:'native:fixture',source_account:saved.url,status:'unavailable',status_evidence:[{url:'https://example.invalid/evidence',kind:'retrieval_result',observed_unix:observed}],destination_account:null,identity_evidence:[],project_mappings:[],observed_unix:observed,review_after_unix:observed+86400,lifecycle:'active'};
+    await window.webContents.executeJavaScript(`(() => {const card=[...document.querySelectorAll('#follow-items article')].find(c=>c.querySelector('h2')?.textContent==='Synthetic ModHold author');const input=card.querySelector('textarea');input.closest('details').open=true;input.value=${JSON.stringify(JSON.stringify(report))};input.dispatchEvent(new Event('input',{bubbles:true}));input.closest('form').requestSubmit();})()`);
+    await until(()=>JSON.parse(fs.readFileSync(path.join(context.profile,'browser-follows.json'),'utf8')).sources.find(row=>row.id===saved.id)?.transitions?.length===1,'native imported report persisted');
+    await until(()=>window.webContents.executeJavaScript("document.getElementById('follow-items').textContent.includes('Imported report: unavailable')"),'attributed native evidence report');
+    await captureShell('synthetic-modhold-following',1320,860);await command('panel-close');
+  });
   await assertSpellcheck('fresh-default-before-any-settings-change', true, []);
   await check('capture actual synthetic blank and settings shell at narrow and desktop widths', async () => {
     for (const [width, height] of [[700, 600], [1320, 860]]) await captureShell('synthetic-blank', width, height);
@@ -973,7 +986,7 @@ async function firstLaunch() {
     const [left, right] = visible.map(view => view.getBounds()).sort((a, b) => a.x - b.x);
     assert.ok(left.width > 0 && right.width > 0 && left.height > 0 && right.height > 0);
     assert.ok(left.x + left.width <= right.x, 'Split view surfaces must not overlap');
-    assert.ok(Math.abs(window.getContentSize()[0] - (left.x + left.width + right.width)) <= 1);
+    assert.ok(Math.abs(window.getContentSize()[0] - (left.x + left.width + right.width + (await state()).paneGeometry.dividers[0].bounds.width)) <= 1);
     await command('split');
     await captureMetrics('more-than-twelve-duplicate-tabs-loaded');
   });
@@ -1226,12 +1239,40 @@ async function firstLaunch() {
     assert.equal((await site(url)).webContents.getURL(),url,'Re-enabling reopens the preserved active tab');
     await activate(previous);
   });
+  await check('legacy blank split preserves whole-unit group and pin metadata',async()=>{
+    const previous=(await state()).activeId,workspace=await command('workspace-create',{name:'Synthetic empty split workspace',color:'cyan'});await command('workspace-switch',workspace.id);const first=(await state()).activeId,group=await command('group-create',{workspaceId:workspace.id,name:'Blank split group',color:'purple'});await command('tab-assign',{id:first,workspaceId:workspace.id,groupId:group.id});await command('tab-pin',{id:first,pinned:true});await command('split');const splitState=await state(),members=splitState.paneGeometry.panes.map(p=>p.tabId);assert.equal(members.length,2);assert.ok(splitState.tabs.filter(t=>members.includes(t.id)).every(t=>t.groupId===group.id&&t.pinned),'Legacy fallback must inherit group and pin');await command('activate',previous);for(const id of members)await command('close',id);await command('group-remove',group.id);await command('workspace-remove',workspace.id);
+  });
+  await check('three actual panes split on both axes move resize and switch isolated identities independently',async()=>{
+    await activate(expected.personalTab);await command('pane-split',{id:expected.personalTab,axis:'x'});let current=await state(),second=current.activeId;await command('pane-navigate',{id:second,url:`${context.origin}/page?pane=second`});await site();
+    await command('pane-split',{id:second,axis:'y'});const third=(await state()).activeId;await command('pane-navigate',{id:third,url:`${context.origin}/page?pane=third`});await site();
+    assert.equal((await state()).paneGeometry.panes.length,3);assert.equal(views().filter(v=>v.getVisible()).length,3);
+    await command('pane-identity',{id:third,identity:expected.secondIdentity});const switched=(await state()).activeId,switchedView=await site();assertIdentity(await identityData(switchedView),'second');
+    const paneBackground=backgroundPages(expected.bridgeRuntimeIds[expected.personalIdentity],expected.personalIdentity)[0];assert.ok(paneBackground);
+    const paneAPI=await paneBackground.executeJavaScript(`(async()=>{const tab=(await browser.tabs.query({})).find(t=>t.url===${JSON.stringify(`${context.origin}/page?pane=second`)});const results=[];for(const operation of [()=>browser.tabs.move(tab.id,{index:0}),()=>browser.tabs.update(tab.id,{pinned:true})]){try{await operation();results.push('unexpected success');}catch(error){results.push(error.message);}}return results;})()`);assert.ok(paneAPI.every(message=>message.includes('other identities')),'Extension must not rearrange or pin another identity through split membership');
+    await command('pane-focus',expected.personalTab);assertIdentity(await identityData(await site()),'personal');assert.equal((await state()).paneGeometry.panes.length,3);
+    await command('pane-resize',{path:[],ratio:0.35});await command('pane-swap',{first:expected.personalTab,second:switched});current=await state();assert.equal(current.paneTree.ratio,0.35);assert.equal(current.paneGeometry.panes[0].tabId,switched);
+    const bounds=views().filter(v=>v.getVisible()).map(v=>v.getBounds());assert.equal(bounds.length,3);for(let i=0;i<bounds.length;i++)for(let j=i+1;j<bounds.length;j++){const a=bounds[i],b=bounds[j];assert.ok(a.x+a.width<=b.x||b.x+b.width<=a.x||a.y+a.height<=b.y||b.y+b.height<=a.y,'Actual pane surfaces cannot overlap');}
+    const memberIds=current.paneGeometry.panes.map(p=>p.tabId),group=await command('group-create',{workspaceId:current.activeWorkspaceId,name:'Synthetic split group',color:'purple'});await command('tab-assign',{id:second,workspaceId:current.activeWorkspaceId,groupId:group.id});const grouped=await state();assert.ok(grouped.tabs.filter(t=>memberIds.includes(t.id)).every(t=>t.groupId===group.id));assert.equal(grouped.paneGeometry.panes.length,3,'Grouping a split must preserve every pane');
+    const workspacePeers=grouped.tabs.filter(t=>t.workspaceId===grouped.activeWorkspaceId),outside=workspacePeers.findLastIndex(t=>!memberIds.includes(t.id));assert.ok(outside>=0,'Require an outside anchor to prove real unit movement');await command('tab-move',{id:second,index:outside});const moved=await state();assert.notDeepEqual(moved.tabs.map(t=>t.id),grouped.tabs.map(t=>t.id),'Unit movement must actually change tab order');const indices=memberIds.map(id=>moved.tabs.findIndex(t=>t.id===id)).sort((a,b)=>a-b);assert.equal(indices[2]-indices[0],2,'Split tabs move as a contiguous unit');assert.deepEqual(moved.paneTree,current.paneTree,'Tab-strip movement must not swap pane positions');
+    const outsideTab=moved.tabs.find(t=>!memberIds.includes(t.id));assert.ok(outsideTab);const outsideBefore={groupId:outsideTab.groupId,pinned:outsideTab.pinned};await command('activate',outsideTab.id);const suspended=await state(),outsideAfter=suspended.tabs.find(t=>t.id===outsideTab.id);assert.deepEqual({groupId:outsideAfter.groupId,pinned:outsideAfter.pinned},outsideBefore,'Unrelated activation must not silently regroup or repin a tab');assert.equal(suspended.paneGeometry.panes.length,1);assert.ok(suspended.paneLayouts.some(tree=>JSON.stringify(tree)===JSON.stringify(moved.paneTree)),'Unrelated activation must preserve the previous split unit');await command('activate',second);assert.deepEqual((await state()).paneTree,moved.paneTree,'Returning to a split member restores its complete layout');
+    const focusPoint=await window.webContents.executeJavaScript(`(()=>{const button=[...document.querySelectorAll('[data-pane-id]')].find(n=>n.dataset.paneId===${JSON.stringify(switched)}).querySelector('button');const r=button.getBoundingClientRect();return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)};})()`);window.webContents.focus();window.webContents.sendInputEvent({type:'mouseDown',...focusPoint,button:'left',clickCount:1});window.webContents.sendInputEvent({type:'mouseUp',...focusPoint,button:'left',clickCount:1});await until(async()=>(await state()).activeId===switched,'native shell pointer selects the targeted pane');
+    const clickedView=await site();await clickedView.webContents.executeJavaScript("window.nativePaneClicks=0;document.addEventListener('click',()=>window.nativePaneClicks++,{once:true});true");clickedView.webContents.sendInputEvent({type:'mouseDown',x:20,y:20,button:'left',clickCount:1});clickedView.webContents.sendInputEvent({type:'mouseUp',x:20,y:20,button:'left',clickCount:1});await until(()=>clickedView.webContents.executeJavaScript('window.nativePaneClicks===1'),'native page receives its viewport pointer click');
+    await captureShell('synthetic-three-independent-panes',1320,860);await command('split');
+  });
+  await check('group action shows every native tab without metadata changes and preserves close restore',async()=>{
+    const workspaceId=(await state()).activeWorkspaceId,group=await command('group-create',{workspaceId,name:'All five native tabs',color:'cyan'}),ids=[];
+    for(let i=0;i<5;i++){await activate(i%2?expected.secondTab:expected.personalTab);const id=await command('new',`${context.origin}/page?whole-group=${i}`);await site();await command('tab-assign',{id,workspaceId,groupId:group.id});ids.push(id);}
+    const before=(await state()).tabs.map(({id,url,identity,groupId,pinned,workspaceId})=>({id,url,identity,groupId,pinned,workspaceId}));await command('workspaces');await until(()=>window.webContents.executeJavaScript(`Boolean(document.querySelector('[data-group-id="${group.id}"] [data-split-group]'))`),'whole group action button');await window.webContents.executeJavaScript(`document.querySelector('[data-group-id="${group.id}"] [data-split-group]').click()`);await until(async()=>(await state()).paneGeometry.panes.length===5,'all five group panes');const shown=await state();assert.deepEqual(shown.tabs.map(({id,url,identity,groupId,pinned,workspaceId})=>({id,url,identity,groupId,pinned,workspaceId})),before,'Group split cannot reorder, regroup, repin, close or replace tabs');assert.deepEqual(shown.paneGeometry.panes.map(p=>p.tabId),ids);await until(()=>views().filter(v=>v.getVisible()).length===5,'five actual native surfaces');
+    await command('pane-resize',{path:[],ratio:.4});await command('pane-swap',{first:ids[0],second:ids[1]});const tree=(await state()).paneTree;await command('group-split',group.id);assert.deepEqual((await state()).paneTree,tree,'Repeated show all preserves customized ratios and swapped visual order');await activate(expected.personalTab);await command('group-split',group.id);assert.deepEqual((await state()).paneTree,tree,'Show all restores a customized suspended group layout');await command('close',ids[4]);assert.equal((await state()).paneGeometry.panes.length,4);await command('restore');await command('group-split',group.id);assert.equal((await state()).paneGeometry.panes.length,5);for(const id of ids){await command('pane-focus',id);assertIdentity(await identityData(await site()),ids.indexOf(id)%2?'second':'personal');}
+    expected.wholeGroup={groupId:group.id,ids};await captureShell('synthetic-all-five-group-panes',1320,860);await command('split');
+  });
   await check('prepare independent workspace focus for real restart',async()=>{
     const previous=(await state()).activeId,previousWorkspace=(await state()).activeWorkspaceId,workspace=await command('workspace-create',{name:'Synthetic restart workspace',color:'cyan'}),first=await command('new'),last=await command('new');
     await command('tab-assign',{id:first,workspaceId:workspace.id});await command('tab-assign',{id:last,workspaceId:workspace.id});await command('activate',first);await command('activate',last);await command('activate',previous);
     expected.workspaceFocus={workspaceId:workspace.id,first,last,previous,previousWorkspace};
   });
   await command('settings-save',{sidebarPanelPinned:false});
+  await command('group-split',expected.wholeGroup.groupId);await command('pane-resize',{path:[],ratio:0.4});expected.paneTree=(await state()).paneTree;
   const final = await state();
   expected.tabs = final.tabs.map(({ id, url, identity }) => ({ id, url, identity }));
   expected.profiles = final.profiles;
@@ -1247,13 +1288,14 @@ async function secondLaunch() {
   await check('follow source and pause choice survive a real process restart', async () => {
     const data=JSON.parse(fs.readFileSync(path.join(context.profile,'browser-follows.json'),'utf8'));
     const saved=data.sources.find(row=>row.id===expected.followId);assert.ok(saved);assert.equal(saved.paused,true);assert.equal(saved.automatic,false);assert.equal(saved.provider,'manual');
+    const modhold=data.sources.find(row=>row.id===expected.modholdFollowId);assert.ok(modhold);assert.equal(modhold.provider,'modhold-author');assert.equal(modhold.automatic,false);assert.equal(modhold.transitions[0].id,'native:report');
     const modrinth=data.sources.find(row=>row.id===expected.modrinthFollowId);assert.ok(modrinth);assert.equal(modrinth.provider,'modrinth-versions');assert.deepEqual(modrinth.compatibility,{loader:'forge',gameVersion:'1.20.1'});assert.equal(modrinth.automatic,false);
   });
   await check('real process restart restores complete duplicate-preserving tab and identity metadata', async () => {
     const restored = await state();
     assert.deepEqual(restored.tabs.map(({ id, url, identity }) => ({ id, url, identity })), expected.tabs);
     assert.deepEqual(restored.profiles, expected.profiles);
-    assert.equal(restored.activeId, expected.activeId);
+    assert.equal(restored.activeId, expected.activeId);assert.deepEqual(restored.paneTree,expected.paneTree);assert.deepEqual(restored.paneGeometry.panes.map(p=>p.tabId),expected.wholeGroup.ids);assert.equal(restored.paneGeometry.panes.length,5);await until(()=>views().filter(v=>v.getVisible()).length===5,'restored whole-group native surfaces');await command('split');
     const personal = await activate(expected.personalTab);
     await assertCookieLifetimes(expected.personalIdentity, 'personal', 'after-restart', {sessionCookieExpected: false});
     assertIdentity(await identityData(personal), 'personal', {sessionCookieExpected: false});

@@ -15,6 +15,7 @@ const {BookmarkService,rootIds:bookmarkRootIds} = require('./bookmarks.cjs');
 const {WorkspaceService} = require('./workspaces.cjs');
 const storage = require('./storage.cjs');
 const {SessionWriter} = require('./session-writer.cjs');
+const paneLayout=require('./pane-layout.cjs');
 const {DownloadManager} = require('./downloads.cjs');
 const {ExtensionManager} = require('./extensions.cjs');
 const {createExtensionLoader} = require('./extension-runtime.cjs');
@@ -32,6 +33,7 @@ app.enableSandbox();
 
 let win, tabs = [], profiles = [{id:'personal', name:'Personal'}], activeId, currentIdentity = 'personal';
 let originalSession = cleanState({}), preferences = originalSession.preferences;
+let paneTree=null,paneLayouts=[];
 let splitId = null, panel = null, closed = [], saveTimer, queuedPublish = false, closing = false, allowClose = false;
 let writer, saveError = '', sessionFile, dataDirectory, downloads, permissions, extensions, extensionError = '';
 let vaultFile, vaultDocument = {version:1, items:[]}, vaultError = '', vaultRecovery = null, vaultImport = null;
@@ -68,7 +70,7 @@ function eventAction(action) {
   }
 }
 function savedTab(tab) { return {...tab.saved, id:tab.id, url:tab.url, title:tab.title, identity:tab.identity}; }
-function snapshot() { const tabWorkspaces=new Map(tabs.map(tab=>[tab.id,tabWorkspace(tab)]));return {...originalSession, version:1, profiles, preferences, activeId, activeWorkspaceId, workspaceLastTabs:Object.fromEntries([...workspaceLastTabs].filter(([workspace,id])=>tabWorkspaces.get(id)===workspace)), tabs:tabs.map(savedTab)}; }
+function snapshot() { const tabWorkspaces=new Map(tabs.map(tab=>[tab.id,tabWorkspace(tab)]));return {...originalSession, version:1, profiles, preferences, activeId, activeWorkspaceId, paneTree, paneLayouts, workspaceLastTabs:Object.fromEntries([...workspaceLastTabs].filter(([workspace,id])=>tabWorkspaces.get(id)===workspace)), tabs:tabs.map(savedTab)}; }
 function tabFromSaved(saved) {
   const tab = {saved, id:saved.id, runtimeId:nextRuntimeTabId++,url:saved.url,title:saved.title,identity:saved.identity,view:null,loading:false,initializing:false,favicon:'',faviconRevision:0};
   runtimeTabs.set(tab.runtimeId,tab);return tab;
@@ -81,7 +83,7 @@ function tabDescriptor(tab) {
     mutedInfo:{muted:wc?.isAudioMuted()??!!tab.saved.muted},groupId:-1,autoDiscardable:false};
 }
 function stateView() {
-  return {version:1, profiles, preferences, activeId, currentIdentity, splitId, panel, closing, saveError,
+  return {version:1, profiles, preferences, activeId, currentIdentity, splitId, paneTree, paneLayouts, paneGeometry:currentPaneGeometry(), panel, closing, saveError,
     activeWorkspaceId,chromeHeight:chromeHeight(),sidebarGeometry:currentSidebarGeometry(),sidebarWeb:sidebarWeb.state(),shortcuts:preferenceStore.shortcutList(preferences),downloadHistory:downloads?.getStatus(),
     canRestore:closed.length > 0, tabs:tabs.map(tab => ({id:tab.id,url:tab.url,title:tab.title,identity:tab.identity,loading:tab.loading,live:!!tab.view,favicon:tab.favicon,
       workspaceId:tabWorkspace(tab),groupId:tab.saved.groupId||null,pinned:!!tab.saved.pinned,muted:tab.view?.webContents.isAudioMuted()??!!tab.saved.muted,audible:tab.view?.webContents.isCurrentlyAudible()||false})),
@@ -148,7 +150,7 @@ function scheduleSidebarDismiss(tab,view){
   // geometry. An unresponsive or navigated-away renderer leaves the panel open.
   setImmediate(async()=>{try{if(view.webContents.isDestroyed())return;await view.webContents.executeJavaScript('void 0');}catch{return;}
     if(generation!==sidebarDismissGeneration)return;
-    sidebarDismissTimer=setTimeout(()=>{sidebarDismissTimer=null;if(generation===sidebarDismissGeneration&&!closing&&!panel&&!preferences.sidebarPanelPinned&&preferences.sidebarVisible&&preferences.sidebarExpanded&&tab.view===view&&(tab.id===activeId||tab.id===splitId))changeSidebar({sidebarExpanded:false});},180);
+    sidebarDismissTimer=setTimeout(()=>{sidebarDismissTimer=null;if(generation===sidebarDismissGeneration&&!closing&&!panel&&!preferences.sidebarPanelPinned&&preferences.sidebarVisible&&preferences.sidebarExpanded&&tab.view===view&&paneLayout.ids(paneTree).includes(tab.id))changeSidebar({sidebarExpanded:false});},180);
   });
 }
 function animateSidebar(){
@@ -158,16 +160,17 @@ function animateSidebar(){
   const tick=()=>{const elapsed=performance.now()-start,panelT=panelDuration?Math.min(1,elapsed/panelDuration):1,railT=railDuration?Math.min(1,elapsed/railDuration):1;sidebarProgress=from+(target-from)*sidebarEase(panelT);sidebarRailProgress=railFrom+(railTarget-railFrom)*sidebarEase(railT);layout();if(elapsed<duration)sidebarTimer=setTimeout(tick,8);else{sidebarTimer=null;sidebarProgress=target;sidebarRailProgress=railTarget;layout();}};
   tick();
 }
+function syncPanes(){
+  const allowed=new Set(visibleTabs().map(tab=>tab.id));for(const id of paneLayout.ids(paneTree))if(!allowed.has(id))paneTree=paneLayout.remove(paneTree,id);
+  if(!paneTree&&activeId)paneTree={tabId:activeId};splitId=paneLayout.ids(paneTree).find(id=>id!==activeId)||null;
+}
+function currentPaneGeometry(){if(!win||win.isDestroyed())return {panes:[],dividers:[]};const [,height]=win.getContentSize(),g=currentSidebarGeometry();return paneLayout.layout(paneTree,{x:g.pageX,y:chromeHeight(),width:g.pageWidth,height:Math.max(0,height-chromeHeight())});}
 function layout() {
   if (!win || win.isDestroyed()) return;
-  const [width,height] = win.getContentSize(), geometry=currentSidebarGeometry(),left=geometry.pageX;
-  const visible = [activeId,splitId].filter((id,index,array) => id && array.indexOf(id) === index);
-  const available = geometry.pageWidth, firstWidth = visible.length === 2 ? Math.floor(available/2) : available;
-  for (const tab of tabs) {
-    if (!tab.view) continue;
-    const index = visible.indexOf(tab.id); tab.view.setVisible(index >= 0 && !panel);
-    if (index >= 0) tab.view.setBounds({x:left + firstWidth*index,y:chromeHeight(),width:index === 1 ? available-firstWidth : firstWidth,height:Math.max(0,height-chromeHeight())});
-  }
+  syncPanes();const [width,height] = win.getContentSize(), geometry=currentSidebarGeometry(),panes=currentPaneGeometry();
+  const visible=new Map(panes.panes.map(pane=>[pane.tabId,pane]));
+  for (const tab of tabs) {if(!tab.view)continue;const pane=visible.get(tab.id);tab.view.setVisible(Boolean(pane)&&!panel);if(pane)tab.view.setBounds(pane.content);}
+  send('pane-layout',panes);
   const grip=Math.min(6,geometry.panel);
   sidebarWeb.layout({x:geometry.panelX+(preferences.sidebarSide==='right'?grip:0),y:chromeHeight()+40,width:Math.max(0,geometry.panel-grip),height:Math.max(0,height-chromeHeight()-40)});
   send('sidebar-layout',geometry);
@@ -221,6 +224,7 @@ function ensureView(tab) {
   const wc = view.webContents;
   wc.on('before-mouse-event',(_event,input)=>{if(input.type==='mouseUp'&&input.button==='left')scheduleSidebarDismiss(tab,view);});
   wc.on('before-input-event',(_event,input)=>{if(input.type==='keyDown'&&!input.isAutoRepeat&&!input.control&&!input.meta&&!input.alt&&input.key&&!['Shift','Control','Meta','Alt','Escape'].includes(input.key))scheduleSidebarDismiss(tab,view);});
+wc.on('focus',()=>{if(activeId!==tab.id&&paneLayout.ids(paneTree).includes(tab.id))activate(tab.id);});
   nativeTabs.set(wc.id,tab);wc.setAudioMuted(!!tab.saved.muted);
   wc.setWindowOpenHandler(({url}) => { if (httpUrl(url) && !closing) eventAction(() => newTab(url,tab.identity)); return {action:'deny'}; });
   wc.on('will-navigate', (event,url) => { if (!tabNavigationAllowed(tab,url)) event.preventDefault(); });
@@ -274,9 +278,13 @@ function ensureView(tab) {
 function activate(id) {
   tabPreview.hide();
   const tab = tabs.find(row => row.id === id); if (!tab || closing) return;
-  const changed = activeId !== id; activeId = id; currentIdentity = tab.identity;activeWorkspaceId=tabWorkspace(tab);workspaceLastTabs.set(activeWorkspaceId,id);
-  if (splitId === id) splitId = null;
-  showPage(); ensureView(tab);syncSidebarWeb();layout();publish(changed);publishHistory();publishBookmarks();publishWorkspaces();publishExtensionActions();
+  const previousActive=activeId,changed = activeId !== id; activeId = id; currentIdentity = tab.identity;activeWorkspaceId=tabWorkspace(tab);workspaceLastTabs.set(activeWorkspaceId,id);
+  if(!paneLayout.ids(paneTree).includes(id)){
+    if(paneLayout.ids(paneTree).length>1)paneLayouts.push(paneTree);
+    const saved=paneLayouts.find(tree=>paneLayout.ids(tree).includes(id));
+    paneLayouts=paneLayouts.filter(tree=>tree!==saved);paneTree=saved||{tabId:id};
+  }
+  showPage();for(const paneId of paneLayout.ids(paneTree))ensureView(findTab(paneId));syncSidebarWeb();layout();publish(changed);publishHistory();publishBookmarks();publishWorkspaces();publishExtensionActions();
   if(changed)hostEvent(tab.identity,'tabs.onActivated',{tabId:tab.runtimeId,windowId:win.id});
 }
 function newTab(url = 'about:blank', identity = currentIdentity, saved = null, position = tabs.length, options = {}) {
@@ -305,7 +313,8 @@ function closeTab(id) {
   const workspaceIndex=visibleTabs().findIndex(tab=>tab.id===id);
   const [tab] = tabs.splice(index,1);if(workspaceLastTabs.get(tabWorkspace(tab))===id)workspaceLastTabs.delete(tabWorkspace(tab));closed.push({saved:savedTab(tab),position:index,closedId:crypto.randomUUID()}); removeView(tab);runtimeTabs.delete(tab.runtimeId);
   hostEvent(tab.identity,'tabs.onRemoved',tab.runtimeId,{windowId:win.id,isWindowClosing:false});
-  if (splitId === id) splitId = null;
+  paneLayouts=paneLayouts.map(tree=>paneLayout.remove(tree,id)).filter(tree=>paneLayout.ids(tree).length>1);
+  paneTree=paneLayout.remove(paneTree,id);if(paneTree&&activeId===id)activate(paneLayout.ids(paneTree)[0]);
   if (!tabs.length) newTab();
   else if (activeId === id) {const candidates=visibleTabs();if(candidates.length)activate(candidates[Math.min(Math.max(workspaceIndex,0),candidates.length-1)].id);else newTab();}
   layout(); publish();
@@ -331,21 +340,19 @@ function navigate(value) {
 function focusChrome(channel) {win.webContents.focus();send(channel);}
 function findTab(id) {const tab=tabs.find(row=>row.id===id);if(!tab)throw new Error('Tab not found.');return tab;}
 function runtimeTab(identity,id) {const tab=runtimeTabs.get(id);if(!tab||tab.identity!==identity)throw new Error('No tab with this ID exists in this browser identity.');return tab;}
-function moveTab(tab,index) {
+function paneMembers(tab){const tree=[paneTree,...paneLayouts].find(tree=>paneLayout.ids(tree).includes(tab.id)),ids=paneLayout.ids(tree);return ids.length>1?tabs.filter(t=>ids.includes(t.id)):[tab];}
+function requirePaneIdentity(tab,identity){if(paneMembers(tab).some(member=>member.identity!==identity))throw new Error('A split spanning other identities can only be rearranged by the browser user.');}
+function moveTab(tab,index,after) {
   if(!Number.isInteger(index)||index<0||index>=tabs.length)throw new Error('Choose an existing tab position.');
-  const before=tabDescriptor(tab).index,old=tabs.indexOf(tab);tabs.splice(old,1);tabs.splice(index,0,tab);
-  publish();hostEvent(tab.identity,'tabs.onMoved',tab.runtimeId,{windowId:win.id,fromIndex:before,toIndex:tabDescriptor(tab).index});
+  const members=paneMembers(tab),anchor=tabs[index];if(members.includes(anchor))return;
+  const before=new Map(members.map(t=>[t.id,tabDescriptor(t).index])),forward=after??(index>tabs.indexOf(tab));tabs=paneLayout.moveUnit(tabs,members,paneMembers(anchor),forward);
+  publish();for(const item of members)hostEvent(item.identity,'tabs.onMoved',item.runtimeId,{windowId:win.id,fromIndex:before.get(item.id),toIndex:tabDescriptor(item).index});
 }
 function pinTab(tab,pinned) {
   if(typeof pinned!=='boolean')throw new Error('Choose whether this tab is pinned.');
-  if(Boolean(tab.saved.pinned)===pinned)return;
-  const before=tabDescriptor(tab).index;
-  tab.saved={...tab.saved,pinned};
-  const peers=tabs.filter(row=>row!==tab&&tabWorkspace(row)===tabWorkspace(tab));
-  const anchor=pinned?peers.find(row=>!row.saved.pinned):peers.filter(row=>row.saved.pinned).at(-1);
-  if(anchor){const old=tabs.indexOf(tab);tabs.splice(old,1);const position=tabs.indexOf(anchor)+(pinned?0:1);tabs.splice(position,0,tab);}
-  publish();hostEvent(tab.identity,'tabs.onUpdated',tab.runtimeId,{pinned},tabDescriptor(tab));
-  if(before!==tabDescriptor(tab).index)hostEvent(tab.identity,'tabs.onMoved',tab.runtimeId,{windowId:win.id,fromIndex:before,toIndex:tabDescriptor(tab).index});
+  const members=paneMembers(tab);if(members.every(t=>Boolean(t.saved.pinned)===pinned))return;
+  for(const item of members){item.saved={...item.saved,pinned};hostEvent(item.identity,'tabs.onUpdated',item.runtimeId,{pinned},tabDescriptor(item));}
+  const peers=tabs.filter(t=>!members.includes(t)&&tabWorkspace(t)===tabWorkspace(tab)),anchor=pinned?peers.find(t=>!t.saved.pinned):peers.filter(t=>t.saved.pinned).at(-1);if(anchor)moveTab(tab,tabs.indexOf(anchor),!pinned);publish();
 }
 function muteTab(tab,muted) {
   if(typeof muted!=='boolean')throw new Error('Choose whether this tab is muted.');
@@ -356,11 +363,10 @@ function muteTab(tab,muted) {
 function assignTab(tab,workspaceId,groupId=null) {
   workspaces.get(workspaceId);
   if(groupId&&!workspaces.listGroups(workspaceId).some(group=>group.id===groupId))throw new Error('Choose a group in the selected workspace.');
-  if(tabWorkspace(tab)===workspaceId&&(tab.saved.groupId||null)===groupId)return;
-  const previousWorkspace=tabWorkspace(tab);if(previousWorkspace!==workspaceId&&workspaceLastTabs.get(previousWorkspace)===tab.id)workspaceLastTabs.delete(previousWorkspace);
-  tab.saved={...tab.saved,workspaceId,groupId};
-  if(tab.id===activeId){activeWorkspaceId=workspaceId;workspaceLastTabs.set(workspaceId,tab.id);splitId=null;}
-  if(splitId===tab.id&&workspaceId!==activeWorkspaceId)splitId=null;
+  const members=paneMembers(tab),movingUnit=members.length>1;
+  if(members.every(member=>tabWorkspace(member)===workspaceId&&(member.saved.groupId||null)===groupId))return;
+  for(const member of members){const previousWorkspace=tabWorkspace(member);if(previousWorkspace!==workspaceId&&workspaceLastTabs.get(previousWorkspace)===member.id)workspaceLastTabs.delete(previousWorkspace);member.saved={...member.saved,workspaceId,groupId};}
+  if(members.some(member=>member.id===activeId)){activeWorkspaceId=workspaceId;workspaceLastTabs.set(workspaceId,activeId);if(!movingUnit)paneTree={tabId:activeId};}
   layout();publish();publishWorkspaces();
 }
 function windowDescriptor(identity,populate=false) {
@@ -401,6 +407,7 @@ function extensionHost() {
         if(properties.url!==undefined&&properties.url!=='about:blank'&&!httpUrl(properties.url)&&!authorizedExtensionURL(identity,properties.url))throw new Error('This tab URL is not supported or is not authorized in this identity.');
         const tab=id===undefined?tabs.find(row=>row.identity===identity&&row.id===activeId):runtimeTab(identity,id);
         if(!tab)throw new Error('No active tab in this browser identity.');
+        if(properties.pinned!==undefined)requirePaneIdentity(tab,identity);
         if(properties.url!==undefined){tab.url=properties.url;tab.pendingTransition='link';
           if(tab.url==='about:blank'){removeView(tab);tab.title='New tab';hostEvent(tab.identity,'tab-navigation-committed',tab.runtimeId,{sameDocument:false});}else if(!tab.view)ensureView(tab);else if(!tab.initializing)tab.view.webContents.loadURL(tab.url).catch(error=>notice(error.message));}
         if(properties.pinned!==undefined)pinTab(tab,properties.pinned);if(properties.muted!==undefined)muteTab(tab,properties.muted);
@@ -413,6 +420,7 @@ function extensionHost() {
         const selected=(Array.isArray(ids)?ids:[ids]).map(id=>runtimeTab(identity,id));let index=properties?.index;
         const count=tabs.filter(tab=>tab.identity===identity).length;if(index===-1)index=count-1;
         if(!Number.isInteger(index)||index<0||index>=count)throw new Error('Invalid tab index.');
+        for(const tab of selected)requirePaneIdentity(tab,identity);
         for(const tab of selected){const peers=tabs.filter(row=>row.identity===identity),anchor=peers[Math.min(index,peers.length-1)];moveTab(tab,tabs.indexOf(anchor));index++;}
         return Array.isArray(ids)?selected.map(tabDescriptor):tabDescriptor(selected[0]);
       },
@@ -606,7 +614,8 @@ async function perform(name, value) {
     case 'tab-mute':muteTab(findTab(value?.id||activeId),value?.muted);break;
     case 'tab-duplicate':{const tab=findTab(value);newTab(tab.url,tab.identity,{...savedTab(tab),id:crypto.randomUUID()},tabs.indexOf(tab)+1);break;}
     case 'tab-reload':{const tab=findTab(value);if(tab.url==='about:blank')break;const view=ensureView(tab);if(view&&!tab.initializing&&!view.webContents.isDestroyed())view.webContents.reload();break;}
-    case 'tab-move':{const tab=findTab(value?.id),peers=tabs.filter(row=>tabWorkspace(row)===tabWorkspace(tab)),index=value?.index??peers.indexOf(tab)+value?.offset;
+    case 'tab-move':{const tab=findTab(value?.id),members=paneMembers(tab),peers=tabs.filter(row=>tabWorkspace(row)===tabWorkspace(tab));let index=value?.index;
+      if(index===undefined&&Number.isInteger(value?.offset)){const positions=members.map(t=>peers.indexOf(t));index=(value.offset<0?Math.min(...positions):Math.max(...positions))+value.offset;}
       if(!Number.isInteger(index)||index<0||index>=peers.length)throw new Error('This tab cannot move farther in that direction.');moveTab(tab,tabs.indexOf(peers[index]));break;}
     case 'tab-assign':assignTab(findTab(value?.id),value?.workspaceId,value?.groupId||null);break;
     case 'tab-menu':{
@@ -627,10 +636,17 @@ async function perform(name, value) {
         {type:'separator'},{label:'Close tab',click:()=>invoke('close',tab.id)}
       ]).popup(popup);break;
     }
+    case 'pane-focus':{if(!paneLayout.ids(paneTree).includes(value))throw new Error('Pane not found.');activate(value);active()?.view?.webContents.focus();break;}
+    case 'pane-split':{const id=value?.id||activeId;if(!paneLayout.ids(paneTree).includes(id)||!['x','y'].includes(value?.axis))throw new Error('Invalid pane split.');const tab=tabs.find(t=>t.id===id);const next=newTab('about:blank',tab.identity,null,tabs.length,{active:false});const added=findTab(next);added.saved={...added.saved,groupId:tab.saved.groupId||null,pinned:!!tab.saved.pinned};paneTree=paneLayout.split(paneTree,id,next,value.axis);activate(next);publish();break;}
+    case 'pane-hide':{if(!paneLayout.ids(paneTree).includes(value)||paneLayout.ids(paneTree).length<2)throw new Error('Keep at least one pane open.');paneTree=paneLayout.remove(paneTree,value);if(activeId===value)activate(paneLayout.ids(paneTree)[0]);layout();publish();break;}
+    case 'pane-swap':{const ids=paneLayout.ids(paneTree);if(!ids.includes(value?.first)||!ids.includes(value?.second)||value.first===value.second)throw new Error('Choose two different panes.');const swap=n=>n.tabId?{tabId:n.tabId===value.first?value.second:n.tabId===value.second?value.first:n.tabId}:{...n,first:swap(n.first),second:swap(n.second)};paneTree=swap(paneTree);layout();publish();break;}
+    case 'pane-resize':{paneTree=paneLayout.resize(paneTree,value?.path,value?.ratio);layout();publish();break;}
+    case 'pane-navigate':{if(!paneLayout.ids(paneTree).includes(value?.id))throw new Error('Pane not found.');activate(value.id);navigate(value.url);break;}
+    case 'pane-identity':{const tab=tabs.find(t=>t.id===value?.id);if(!tab||!paneLayout.ids(paneTree).includes(tab.id)||!profiles.some(p=>p.id===value?.identity))throw new Error('Choose an existing pane and identity.');if(tab.identity===value.identity)break;if(extensionUrl(tab.url))throw new Error('Open extension pages separately in their enrolled identity.');const next=newTab(tab.url,value.identity,null,tabs.length,{active:false});const added=findTab(next);added.saved={...added.saved,groupId:tab.saved.groupId||null,pinned:!!tab.saved.pinned};paneTree=paneLayout.replace(paneTree,tab.id,{tabId:next});activate(next);publish();break;}
     case 'split': {
-      if (splitId) splitId = null;
-      else { const other = visibleTabs().find(tab => tab.id !== activeId && tab.url !== 'about:blank'); if (other) {splitId = other.id;ensureView(other);} else notice('Open another website tab in this workspace to use split view.'); }
-      showPage(); layout(); publish(false); break;
+      if(paneLayout.ids(paneTree).length>1)paneTree={tabId:activeId};
+      else {const other=visibleTabs().find(tab=>tab.id!==activeId&&tab.url!=='about:blank'&&!paneLayouts.some(tree=>paneLayout.ids(tree).includes(tab.id)));if(other){other.saved={...other.saved,groupId:active().saved.groupId||null,pinned:!!active().saved.pinned};paneTree=paneLayout.split(paneTree||{tabId:activeId},activeId,other.id,'x');ensureView(other);}else{const owner=active(),next=newTab('about:blank',currentIdentity,null,tabs.length,{active:false});findTab(next).saved={...findTab(next).saved,groupId:owner.saved.groupId||null,pinned:!!owner.saved.pinned};paneTree=paneLayout.split(paneTree||{tabId:activeId},activeId,next,'x');}}
+      showPage();layout();publish();break;
     }
     // Electron's findNext maps to Chromium new_session: true starts a search.
     // Our command's findNext means a follow-up, so its native flag is inverted.
@@ -669,8 +685,10 @@ async function perform(name, value) {
     case 'history-clear':{const identity=value?.identity||currentIdentity;history.settings(identity);const choice=await dialog.showMessageBox(win,{type:'question',message:`Remove history for ${profiles.find(profile=>profile.id===identity)?.name||identity}?`,detail:'This removes the active history list. Recovery checkpoints can retain earlier records; this is not secure erasure of browsing data.',buttons:['Cancel','Remove history entries'],defaultId:0,cancelId:0,noLink:true});if(choice.response===1)history.clear(identity);publishHistory();break;}
     case 'history-recover':await recoverService(history,'history');publishHistory();break;
     case 'follow-add':{const {identity=currentIdentity,...input}=value||{};const result=follows.add(identity,input);publishFollows();return result;}
+    case 'follow-list':publishFollows();break;
     case 'follow-change':{const {identity=currentIdentity,id,...patch}=value||{};follows.change(identity,id,patch);publishFollows();break;}
     case 'follow-refresh':await follows.refresh(value?.identity||currentIdentity,value?.id);publishFollows();break;
+    case 'follow-evidence-open':{const source=follows.get(value?.identity||currentIdentity,value?.id);const record=source.transitions?.[value?.transitionIndex];const section=['status_evidence','identity_evidence','project_mappings'].includes(value?.section)?value.section:null;const address=section?record?.[section]?.[value?.evidenceIndex]?.[section==='project_mappings'?'evidence_url':'url']:null;if(!address)throw new Error('Saved transition evidence not found.');newTab(address,source.identity);break;}
     case 'follow-open':{const source=follows.get(value?.identity||currentIdentity,value?.id);const address=value?.itemId?source.items.find(item=>item.id===value.itemId)?.url:source.url;if(!address)throw new Error('Saved update not found.');newTab(address,source.identity);break;}
     case 'follow-recover':await recoverService(follows,'following');publishFollows();break;
     case 'bookmark-current':{
@@ -690,6 +708,16 @@ async function perform(name, value) {
       workspaces.get(value);if(value===activeWorkspaceId){showPage();break;}activeWorkspaceId=value;splitId=null;const candidates=visibleTabs(),tab=candidates.find(item=>item.id===workspaceLastTabs.get(value))||candidates[0];if(tab)activate(tab.id);else newTab();publishWorkspaces();break;
     }
     case 'workspace-recover':await recoverService(workspaces,'workspaces');publishWorkspaces();break;
+    case 'group-split':{
+      const group=workspaces.getGroup(value),members=tabs.filter(tab=>tab.saved.groupId===group.id&&tabWorkspace(tab)===group.workspaceId),ids=members.map(tab=>tab.id);if(!ids.length)throw new Error('This group has no tabs to show.');
+      const membership=new Set(ids),existing=[paneTree,...paneLayouts].find(tree=>{const leaves=paneLayout.ids(tree);return leaves.length===ids.length&&leaves.every(id=>membership.has(id));});if(existing){activate(ids.includes(activeId)?activeId:ids[0]);break;}
+      const next=paneLayout.fromTabs(ids),selected=new Set(ids),remaining=[paneTree,...paneLayouts].map(tree=>{for(const id of selected)tree=paneLayout.remove(tree,id);return tree;}).filter(tree=>paneLayout.ids(tree).length>1);
+      paneLayouts=remaining;paneTree=next;activate(ids.includes(activeId)?activeId:ids[0]);publish();break;
+    }
+    case 'group-menu':{
+      const group=workspaces.getGroup(value),count=tabs.filter(tab=>tab.saved.groupId===group.id&&tabWorkspace(tab)===group.workspaceId).length;
+      Menu.buildFromTemplate([{label:group.name,enabled:false},{label:`Show all ${count} tabs in split view`,enabled:count>0,click:()=>invoke('group-split',group.id)},{label:group.collapsed?'Expand group':'Collapse group',click:()=>invoke('group-update',{id:group.id,collapsed:!group.collapsed})},{type:'separator'},{label:'Manage group name and color…',click:()=>invoke('workspaces')}]).popup({window:win});break;
+    }
     case 'group-create':{const item=workspaces.createGroup(value);publishWorkspaces();return item;}
     case 'group-update':{const {id,...changes}=value||{};const item=workspaces.updateGroup(id,changes);publishWorkspaces();return item;}
     case 'group-remove':workspaces.removeGroup(value);publishWorkspaces();break;
@@ -840,7 +868,7 @@ async function start() {
   spellcheck=new SpellcheckService({enabled:preferences.spellcheckEnabled,canAct:()=>!closing,onError:notice});
   spellcheck.attach(session.defaultSession);
   resolveIdentitySession = createIdentitySessionResolver({session,root:app.getPath('sessionData')});
-  tabs = originalSession.tabs.map(tabFromSaved); activeId = originalSession.activeId;
+  tabs = originalSession.tabs.map(tabFromSaved); activeId = originalSession.activeId;paneTree=originalSession.paneTree|| (activeId?{tabId:activeId}:null);paneLayouts=originalSession.paneLayouts||[];
   for(const [workspace,id] of Object.entries(originalSession.workspaceLastTabs||{}))workspaceLastTabs.set(workspace,id);
   currentIdentity = active()?.identity || 'personal';
   activeWorkspaceId=active()?tabWorkspace(active()):originalSession.activeWorkspaceId||'default';
@@ -890,7 +918,7 @@ async function start() {
   win.webContents.on('before-mouse-event',(_event,input)=>{if(input.type==='mouseDown')cancelSidebarDismiss();});win.webContents.on('before-input-event',(_event,input)=>{if(input.type==='keyDown')cancelSidebarDismiss();});
   win.on('close',event => {if (!allowClose) {event.preventDefault();requestClose().catch(error => resumeAfterCloseError(error.message));}});
   win.webContents.on('did-finish-load',() => {
-    eventAction(() => {if (tabs.length) {ensureView(active() || tabs[0]);syncSidebarWeb();layout();publish(false);} else newTab();});
+    eventAction(() => {if (tabs.length) {for(const id of paneLayout.ids(paneTree))ensureView(tabs.find(tab=>tab.id===id));ensureView(active() || tabs[0]);syncSidebarWeb();layout();publish(false);} else newTab();});
     publishVault();publishAccounts();publishExtensions();publishPermissions();publishBookmarks();publishWorkspaces();publishExtensionActions();
   });
   buildMenu();

@@ -1,6 +1,20 @@
+## Group-wide split action · 2026-11-16
+
+- [ ] Show every group tab simultaneously via accessible group actions, with no two-pane/count cap, preserved identities/order/metadata, balanced layout, restart and native acceptance. Rust-first retained; this menu integration composes existing Electron pane APIs without a new sidecar.
+
 # Active project work
 
+## Prime feature: independent multi-pane browser
+
+- [ ] Deliver arbitrary nested side-by-side/stacked real browser panes, resize and position controls, independent account/container selection, durable layouts and split-unit grouping/moving. Current implementation is under native qualification; source-code study of Firefox/Chromium informs unit movement and explicit pane swap. Cross-window detach/drop, drag-to-edge, complete parity and high-count performance acceptance remain open. [Scope and evidence gates](docs/browser/MULTI-PANE.md).
+
 ## Standalone creator/project following · 2026-11-16
+
+- [ ] Source-continuity consumer: explicit shared-v1 report import, evidence-linked review notices, retained corrections/retractions and conservative conflict states. Native truth verification, verified mapping actions and live shared-source sync remain open; imported reports never trigger auto-switch/download.
+
+- [ ] Verified relocation/ban warnings and independent destination tracking: ModHold public project/file and author-catalog adapter in progress. Preserve source evidence and uncertainty; never infer a ban/cause from missing data or cross-site names alone. Shared Modding-Knowledge evidence integration remains open.
+
+- [ ] Verify observed-update revision history: retain previous supported metadata on actual fingerprint changes, show field differences on demand, preserve restart/identity/last-good behavior. This is not complete source history or release-note archival.
 
 - [ ] CurseForge follow-up: staged paginated metadata collector and explicit manual-source guidance. Requires applicable-agreement/retention/key-distribution review, authorized API-key integration and live/native checks before automatic tracking is enabled. Missing API coverage must not be presented as absent releases. Preserve file names separately from provider release labels, fail incomplete snapshots, never infer maturity or cross-file compatibility. [Evidence and next step](docs/browser/FOLLOWING-CURSEFORGE.md).
 

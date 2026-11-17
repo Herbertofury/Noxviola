@@ -1,0 +1,46 @@
+{
+  "observedAt": "2026-11-16T19:33:12.440Z",
+  "scope": "Public metadata only; no key, cookies, downloads, cross-site identity or ban inference",
+  "checks": [
+    {
+      "url": "https://modholdmods.com/g/skyrim-se/mods/8",
+      "requests": 1,
+      "items": 8,
+      "projects": 1,
+      "files": 7,
+      "first": [
+        {
+          "id": "modhold-project:8",
+          "kind": "modhold-project",
+          "title": "Octavia - Fully Voiced Shield-Sister Follower - 10461 Voiced Lines (Followers-Companions-Romance-Quest-EoS)",
+          "url": "https://modholdmods.com/g/skyrim-se/mods/8",
+          "publishedAt": "2026-11-15 22:29:40",
+          "versionNumber": "1.0.13",
+          "authorHandle": "SethSaidThat",
+          "access": "free",
+          "fingerprint": "be439ffae2500357e48f9348264267adeafe7d0aee098c6f81606ada12cab4d1"
+        }
+      ]
+    },
+    {
+      "url": "https://modholdmods.com/u/SethSaidThat",
+      "requests": 3,
+      "items": 36,
+      "projects": 36,
+      "files": 0,
+      "first": [
+        {
+          "id": "modhold-project:201",
+          "kind": "modhold-project",
+          "title": "Nemesis",
+          "url": "https://modholdmods.com/g/skyrim-se/mods/201",
+          "publishedAt": "2026-11-16 19:30:21",
+          "versionNumber": "0.1.5 beta",
+          "authorHandle": "SethSaidThat",
+          "access": "free",
+          "fingerprint": "6fe9a1d550585f14d928e8fa26e6345dcb9e9d13c94f9ea35a5563f664330773"
+        }
+      ]
+    }
+  ]
+}

@@ -6,6 +6,8 @@ let currentState = {profiles:[],tabs:[],preferences:{},currentIdentity:'personal
 let vaultItems = [], accountItems = [], extensionData = {items:[],profiles:[],busy:false};
 let permissionData = {items:[]}, downloadItems = [], capabilityData = null, extensionPreview = null;
 const followCompatibilityDrafts=new Map();
+const followTransitionDrafts=new Map();
+const paneDrafts=new Map();let paneGeometry={panes:[],dividers:[]},paneChromeKey='';
 let followData={items:[]},followDraftIdentity=null,followDeadlineTimer;
 let historyData={items:[]},bookmarkData={tree:[]},workspaceData={items:[],groups:[]},resourceData=null,bookmarkFolder=null,extensionActions=[];
 let settingsDirty=false,historySettingsDirty=false;
@@ -129,12 +131,12 @@ function renderTabs(state) {
     if(group)wrap.dataset.groupColor=group.color;else delete wrap.dataset.groupColor;
     if(group&&inWorkspace&&!seenGroups.has(group.id)){
       seenGroups.add(group.id);let control=groupNodes.get(group.id);
-      if(!control){control=button('',()=>api.command('group-update',{id:group.id,collapsed:!workspaceData.groups.find(row=>row.id===group.id)?.collapsed}),'tab-group');groupNodes.set(group.id,control);}
-      control.textContent=`${group.collapsed?'▸':'▾'} ${group.name}`;control.dataset.groupColor=group.color;control.setAttribute('aria-expanded',String(!group.collapsed));ordered.push(control);
+      if(!control){control=button('',()=>api.command('group-update',{id:group.id,collapsed:!workspaceData.groups.find(row=>row.id===group.id)?.collapsed}),'tab-group');control.oncontextmenu=event=>{event.preventDefault();api.command('group-menu',group.id);};control.onkeydown=event=>{if(event.key==='ContextMenu'||event.shiftKey&&event.key==='F10'){event.preventDefault();api.command('group-menu',group.id);}};control.groupActions=button('⋯',()=>api.command('group-menu',group.id),'tab-group-actions');control.groupActions.setAttribute('aria-haspopup','menu');groupNodes.set(group.id,control);}
+      control.textContent=`${group.collapsed?'▸':'▾'} ${group.name}`;control.dataset.groupColor=group.color;control.setAttribute('aria-expanded',String(!group.collapsed));control.groupActions.setAttribute('aria-label',`Actions for group ${group.name}`);ordered.push(control,control.groupActions);
     }
     ordered.push(wrap);
   });
-  for(const [id,control] of groupNodes)if(!seenGroups.has(id)){control.remove();groupNodes.delete(id);}
+  for(const [id,control] of groupNodes)if(!seenGroups.has(id)){control.remove();control.groupActions?.remove();groupNodes.delete(id);}
   ordered.forEach((control,index)=>{if($('tabs').children[index]!==control)$('tabs').insertBefore(control,$('tabs').children[index]||null);});
   const revealKey=`${activeWorkspace}:${state.activeId}:${state.preferences.tabLayout}`;
   if(revealedTabKey!==revealKey){const selected=tabNodes.get(state.activeId);if(selected&&!selected.hidden){selected.scrollIntoView?.({block:'nearest',inline:'nearest'});revealedTabKey=revealKey;}}
@@ -262,7 +264,7 @@ function renderSidebarToolEditor(){
     up.disabled=index===0;down.disabled=index===sidebarDraftTools.length-1;up.setAttribute('aria-label',`Move ${name} up`);down.setAttribute('aria-label',`Move ${name} down`);row.append(label,up,down);return row;
   }));
 }
-api.onSidebarLayout?.(updateSidebarGeometry);api.onSidebarWebState?.(value=>{sidebarWebState=value||{};renderSidebarChrome();});
+api.onPaneLayout?.(value=>{paneGeometry=value;renderPanes();});api.onSidebarLayout?.(updateSidebarGeometry);api.onSidebarWebState?.(value=>{sidebarWebState=value||{};renderSidebarChrome();});
 $('sidebar-toggle').onclick=()=>run('sidebar-toggle');$('sidebar-rail-expand').onclick=()=>run('sidebar-rail-expand');$('sidebar-workspace-manage').onclick=()=>run('workspaces');$('sidebar-pin').onclick=()=>run('sidebar-pin');$('sidebar-close').onclick=()=>run('sidebar-close');$('sidebar-manage').onclick=()=>run('settings');
 for(const control of $('sidebar-rail').querySelectorAll('[data-sidebar]'))control.onclick=()=>run('sidebar-select',control.dataset.sidebar);
 $('sidebar-search').oninput=renderSidebarItems;
@@ -298,8 +300,25 @@ function renderPreferenceForm(state) {
   }));
   applySettingsSearch();
 }
+function renderPanes(){
+ const root=$('pane-chrome');if(!root)return;const renderKey=JSON.stringify([paneGeometry,currentState.panel,currentState.closing,currentState.activeId,currentState.profiles,currentState.tabs.map(t=>[t.id,t.title,t.url,t.identity])]);if(renderKey===paneChromeKey)return;paneChromeKey=renderKey;const focused=root.contains(document.activeElement)&&document.activeElement.tagName==='INPUT'?{id:document.activeElement.closest('[data-pane-id]')?.dataset.paneId,start:document.activeElement.selectionStart,end:document.activeElement.selectionEnd}:null;root.replaceChildren();if(currentState.panel||currentState.closing||(paneGeometry.panes?.length||0)<2)return;
+ for(const pane of paneGeometry.panes){const tab=currentState.tabs.find(t=>t.id===pane.tabId);if(!tab)continue;const bar=node('form',undefined,'pane-toolbar'),r=pane.bounds;bar.dataset.paneId=tab.id;bar.style.cssText=`left:${r.x}px;top:${r.y}px;width:${r.width}px;height:${pane.toolbar}px`;bar.classList.toggle('active',tab.id===currentState.activeId);
+  const focus=button('●',()=>api.command('pane-focus',tab.id));focus.title=`Focus ${tab.title}`;focus.setAttribute('aria-label',focus.title);
+  const identity=node('select');setOptions(identity,currentState.profiles,tab.identity);identity.setAttribute('aria-label',`Account container for ${tab.title}`);identity.onchange=()=>api.command('pane-identity',{id:tab.id,identity:identity.value}).catch(error=>announce(error.message));
+  const input=node('input');input.value=paneDrafts.get(tab.id)??(tab.url==='about:blank'?'':tab.url);input.placeholder='Address or search';input.setAttribute('aria-label',`Address for ${tab.title}`);input.oninput=()=>paneDrafts.set(tab.id,input.value);
+  bar.onsubmit=event=>{event.preventDefault();const submitted=input.value;api.command('pane-navigate',{id:tab.id,url:submitted}).then(()=>{if(paneDrafts.get(tab.id)===submitted)paneDrafts.delete(tab.id);}).catch(error=>announce(error.message));};
+  const right=button('↔',()=>api.command('pane-split',{id:tab.id,axis:'x'})),below=button('↕',()=>api.command('pane-split',{id:tab.id,axis:'y'})),hide=button('×',()=>api.command('pane-hide',tab.id));right.title='Split this pane side by side';below.title='Split this pane above and below';hide.title='Hide this pane; keep its tab';for(const b of [right,below,hide])b.setAttribute('aria-label',b.title);
+  const move=node('select');move.append(node('option','Move…'));move.firstChild.value='';move.setAttribute('aria-label',`Swap position of ${tab.title}`);for(const other of paneGeometry.panes)if(other.tabId!==tab.id){const option=node('option',currentState.tabs.find(t=>t.id===other.tabId)?.title||'Other pane');option.value=other.tabId;move.append(option);}move.onchange=()=>{if(move.value)api.command('pane-swap',{first:tab.id,second:move.value}).catch(error=>announce(error.message));};
+  bar.append(focus,identity,input,right,below,move,hide);root.append(bar);
+ }
+ for(const divider of paneGeometry.dividers||[]){const grip=node('button',undefined,'pane-divider'),r=divider.bounds;grip.type='button';grip.style.cssText=`left:${r.x}px;top:${r.y}px;width:${r.width}px;height:${r.height}px`;grip.setAttribute('role','separator');grip.setAttribute('aria-label','Resize split panes');grip.setAttribute('aria-orientation',divider.axis==='x'?'vertical':'horizontal');grip.setAttribute('aria-valuenow',String(Math.round(divider.ratio*100)));grip.dataset.axis=divider.axis;
+  grip.onkeydown=event=>{if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key))return;event.preventDefault();const direction=['ArrowRight','ArrowDown'].includes(event.key)?1:-1;api.command('pane-resize',{path:divider.path,ratio:Math.max(.02,Math.min(.98,divider.ratio+direction*.05))}).catch(error=>announce(error.message));};
+  grip.onpointerdown=event=>{event.preventDefault();grip.setPointerCapture(event.pointerId);const finish=e=>{grip.removeEventListener('pointerup',finish);const size=divider.axis==='x'?divider.parent.width:divider.parent.height,start=divider.axis==='x'?divider.parent.x:divider.parent.y,end=divider.axis==='x'?e.clientX:e.clientY;api.command('pane-resize',{path:divider.path,ratio:Math.max(.02,Math.min(.98,(end-start)/Math.max(1,size-6)))}).catch(error=>announce(error.message));};grip.addEventListener('pointerup',finish,{once:true});grip.onlostpointercapture=()=>grip.removeEventListener('pointerup',finish);};root.append(grip);
+ }
+ if(focused){const input=[...root.querySelectorAll('[data-pane-id]')].find(n=>n.dataset.paneId===focused.id)?.querySelector('input');if(input){input.focus();input.setSelectionRange(focused.start,focused.end);}}
+}
 function renderState(state) {
-  const old = currentState; currentState = state;
+  const old = currentState; currentState = state;if(state.paneGeometry)paneGeometry=state.paneGeometry;renderPanes();
   if(old.currentIdentity!==state.currentIdentity||old.preferences.sidebarActive!==state.preferences.sidebarActive){sidebarRequest++;sidebarData={};$('sidebar-items').replaceChildren();$('sidebar-message').textContent='';}
   if(state.sidebarWeb)sidebarWebState=state.sidebarWeb;
   if (old.activeWorkspaceId !== state.activeWorkspaceId || old.panel !== state.panel || old.preferences.tabLayout !== state.preferences.tabLayout || state.closing) hideTabPreview();
@@ -318,7 +337,7 @@ function renderState(state) {
   document.body.dataset.tabLayout = state.preferences.tabLayout || 'horizontal';
   document.documentElement.style.setProperty('--chrome-height',`${state.chromeHeight||76}px`);applyAppearance(state.preferences);updateSidebarGeometry(state.sidebarGeometry);renderSidebarChrome();
   for (const panel of document.querySelectorAll('#workspace > section')) panel.hidden = panel.id !== state.panel;
-  $('start').hidden = Boolean(state.panel) || active?.url !== 'about:blank';
+  $('start').hidden = Boolean(state.panel) || active?.url !== 'about:blank'||(paneGeometry.panes?.length||0)>1;
   $('workspace').inert = Boolean(state.closing);
   $('retry-save').hidden = !state.saveError;
   if (state.saveError && state.saveError !== lastSaveError) announce(`Session not saved: ${state.saveError}`);
@@ -729,7 +748,7 @@ function refreshWorkspaceState(){
     card.querySelector('[data-remove-workspace]').disabled=Boolean(item.protected)||count>0||workspacesWithGroups.has(item.id);
   }
   for(const card of $('group-items').querySelectorAll('[data-group-id]')){const item=groups.get(card.dataset.groupId);if(!item)continue;const count=groupCounts.get(item.id)||0;
-    card.querySelector('.workspace-count').textContent=`${count} tab${count===1?'':'s'} · ${item.collapsed?'Collapsed':'Expanded'}`;card.querySelector('[data-remove-group]').disabled=count>0;
+    card.querySelector('.workspace-count').textContent=`${count} tab${count===1?'':'s'} · ${item.collapsed?'Collapsed':'Expanded'}`;card.querySelector('[data-remove-group]').disabled=count>0;const split=card.querySelector('[data-split-group]');split.disabled=count===0;split.textContent=`Show all ${count} tabs in split view`;
   }
   for(const card of $('workspace-tabs').querySelectorAll('[data-assignment-tab-id]')){const tab=byId.get(card.dataset.assignmentTabId);if(!tab)continue;
     card.querySelector('h2').textContent=tab.title;card.querySelector('.source').textContent=`${identityName(tab.identity)} · ${tab.url}`;
@@ -763,6 +782,7 @@ function renderWorkspaces() {
     const card=node('article'),count=currentState.tabs.filter(tab=>tab.groupId===group.id).length,actions=node('div',undefined,'card-actions');card.dataset.groupId=group.id;
     card.append(node('h2',group.name),node('p',`${count} tab${count===1?'':'s'} · ${group.collapsed?'Collapsed':'Expanded'}`,'subtle workspace-count'));
     actions.append(action(group.collapsed?'Expand':'Collapse','group-update',{id:group.id,collapsed:!group.collapsed}),button('Edit',()=>editForm($('group-form'),group,['id','name','color'])));
+    const split=action(`Show all ${count} tabs in split view`,'group-split',group.id);split.dataset.splitGroup='';split.disabled=count===0;actions.append(split);
     const remove=action('Remove empty group','group-remove',group.id);remove.dataset.removeGroup='';remove.disabled=count>0;actions.append(remove);card.append(actions);return card;
   },'Create a group, then assign tabs below.');
   const tabIds=new Set(currentState.tabs.map(tab=>tab.id));for(const id of workspaceAssignments.keys())if(!tabIds.has(id))workspaceAssignments.delete(id);
@@ -846,8 +866,8 @@ api.command('state').then(renderState).catch(error=>announce(error.message));
 
 function renderFollows(){
   clearTimeout(followDeadlineTimer);
-  const now=Date.now(),deadlines=(followData.items||[]).flatMap(source=>[source.providerNotBefore,source.lastSuccess?source.nextCheck:0]).filter(value=>Number.isFinite(value)&&value>now);
-  if(currentState.panel==='following'&&deadlines.length)followDeadlineTimer=setTimeout(()=>{if(currentState.panel==='following')renderFollows();},Math.min(2147483647,Math.min(...deadlines)-now+20));
+  const now=Date.now(),deadlines=(followData.items||[]).flatMap(source=>[source.providerNotBefore,source.lastSuccess?source.nextCheck:0,...(source.transitionNotices||[]).map(n=>n.record.review_after_unix*1000)]).filter(value=>Number.isFinite(value)&&value>now);
+  if(currentState.panel==='following'&&deadlines.length)followDeadlineTimer=setTimeout(()=>{if(currentState.panel==='following'){renderFollows();api.command('follow-list').catch(error=>errorMessage('follow-error',error.message));}},Math.min(2147483647,Math.min(...deadlines)-now+20));
   errorMessage('follow-error',followData.error);$('follow-recover').hidden=!followData.recoveryAvailable;
   $('follow-identity').textContent=`Following for ${identityName(followData.identity||currentState.currentIdentity)}.${followDraftIdentity?` Unsaved follow will be added to ${identityName(followDraftIdentity)}.`:''} Pausing keeps saved updates; automatic checks stop when the browser closes.`;
   const query=$('follow-search').value.toLocaleLowerCase(),filter=$('follow-filter').value;
@@ -855,7 +875,7 @@ function renderFollows(){
   $('follow-count').textContent=`${sources.length} sources · ${(followData.items||[]).reduce((n,s)=>n+s.items.filter(i=>!i.read).length,0)} unread updates`;
   paintList($('follow-items'),sources,source=>{
     const card=node('article',undefined,'follow-card'),key={id:source.id,identity:source.identity};
-    card.append(node('p',`${source.kind.toUpperCase()} · ${source.provider==='manual'?'MANUAL CHECK':source.provider==='modrinth-versions'?'MODRINTH VERSIONS':source.provider==='github-releases'?'GITHUB RELEASES + TAGS':'GITHUB REPOSITORIES'}`,'subtle'),node('h2',source.name),node('p',source.url,'follow-address'));
+    card.append(node('p',`${source.kind.toUpperCase()} · ${source.provider==='manual'?'MANUAL CHECK':source.provider.startsWith('modhold-')?'MODHOLD PUBLIC METADATA':source.provider==='modrinth-versions'?'MODRINTH VERSIONS':source.provider==='github-releases'?'GITHUB RELEASES + TAGS':'GITHUB REPOSITORIES'}`,'subtle'),node('h2',source.name),node('p',source.url,'follow-address'));
     card.append(node('p',source.paused?'Paused · saved updates retained':source.busy?'Checking public source…':source.provider==='manual'?'Saved only · automatic tracking unavailable':source.automatic?'Hourly checks enabled while browser is open':'Manual refresh · automatic checks off','follow-status'));
     card.append(node('p',source.lastSuccess?`Last successful check: ${new Date(source.lastSuccess).toLocaleString()}`:'Not checked yet.','subtle'));
     if(source.coverage)card.append(node('p',source.coverage,'subtle'));
@@ -863,7 +883,7 @@ function renderFollows(){
     if(source.providerNotBefore>Date.now())card.append(node('p',`Provider requested no checks before ${new Date(source.providerNotBefore).toLocaleString()}.`,'subtle'));
     if(source.error)card.append(node('p',source.error,'error'));
     const actions=node('div',undefined,'card-actions');actions.append(action('Open source','follow-open',key),action(source.paused?'Resume':'Pause','follow-change',{...key,paused:!source.paused}));
-    if(source.adapterAvailable)actions.append(action('Enable Modrinth version adapter','follow-change',{...key,enableAdapter:true}));
+    if(source.adapterAvailable)actions.append(action('Enable available source adapter','follow-change',{...key,enableAdapter:true}));
     if(source.provider!=='manual'){
       const refresh=action('Check now','follow-refresh',key);refresh.disabled=source.busy||source.paused||source.providerNotBefore>Date.now();actions.append(refresh,action(source.automatic?'Turn off automatic checks':'Enable hourly checks','follow-change',{...key,automatic:!source.automatic}));
     }
@@ -876,10 +896,34 @@ function renderFollows(){
       form.onsubmit=event=>{event.preventDefault();const wanted={loader:loader.value,gameVersion:game.value};guarded(save,async()=>{await api.command('follow-change',{...key,compatibility:wanted});if(JSON.stringify(followCompatibilityDrafts.get(draftKey))===JSON.stringify(wanted))followCompatibilityDrafts.delete(draftKey);renderFollows();announce('Compatibility filter saved. Matching metadata is not a runtime test.');});};
       card.append(form,node('p',`${(source.matchingVersionIds||[]).length} versions in the last successful snapshot match both saved filters${source.compatibility?.loader||source.compatibility?.gameVersion?` (${source.compatibility.loader||'any loader'} / ${source.compatibility.gameVersion||'any Minecraft version'})`:''}. This is declared metadata, not verified installation compatibility.`,'subtle'));
     }
+    const importNotice=node('details');importNotice.append(node('summary','Import source-continuity evidence record'));
+    const importForm=node('form'),input=node('textarea'),label=node('label','Shared schema-v1 JSON record'),submit=node('button','Save evidence report'),transitionDraftKey=`${source.identity}:${source.id}`;input.value=followTransitionDrafts.get(transitionDraftKey)||'';input.oninput=()=>followTransitionDrafts.set(transitionDraftKey,input.value);submit.type='submit';label.append(input);importForm.append(label,node('p','Imported claims are not independently verified. Saving does not switch sources, enable tracking, or download anything.'),submit);
+    importForm.onsubmit=event=>{event.preventDefault();guarded(submit,async()=>{const submitted=input.value,transition=JSON.parse(submitted);await api.command('follow-change',{...key,transition});if(followTransitionDrafts.get(transitionDraftKey)===submitted)followTransitionDrafts.delete(transitionDraftKey);renderFollows();announce('Evidence report saved for review. No source changed.');});};importNotice.append(importForm);card.append(importNotice);
+    for(const notice of source.transitionNotices||[]){const r=notice.record,entry=node('section',undefined,'follow-transition');
+      const stale=Date.now()>=r.review_after_unix*1000,state=notice.current&&r.lifecycle==='active'&&stale?'review overdue':notice.state;
+      entry.append(node('h3',`Imported report: ${r.status} · ${state}`),node('p','Not independently verified. Evidence authority below is supplied by the record, not a browser verdict.'),node('p',`Record: ${r.id} · Creator identity: ${r.creator_id}`),node('p',`Source account: ${r.source_account}`),node('p',`Claimed destination: ${r.destination_account||'not supplied'}`),node('p',`Review by ${new Date(r.review_after_unix*1000).toLocaleString()}`));
+      for(const section of ['status_evidence','identity_evidence'])r[section].forEach((e,index)=>entry.append(action(`Open ${e.kind} evidence`,'follow-evidence-open',{...key,transitionIndex:notice.index,section,evidenceIndex:index})));
+      r.project_mappings.forEach((m,index)=>entry.append(node('p',`${m.game}: ${m.source_project} → ${m.destination_project} · mapping claimed ${m.verified?'verified':'unverified'}; no automatic switch`),action('Open mapping evidence','follow-evidence-open',{...key,transitionIndex:notice.index,section:'project_mappings',evidenceIndex:index})));
+      if(notice.conflict)entry.append(node('p','Conflicting active reports: resolve evidence before any tracking decision.','error'));card.append(entry);
+    }
     const updates=node('details');updates.open=source.items.some(item=>!item.read);updates.append(node('summary',`${source.items.filter(i=>!i.read).length} unread · ${source.items.length} saved updates`));
     const list=node('div',undefined,'follow-updates');
     for(const item of [...source.items].sort((a,b)=>b.observedAt-a.observedAt)){
-      const row=node('div',undefined,'follow-update');row.append(node('span',item.read?'Read':'New','follow-badge'),node('strong',item.title),node('small',item.publishedAt?`Source date: ${item.publishedAt}`:item.kind==='tag'?'Tag date is not provided by the source API.':'Source date unavailable'),node('small',`Observed on this device: ${new Date(item.observedAt).toLocaleString()}`),...(item.kind==='modrinth-version'?[node('small',`Loaders: ${item.loaders.join(', ')||'not declared'} · Minecraft: ${item.gameVersions.join(', ')||'not declared'}`),node('small',`Version: ${item.versionNumber} · ${item.releaseType}`)]:[]),...(item.commit?[node('small',`Commit: ${item.commit}`)]:[]),...(item.presentInLastSnapshot===false?[node('small','Not returned in last successful snapshot; saved record retained.')]:[]),action('Open update','follow-open',{...key,itemId:item.id}));list.append(row);
+      const row=node('div',undefined,'follow-update');row.append(node('span',item.read?'Read':'New','follow-badge'),node('strong',item.title),node('small',item.publishedAt?`Source date: ${item.publishedAt}`:item.kind==='tag'?'Tag date is not provided by the source API.':'Source date unavailable'),node('small',`Observed on this device: ${new Date(item.observedAt).toLocaleString()}`),...(item.kind==='modrinth-version'?[node('small',`Loaders: ${item.loaders.join(', ')||'not declared'} · Minecraft: ${item.gameVersions.join(', ')||'not declared'}`),node('small',`Version: ${item.versionNumber} · ${item.releaseType}`)]:[]),...(item.kind?.startsWith('modhold-')?[node('small',`Version: ${item.versionNumber} · ${item.authorHandle?'Author handle: '+item.authorHandle+' · Access: '+item.access:'File type: '+item.fileKind}`),...(item.sha256?[node('small',`SHA-256: ${item.sha256} · ${item.sizeBytes} bytes (metadata only, not downloaded or verified)` )]:[])]:[]),...(item.commit?[node('small',`Commit: ${item.commit}`)]:[]),...(item.presentInLastSnapshot===false?[node('small','Not returned in last successful snapshot; saved record retained.')]:[]),action('Open update','follow-open',{...key,itemId:item.id}));
+      if(item.revisions?.length){
+        const history=node('details',undefined,'follow-history');history.append(node('summary',`${item.revisions.length} previously observed revisions`));
+        history.ontoggle=()=>{if(!history.open||history.dataset.loaded)return;history.dataset.loaded='true';
+          for(let index=item.revisions.length-1;index>=0;index--){const revision=item.revisions[index],previous=revision.metadata,next=item.revisions[index+1]?.metadata||item,entry=node('div',undefined,'follow-revision');
+            entry.append(node('strong',previous.title),node('small',`Observed ${new Date(revision.observedAt).toLocaleString()} · replaced ${new Date(revision.supersededAt).toLocaleString()}`));
+            const keys=[...new Set([...Object.keys(previous),...Object.keys(next)])].filter(key=>!['fingerprint','id','read','observedAt','lastSeenAt','presentInLastSnapshot','revisions'].includes(key));let changes=0;
+            for(const key of keys)if(JSON.stringify(previous[key])!==JSON.stringify(next[key])){changes++;entry.append(node('p',`${key}: ${JSON.stringify(previous[key])??'not provided'} → ${JSON.stringify(next[key])??'not provided'}`));}
+            if(!changes)entry.append(node('p','Provider fingerprint changed; the changed source content was not retained.'));
+            history.append(entry);
+          }
+          history.append(node('p','Only versions observed on this device are shown. Changes between checks and full release-note history are not captured.','subtle'));
+        };row.append(history);
+      }
+      list.append(row);
     }
     if(!source.items.length)list.append(node('p',source.lastSuccess?'No items returned by the last successful check. This does not establish that no other activity exists.':'Check this source to load its supported updates.','subtle'));
     updates.append(list);card.append(updates);return card;

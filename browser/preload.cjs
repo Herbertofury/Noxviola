@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('browser', Object.freeze({
   onSettingsPreview:callback => subscribe('settings-preview',callback),
   onFindResult:callback => subscribe('find-result',callback),
   onExtensionActions:callback => subscribe('extension-actions',callback),
+  onPaneLayout:callback => subscribe('pane-layout',callback),
   onSidebarLayout:callback => subscribe('sidebar-layout',callback),
   onSidebarWebState:callback => subscribe('sidebar-web-state',callback),
   onNotice:callback => subscribe('notice',callback),

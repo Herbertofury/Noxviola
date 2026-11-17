@@ -11,6 +11,7 @@ const {ResourceMonitor} = require('./resources.cjs');
 const {SpellcheckService} = require('./spellcheck.cjs');
 const {HistoryService} = require('./history.cjs');
 const {TabCollections} = require('./tab-collections.cjs');
+const {CollectionBackups}=require('./collection-backups.cjs');
 const {FollowService} = require('./follows.cjs');
 const {BookmarkService,rootIds:bookmarkRootIds} = require('./bookmarks.cjs');
 const {WorkspaceService} = require('./workspaces.cjs');
@@ -39,7 +40,7 @@ let vaultFile, vaultDocument = {version:1, items:[]}, vaultError = '', vaultReco
 let accountFile, accounts = [], accountError = '', accountRecovery = null;
 let permissionOpening = null, extensionBusy = false;
 let resolveIdentitySession, history, bookmarks, workspaces, follows, followTimer, resourceMonitor, extensionBridge, spellcheck;
-let collections;
+let collections,collectionBackups;
 let activeWorkspaceId = 'default', nextRuntimeTabId = 1, preferencePreview = null;
 let sidebarProgress=0,sidebarRailProgress=0,sidebarTimer=null;
 const runtimeTabs = new Map(), nativeTabs = new Map(), sessionTargets = new Map(), workspaceLastTabs = new Map(), browserEvents = new EventEmitter();
@@ -533,6 +534,16 @@ async function perform(name, value) {
   const wc = active()?.view?.webContents;
   switch (name) {
     case 'state': return stateView();
+    case 'collection-backup-cancel':collectionBackups.cancel();return {canceled:true};
+    case 'collection-backup': {
+      if(value?.identity!==currentIdentity||!['export','import'].includes(value?.kind))throw new Error('Review the backup identity and operation.');
+      const identity=currentIdentity,kind=value.kind;
+      const filters=[{name:'Noxviola library-only backup (plaintext URLs)',extensions:['noxlibrary']}];
+      const choice=kind==='export'?await dialog.showSaveDialog(win,{title:'Export all saved collections for this identity; choose a NEW filename',defaultPath:`noxviola-library-${identity}.noxlibrary`,filters}):await dialog.showOpenDialog(win,{title:'Add collections from a same-identity backup; existing collections stay untouched',properties:['openFile'],filters});
+      const file=kind==='export'?choice.filePath:choice.filePaths?.[0];if(choice.canceled||!file)return {canceled:true};
+      if(identity!==currentIdentity||closing)throw new Error('Identity changed while selecting the backup. Nothing started.');
+      return collectionBackups.run(kind,identity,file);
+    }
     case 'collection-query': {
       if(!value||!['groups','tabs','update','health','folders','folder-create','folder-rename','move','restore-sessions','restore-tabs','restore-pause','search-all'].includes(value.op)||!profiles.some(p=>p.id===value.identity))throw new Error('Invalid collection request.');
       return collections.request(value);
@@ -822,7 +833,7 @@ function command(event, payload = {}) {
   return runBrowserOperation(payload.name,payload.value);
 }
 function runBrowserOperation(name,value) {
-  if(closing&&!['state','extension-list','download-list','permission-list'].includes(name))return Promise.reject(new Error('Wait for the close attempt to finish.'));
+  if(closing&&!['state','extension-list','download-list','permission-list','collection-backup-cancel'].includes(name))return Promise.reject(new Error('Wait for the close attempt to finish.'));
   const operation = Promise.resolve().then(() => perform(name,value));
   pendingOperations.add(operation); operation.finally(() => pendingOperations.delete(operation)).catch(() => {}); return operation;
 }
@@ -839,8 +850,14 @@ async function requestClose() {
   if (closing || allowClose || !win || win.isDestroyed()) return;
   tabPreview.hide();tabSearch.dismiss();clearTimeout(sidebarTimer);
   closing = true; clearTimeout(saveTimer); publish(false);
+  let canceledBackup=false;
+  if(collectionBackups?.helper){
+    const choice=await dialog.showMessageBox(win,{type:'question',message:'A library backup operation is running.',detail:'Keep the browser open to finish, or stop the worker and close. Existing data is retained. An import may already have committed; inspect the library before retrying (the same backup ID is not imported twice). Verify any completed export and leftover .partial staging file.',buttons:['Keep browser open','Cancel backup and close'],defaultId:0,cancelId:0,noLink:true});
+    if(choice.response!==1){resumeAfterCloseError('Library backup continues.');return;}
+    canceledBackup=true;collectionBackups.cancel();
+  }
   const pending = await Promise.allSettled([...pendingOperations]);
-  const failed = pending.find(result => result.status === 'rejected');
+  const failed = pending.find(result => result.status === 'rejected'&&!(canceledBackup&&result.reason?.code==='BACKUP_CANCELED'));
   if (failed) {resumeAfterCloseError(`Close canceled: ${failed.reason.message}`);return;}
   if (downloads.activeCount()) {
     const choice = await dialog.showMessageBox(win,{type:'question',message:'Downloads are still active.',detail:'Closing now cancels the active downloads.',buttons:['Keep browser open','Cancel downloads and close'],defaultId:0,cancelId:0,noLink:true});
@@ -885,7 +902,7 @@ async function start() {
   vaultFile = path.join(dataDirectory,'private-vault.json'); accountFile = path.join(dataDirectory,'private-accounts.json');
   try { const opened = vaultStore.inspect(vaultFile); if (opened.status === 'recovery') {vaultRecovery = opened;vaultError = 'The library needs explicit recovery before editing.';} else vaultDocument = opened.value; } catch (error) {vaultError = error.message;}
   try { const opened = accountStore.inspect(accountFile); if (opened.status === 'recovery') {accountRecovery = opened;accountError = 'The account inventory needs explicit recovery before editing.';} else accounts = opened.value.accounts; } catch (error) {accountError = error.message;}
-  collections=new TabCollections({file:path.join(dataDirectory,'tab-collections.sqlite')});
+  collections=new TabCollections({file:path.join(dataDirectory,'tab-collections.sqlite')});collectionBackups=new CollectionBackups({file:collections.file});
   follows=new FollowService({file:path.join(dataDirectory,'browser-follows.json'),getIdentities:()=>profiles.map(profile=>profile.id),onChange:publishFollows});
   history=new HistoryService({file:path.join(dataDirectory,'browser-history.json'),getIdentities:()=>profiles.map(profile=>profile.id),onChange:publishHistory});
   bookmarks=new BookmarkService({file:path.join(dataDirectory,'browser-bookmarks.json'),getIdentities:()=>profiles.map(profile=>profile.id),onChange:publishBookmarks});

@@ -465,6 +465,14 @@ async function runPackagedPhase(packaged, context, phase, { publicHttps = false 
         const materialized=await command('collection-restore-open',{identity,session:lazy.id,id:pending.items[0].id});await ready(await targetAt(`${context.origin}/page?packaged-collection=0`));assert.equal((await state()).tabs.length,before+1);assert.equal(await command('collection-restore-open',{identity,session:lazy.id,id:pending.items[0].id}),materialized);assert.equal((await state()).tabs.length,before+1);
         await command('close',materialized);await command('activate',expected.personal);expected.collection={identity,group:saved.id,folder:folder.id,lazy:lazy.id};
       });
+      await check('exact packaged Rust helper streams library backup and additive restoration without replacing source',async()=>{
+        const {TabCollections}=require('../../browser/tab-collections.cjs'),{CollectionBackups}=require('../../browser/collection-backups.cjs');
+        const binary=path.join(packaged.directory,'resources','app.asar.unpacked','browser','bin',process.platform==='win32'?'noxviola-tab-collections.exe':'noxviola-tab-collections'),file=path.join(context.output,'packaged-backup-fixture.sqlite'),backup=path.join(context.output,'packaged-library.noxlibrary');
+        const store=new TabCollections({file,binary}),jobs=new CollectionBackups({file,binary});try{
+          const source=await store.request({op:'save',identity:'synthetic',title:'Packaged backup',created:1,tabs:Array.from({length:205},(_,i)=>({url:`https://synthetic.example/${i}`,title:`Packaged backup ${i}`}))});
+          assert.equal((await jobs.run('export','synthetic',backup)).tabs,205);assert.equal((await jobs.run('import','synthetic',backup)).tabs,205);const groups=await store.request({op:'groups',identity:'synthetic'});assert.equal(groups.items.length,2);assert.ok(groups.items.every(g=>g.count===205));assert.ok(groups.items.some(g=>g.id===source.id));assert.equal((await store.request({op:'health',identity:'synthetic'})).integrity,'ok');
+        }finally{store.close();jobs.cancel();}
+      });
       await check('packaged workspace and group forms retain tab identity, pin and mute state', async () => {
         await evaluate(shell, 'window.__packagedWorkspaces = null; void window.browser.onWorkspaces(value => { window.__packagedWorkspaces = value; });');
         await command('workspaces');

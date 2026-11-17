@@ -6,7 +6,7 @@ const crypto = require('node:crypto');
 const { execFileSync } = require('node:child_process');
 
 const APP_FILES = [
-  'THIRD_PARTY_COLLECTIONS_LICENSES.txt', 'browser/tab-collections.cjs', 'browser/tab-collections-ui.js',
+  'THIRD_PARTY_COLLECTIONS_LICENSES.txt', 'browser/tab-collections.cjs', 'browser/collection-backups.cjs', 'browser/tab-collections-ui.js',
   `browser/bin/noxviola-tab-collections${process.platform==='win32'?'.exe':''}`,
   'browser/main.cjs', 'browser/preload.cjs', 'browser/renderer.js',
   'browser/index.html', 'browser/style.css', 'browser/assets/noxviola.png',

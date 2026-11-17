@@ -1,0 +1,15 @@
+{
+  "synthetic": true,
+  "sourceTabs": 1000017,
+  "exportMs": 751.516264,
+  "importMs": 29787.126397,
+  "exportBytes": 113669302,
+  "importedTabs": 1000017,
+  "preservedExistingTabs": 1,
+  "checksumVerified": true,
+  "interruptedExportPublished": false,
+  "interruptedImportRolledBack": true,
+  "integrity": "ok",
+  "parentEventLoopP99ms": 10.911743,
+  "parentRssExcludesHelpers": 67350528
+}

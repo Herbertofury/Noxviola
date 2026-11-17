@@ -1,5 +1,6 @@
 //! Local-only collection store. SQLite owns durable transactions and indexes;
 //! the browser never hydrates the entire library into its renderer or main thread.
+mod backup;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::{json, Value};
 use std::io::{self, BufRead, Write};
@@ -34,9 +35,9 @@ fn open(file: &str) -> Result<Connection> {
     }
     let db = Connection::open(file)?;
     db.busy_timeout(std::time::Duration::from_secs(5))?;
-    db.execute_batch("PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA cache_size=-8192;")?;
+    db.execute_batch("PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA cache_size=-8192; PRAGMA temp_store=FILE;")?;
     let version: i64 = db.query_row("PRAGMA user_version", [], |r| r.get(0))?;
-    if version > 3 {
+    if version > 5 {
         return Err("Unsupported collection database version; original file preserved".into());
     }
     if version == 0 {
@@ -71,6 +72,12 @@ fn open(file: &str) -> Result<Connection> {
           CREATE INDEX restore_workspace ON restore_sessions(workspace);
           CREATE TABLE restore_claims(session_id TEXT NOT NULL REFERENCES restore_sessions(id),tab_id INTEGER NOT NULL REFERENCES tabs(id),browser_id TEXT NOT NULL UNIQUE,PRIMARY KEY(session_id,tab_id));
           PRAGMA user_version=3; COMMIT;")?;
+    }
+    if version < 4 {
+        db.execute_batch("BEGIN IMMEDIATE;CREATE TABLE collection_origins(collection_id INTEGER PRIMARY KEY REFERENCES collections(id),backup_id TEXT NOT NULL,source_id INTEGER NOT NULL,source_identity TEXT NOT NULL,imported_from TEXT NOT NULL);PRAGMA user_version=4;COMMIT;")?;
+    }
+    if version < 5 {
+        db.execute_batch("BEGIN IMMEDIATE;CREATE TABLE backup_imports(identity TEXT NOT NULL,backup_id TEXT NOT NULL,folders INTEGER NOT NULL,collections INTEGER NOT NULL,tabs INTEGER NOT NULL,PRIMARY KEY(identity,backup_id));PRAGMA user_version=5;COMMIT;")?;
     }
     Ok(db)
 }
@@ -145,6 +152,8 @@ fn run(db: &mut Connection, v: &Value) -> Result<Value> {
     }
     let op = text(v, "op")?;
     match op {
+        "backup-export" => backup::export(db, v, identity),
+        "backup-import" => backup::import(db, v, identity),
         "restore-workspace-count" => {
             let count: i64 = db.query_row(
                 "SELECT COUNT(*) FROM restore_sessions WHERE workspace=?1",
@@ -641,7 +650,7 @@ mod migration_tests {
             let version: i64 = db
                 .query_row("PRAGMA user_version", [], |r| r.get(0))
                 .unwrap();
-            assert_eq!(version, if conflict { 1 } else { 3 });
+            assert_eq!(version, if conflict { 1 } else { 5 });
             let column: i64 = db
                 .query_row(
                     "SELECT count(*) FROM pragma_table_info('collections') WHERE name='folder_id'",

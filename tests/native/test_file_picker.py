@@ -1,5 +1,6 @@
 """Portable safety contracts; these do not claim native picker acceptance."""
 import importlib.util
+import inspect
 from pathlib import Path
 import os
 import sys
@@ -58,6 +59,25 @@ class FilePickerContracts(unittest.TestCase):
         self.assertIn('[Console]::Error.WriteLine', block)
         for forbidden in ['Invoke()', 'SetValue(', 'SendKeys', 'SendInput']:
             self.assertNotIn(forbidden, block)
+
+    def test_linux_diagnostics_do_not_read_foreign_titles_or_send_input(self):
+        block = inspect.getsource(picker.linux_picker).split('def diagnostics():', 1)[1].split('def dialogs():', 1)[0]
+        self.assertIn('min(desktop.get_child_count(), 32)', block)
+        self.assertIn('min(app.get_child_count(), 32)', block)
+        self.assertLess(block.index('if pid != args.pid:'), block.index('app.get_name()'))
+        self.assertLess(block.index('obj.get_process_id() == args.pid'), block.index('obj.get_name()'))
+        self.assertLess(block.index('query(["getwindowpid", xid]) == str(args.pid)'), block.index('query(["getwindowname", xid])'))
+        for forbidden in ['"key"', 'set_text_contents', 'do_action']:
+            self.assertNotIn(forbidden, block)
+
+    def test_windows_phase_diagnostics_bracket_native_operations(self):
+        script = picker.WINDOWS_SCRIPT
+        for before, operation, after in [
+            ("Phase 'before-dialog-discovery'", '$d=Dialog', "Phase 'after-dialog-discovery'"),
+            ("Phase 'before-button-enumeration'", '$buttons = @(Descendants', "Phase 'after-button-enumeration'"),
+            ("Phase 'before-invoke'", '$invoke.Invoke()', "Phase 'after-invoke'")]:
+            self.assertLess(script.index(before), script.index(operation))
+            self.assertLess(script.index(operation), script.index(after))
 
     def test_windows_nested_picker_keeps_exact_owner_and_title(self):
         block = picker.WINDOWS_SCRIPT.split('function Dialog {', 1)[1].split('function Descendants', 1)[0]

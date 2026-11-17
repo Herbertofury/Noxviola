@@ -91,6 +91,49 @@ def linux_picker(args):
         states = obj.get_state_set()
         return states.contains(Atspi.StateType.SHOWING) and not states.contains(Atspi.StateType.DEFUNCT)
 
+    def diagnostics():
+        # Read-only evidence; foreign application names are never read or logged.
+        until = time.monotonic() + 1.0
+        report = {"diagnostic": "owned-linux-picker", "pid": args.pid,
+                  "applicationPids": [], "owned": [], "x11": []}
+        try:
+            desktop.clear_cache()
+            for i in range(min(desktop.get_child_count(), 32)):
+                if time.monotonic() >= until:
+                    break
+                app = desktop.get_child_at_index(i)
+                if not app:
+                    continue
+                pid = app.get_process_id()
+                report["applicationPids"].append(pid)
+                if pid != args.pid:
+                    continue
+                report["owned"].append({"kind": "application", "name": (app.get_name() or "")[:256]})
+                for j in range(min(app.get_child_count(), 32)):
+                    if time.monotonic() >= until:
+                        break
+                    obj = app.get_child_at_index(j)
+                    if obj and obj.get_process_id() == args.pid:
+                        report["owned"].append({"kind": "top-level", "name": (obj.get_name() or "")[:256],
+                                                "role": obj.get_role_name(), "showing": showing(obj)})
+        except Exception as error:
+            report["accessibilityError"] = type(error).__name__
+        # Separate bounded native-window evidence distinguishes missing AT-SPI exposure.
+        until = time.monotonic() + 1.0
+        try:
+            def query(parts):
+                return subprocess.run(["xdotool", *parts], check=True, capture_output=True,
+                                      text=True, timeout=max(.05, until-time.monotonic())).stdout.strip()
+            ids = query(["search", "--onlyvisible", "--pid", str(args.pid)]).splitlines()
+            for xid in ids[:16]:
+                if time.monotonic() >= until:
+                    break
+                if xid.isdigit() and query(["getwindowpid", xid]) == str(args.pid):
+                    report["x11"].append({"id": xid, "pid": args.pid, "title": query(["getwindowname", xid])[:256]})
+        except Exception as error:
+            report["x11Error"] = type(error).__name__
+        print(json.dumps(report), file=sys.stderr, flush=True)
+
     def dialogs():
         found = []
         desktop.clear_cache()
@@ -135,6 +178,7 @@ def linux_picker(args):
                 queue.extend((obj.get_child_at_index(i), depth+1) for i in range(obj.get_child_count()) if obj.get_child_at_index(i))
         return result
 
+    diagnostics()
     picked = None
     while time.monotonic() < deadline:
         picked = owned()
@@ -142,6 +186,7 @@ def linux_picker(args):
             break
         time.sleep(.05)
     if not picked:
+        diagnostics()
         raise TimeoutError("Exact owned native picker did not appear")
     shortcut = None
     if not args.cancel:
@@ -201,6 +246,9 @@ $r = $env:NOXVIOLA_PICKER_REQUEST | ConvertFrom-Json
 $deadline = [DateTime]::UtcNow.AddSeconds([double]$r.timeout)
 $A = [System.Windows.Automation.AutomationElement]
 $T = [System.Windows.Automation.TreeScope]
+function Phase([string]$name) {
+  [Console]::Error.WriteLine((@{diagnostic='owned-picker-phase';pid=[int]$r.pid;phase=$name} | ConvertTo-Json -Compress))
+}
 # Read-only diagnostics: names are read only AFTER exact PID verification.
 # Never use these candidates as alternate action targets.
 function OwnedDiagnostics {
@@ -261,31 +309,52 @@ function Descendants($d, $type) {
 }
 $d=$null
 OwnedDiagnostics
-while ([DateTime]::UtcNow -lt $deadline) { $d=Dialog; if ($d) {break}; Start-Sleep -Milliseconds 50 }
+$firstDiscovery = $true
+while ([DateTime]::UtcNow -lt $deadline) {
+  if ($firstDiscovery) { Phase 'before-dialog-discovery' }
+  $d=Dialog
+  if ($firstDiscovery) { Phase 'after-dialog-discovery'; $firstDiscovery=$false }
+  if ($d) {break}; Start-Sleep -Milliseconds 50
+}
 if (-not $d) { OwnedDiagnostics; throw 'Exact owned native picker did not appear' }
+Phase 'dialog-discovered'
 if (-not $r.cancel) {
+  Phase 'before-filename-enumeration'
   $edits = @(Descendants $d ([System.Windows.Automation.ControlType]::Edit) | Where-Object { $_.Current.Name -in @('File name:', 'File name', 'Filename:', 'Filename') })
+  Phase 'after-filename-enumeration'
   if ($edits.Count -ne 1) { throw "Expected one filename Edit control, found $($edits.Count)" }
   if (-not (Dialog)) { throw 'Owned picker changed before filename entry' }
   $value = $edits[0].GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
   if ($value.Current.IsReadOnly) { throw 'Filename field is read-only' }
+  Phase 'before-filename-set'
   $value.SetValue([string]$r.file)
+  Phase 'after-filename-set'
   if ($value.Current.Value -cne [string]$r.file) { throw 'Filename readback mismatch' }
 }
 $button=$null
+$firstActionCheck=$true
+Phase 'before-action-dialog-check'
 while ([DateTime]::UtcNow -lt $deadline) {
   $d=Dialog; if (-not $d) { throw 'Picker disappeared before native action' }
+  if ($firstActionCheck) { Phase 'after-action-dialog-check' }
   $names = if ($r.cancel) { @('Cancel') } else { @('Open','Save') }
+  if ($firstActionCheck) { Phase 'before-button-enumeration' }
   $buttons = @(Descendants $d ([System.Windows.Automation.ControlType]::Button) | Where-Object { $_.Current.Name.Replace('&','') -in $names })
+  if ($firstActionCheck) { Phase 'after-button-enumeration'; $firstActionCheck=$false }
   if ($buttons.Count -gt 1) { throw 'Ambiguous native picker action' }
   if ($buttons.Count -eq 1) {$button=$buttons[0];break}
   Start-Sleep -Milliseconds 50
 }
 if (-not $button) { throw 'No enabled native picker action' }
+Phase 'before-invoke-pattern'
 $invoke=$button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
+Phase 'before-invoke'
 $invoke.Invoke()
+Phase 'after-invoke'
+Phase 'before-dismissal-check'
 while ([DateTime]::UtcNow -lt $deadline) {
   if (-not (Dialog)) {
+    Phase 'dialog-dismissed'
     @{pid=[int]$r.pid;title=[string]$r.title;action=$(if($r.cancel){'cancel'}else{'submit'});delivery='Windows UI Automation ValuePattern/InvokePattern';dialogDismissed=$true} | ConvertTo-Json -Compress
     exit 0
   }
@@ -304,7 +373,7 @@ def windows_picker(args):
         diagnostics = error.stderr or ""
         if isinstance(diagnostics, bytes):
             diagnostics = diagnostics.decode("utf-8", errors="replace")
-        raise TimeoutError("Windows native picker timed out; owned diagnostics: " + diagnostics[:1600]) from error
+        raise TimeoutError("Windows native picker timed out; owned diagnostics: " + (diagnostics[:800] + " ... " + diagnostics[-1600:] if len(diagnostics) > 2400 else diagnostics)) from error
     if outcome.returncode:
         raise RuntimeError("Windows native picker automation failed: " + outcome.stderr.strip()[:1600])
     if outcome.stderr.strip():
@@ -327,8 +396,14 @@ def main():
         interpreter = "/usr/bin/python3" if sys.platform.startswith("linux") else sys.executable
         if not Path(interpreter).is_file():
             raise RuntimeError("Native picker fixture requires the system Python interpreter")
-        worker = subprocess.run([interpreter, "-B", str(Path(__file__).resolve()), *sys.argv[1:], "--worker"],
-                                capture_output=True, text=True, timeout=args.timeout+3)
+        try:
+            worker = subprocess.run([interpreter, "-B", str(Path(__file__).resolve()), *sys.argv[1:], "--worker"],
+                                    capture_output=True, text=True, timeout=args.timeout+3)
+        except subprocess.TimeoutExpired as error:
+            diagnostics = error.stderr or ""
+            if isinstance(diagnostics, bytes):
+                diagnostics = diagnostics.decode("utf-8", errors="replace")
+            raise TimeoutError("Native helper timed out; owned diagnostics: " + (diagnostics[:800] + " ... " + diagnostics[-1600:] if len(diagnostics) > 2400 else diagnostics)) from error
         if worker.returncode:
             raise RuntimeError("Native picker helper failed: " + (worker.stdout + worker.stderr).strip()[:2000])
         print(worker.stdout.strip())

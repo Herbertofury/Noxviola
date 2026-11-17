@@ -103,6 +103,24 @@ def x11_picker(args, deadline):
         if current != [xid]:
             raise RuntimeError("Owned X11 picker became ambiguous before keyboard input")
 
+    def capture(stage):
+        directory = getattr(args, 'evidence_dir', None)
+        if not directory:
+            return
+        verify()
+        import gi
+        gi.require_version('Gdk', '3.0')
+        gi.require_version('GdkX11', '3.0')
+        from gi.repository import Gdk, GdkX11
+        display = Gdk.Display.open(os.environ['DISPLAY'])
+        window = GdkX11.X11Window.foreign_new_for_display(display, int(xid))
+        pixels = Gdk.pixbuf_get_from_window(window, 0, 0, window.get_width(), window.get_height())
+        if not pixels:
+            raise RuntimeError('Owned picker screenshot unavailable')
+        pixels.savev(str(Path(directory) / (stage + '.png')), 'png', [], [])
+        display.close()
+
+    capture('opened')
     accept_key = None
     if not args.cancel:
         if args.title == "Export all saved collections for this identity; choose a NEW filename":
@@ -123,6 +141,7 @@ def x11_picker(args, deadline):
         run(["key", "--window", xid, "ctrl+a"])
         verify()
         run(["type", "--window", xid, "--delay", "0", "--", args.file])
+        capture("path-entered")
         verify()
         run(["key", "--window", xid, "Return"])
     accept_sent = False
@@ -153,6 +172,7 @@ def x11_picker(args, deadline):
                     raise RuntimeError("Secondary owned modal present; refusing accept mnemonic")
             if accept_key == "alt+s" and os.path.lexists(args.file):
                 raise RuntimeError("Export target appeared; refusing accept mnemonic")
+            capture("before-accept")
             verify()
             run(["key", "--window", xid, accept_key])
             accept_sent = True
@@ -335,6 +355,20 @@ def legacy_allowed(kind, name, expected, role, state, default_action):
     return role == 43 and default_action.lower() in ('press', 'click')
 
 
+def filename_matches(matches):
+    """Only collapse a ComboBox's own single editable descendant, never siblings."""
+    if len(matches) != 2:
+        return matches
+    combos = [item for item in matches if item[0].ControlType == 50003]
+    edits = [item for item in matches if item[0].ControlType == 50004]
+    if len(combos) != 1 or len(edits) != 1:
+        return matches
+    ancestor, descendant = combos[0][3], edits[0][3]
+    if len(descendant) > len(ancestor) and descendant[:len(ancestor)] == ancestor:
+        return edits
+    return matches
+
+
 def windows_picker(args):
     # Maintained native UIA wrapper; unlike stock managed UIA, includes Legacy MSAA.
     sys.coinit_flags = 0  # non-window-owning MTA worker
@@ -376,9 +410,9 @@ def windows_picker(args):
         return found[0] if found else None
 
     def control(root, kind, names):
-        queue, matches, evidence, visited = [(root, 0)], [], [], 0
+        queue, matches, evidence, visited = [(root, 0, ())], [], [], 0
         while queue:
-            node, depth = queue.pop()
+            node, depth, ancestry = queue.pop()
             visited += 1
             if visited > 2048 or depth > 24 or time.monotonic() >= deadline:
                 raise TimeoutError('Owned UIA control traversal budget exceeded')
@@ -398,13 +432,15 @@ def windows_picker(args):
                                  'legacyRole': legacy.Role if legacy else None})
                 if pattern:
                     if kind != 'value' or method == 'LegacyIAccessiblePattern' or not pattern.IsReadOnly:
-                        matches.append((node, pattern, method))
-            for child in children(node, 2048):
-                queue.append((child, depth+1))
+                        matches.append((node, pattern, method, ancestry))
+            for index, child in enumerate(children(node, 2048)):
+                queue.append((child, depth+1, ancestry+(index,)))
         phase('named-controls', kind=kind, controls=evidence[:32])
+        if kind == 'value':
+            matches = filename_matches(matches)
         if len(matches) != 1:
             raise RuntimeError(f'Expected one exact owned {kind} control; found {len(matches)}')
-        return matches[0]
+        return matches[0][:3]
 
     phase('before-dialog-discovery')
     current = None
@@ -460,9 +496,12 @@ def main():
     group.add_argument("--file")
     group.add_argument("--cancel", action="store_true")
     parser.add_argument("--timeout", type=float, default=15)
+    parser.add_argument("--evidence-dir", help="Existing synthetic fixture directory for owned-dialog screenshots")
     parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     validate(args.pid, args.title, args.file, args.cancel, args.timeout)
+    if args.evidence_dir and (not os.path.isabs(args.evidence_dir) or not Path(args.evidence_dir).is_dir()):
+        raise ValueError("Existing absolute synthetic evidence directory required")
     if not args.worker:
         interpreter = "/usr/bin/python3" if sys.platform.startswith("linux") else sys.executable
         if not Path(interpreter).is_file():

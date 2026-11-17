@@ -138,7 +138,7 @@ class FilePickerContracts(unittest.TestCase):
         self.assertFalse(picker.legacy_allowed('value','File name:',{'File name:'},42,0x40,''))
 
     def test_native_wrapper_actual_route_with_fake_owned_tree(self):
-        for cancel, duplicate in [(True,False),(False,False),(True,True)]:
+        for cancel, duplicate, field_mode in [(True,False,'single'),(False,False,'single'),(True,True,'single'),(False,False,'nested'),(False,False,'siblings'),(False,False,'foreign')]:
             actions=[]
             args=SimpleNamespace(pid=314,title='Exact picker',file=os.path.abspath('fixture.noxlibrary'),cancel=cancel,timeout=2)
             class Legacy:
@@ -163,16 +163,21 @@ class FilePickerContracts(unittest.TestCase):
                 def GetPattern(self,kind): return self.pattern if kind==18 else None
             button_name='Cancel' if cancel else 'Open'
             button=Node(button_name,pattern=Legacy(button_name,43))
-            field=Node('File name:',pattern=Legacy('File name:',42))
+            field=Node('File name:',kind=50004,pattern=Legacy('File name:',42))
+            if field_mode == 'nested':
+                field=Node('File name:',kind=50003,pattern=Legacy('File name:',42)).add(field)
+            elif field_mode == 'foreign':
+                field.ProcessId=999
             picker_node=Node(args.title,kind=32).add(field,button)
             if duplicate: picker_node.add(field,button,Node(button_name,pattern=Legacy(button_name,43)))
+            if field_mode == 'siblings': picker_node.add(field,button,Node('File name:',kind=50003,pattern=Legacy('File name:',42)))
             main=Node('Main',kind=32).add(picker_node)
             foreign=Node(args.title,pid=999,kind=32)
             root=Node('Desktop',pid=0).add(foreign,main)
             api=SimpleNamespace(GetRootControl=lambda:root,ControlType=SimpleNamespace(WindowControl=32),PatternId=SimpleNamespace(ValuePattern=2,InvokePattern=0,LegacyIAccessiblePattern=18))
             with patch.dict(sys.modules,{'uiautomation':api}), patch.object(picker.sys,'stderr'):
-                if duplicate:
-                    with self.assertRaisesRegex(RuntimeError,'Expected one exact owned action'):
+                if duplicate or field_mode in ('siblings','foreign'):
+                    with self.assertRaisesRegex(RuntimeError,'Expected one exact owned'):
                         picker.windows_picker(args)
                     self.assertEqual(actions,[])
                 else:
@@ -180,6 +185,16 @@ class FilePickerContracts(unittest.TestCase):
                     self.assertTrue(result['dialogDismissed'])
                     self.assertIn('LegacyIAccessiblePattern',result['delivery'])
                     self.assertEqual(actions,['action'] if cancel else ['value','action'])
+
+    def test_filename_combo_collapses_only_its_unique_edit_descendant(self):
+        def match(kind, ancestry): return (SimpleNamespace(ControlType=kind), object(), 'ValuePattern', ancestry)
+        combo, edit = match(50003,(1,)), match(50004,(1,0))
+        self.assertEqual(picker.filename_matches([combo,edit]),[edit])
+        for other in [match(50004,(2,)), match(50004,(0,)), match(50003,(1,0))]:
+            candidates=[combo,other]
+            self.assertEqual(picker.filename_matches(candidates),candidates)
+        duplicate=[combo,edit,match(50004,(1,1))]
+        self.assertEqual(picker.filename_matches(duplicate),duplicate)
 
     def test_native_wrapper_keeps_owned_bounded_unique_selection(self):
         source = inspect.getsource(picker.windows_picker)

@@ -57,7 +57,7 @@ jobs:
         run: node scripts/setup-legacy-electron.cjs --receipt native-results/legacy-runtime.json
       - name: Install Linux display dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install --yes xvfb libgtk-3-0 libnss3 libasound2 python3-gi gir1.2-atspi-2.0 at-spi2-core dbus-x11 xdotool x11-utils
+        run: sudo apt-get update && sudo apt-get install --yes xvfb libgtk-3-0 libnss3 libasound2 python3-gi gir1.2-gtk-3.0 gir1.2-atspi-2.0 at-spi2-core dbus-x11 xdotool x11-utils
       - name: Install pinned native Windows accessibility test adapters
         if: runner.os == 'Windows'
         run: python -m pip install uiautomation==2.0.29 comtypes==1.5.0

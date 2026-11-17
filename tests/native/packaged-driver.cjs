@@ -484,7 +484,8 @@ async function runPackagedPhase(packaged, context, phase, { publicHttps = false 
         const choose=async(kind,file=null)=>{
           const title=kind==='export'?'Export all saved collections for this identity; choose a NEW filename':'Add collections from a same-identity backup; existing collections stay untouched';
           const label=kind==='export'?'Export library backup':'Add from library backup';
-          const args=['-B',path.join(__dirname,'file-picker.py'),'--pid',String(child.pid),'--title',title,...(file?['--file',file]:['--cancel'])];
+          const evidence=path.join(context.output,`picker-${result.nativePickerActions?.length||0}-${kind}`);fs.mkdirSync(evidence,{recursive:true});
+          const args=['-B',path.join(__dirname,'file-picker.py'),'--pid',String(child.pid),'--title',title,'--evidence-dir',evidence,...(file?['--file',file]:['--cancel'])];
           const picker=executeFile('python',args,{encoding:'utf8',windowsHide:true,timeout:30_000}).catch(error=>{throw new Error(`Native picker failed: ${String(error.stdout||'').slice(0,4000)} ${String(error.stderr||'').slice(0,2000)}`,{cause:error});});
           // Start the owned-dialog observer before opening a modal: GTK can hold CDP dispatch until dismissal.
           const [{stdout}]=await Promise.all([picker,evaluate(shell,`[...document.querySelectorAll('#${root} button')].find(b=>b.textContent===${JSON.stringify(label)}).click()`)]);

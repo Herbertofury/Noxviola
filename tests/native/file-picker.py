@@ -121,6 +121,9 @@ def x11_picker(args, deadline):
         display.close()
 
     capture('opened')
+    # GTK must process its initial focus and activation guard before synthetic keys.
+    # XSendEvent completion is not GTK event-loop completion (captured fixture evidence).
+    time.sleep(.6)
     accept_key = None
     if not args.cancel:
         if args.title == "Export all saved collections for this identity; choose a NEW filename":
@@ -137,10 +140,12 @@ def x11_picker(args, deadline):
     else:
         verify()
         run(["key", "--window", xid, "ctrl+l"])
+        time.sleep(.25)  # Let the real location field be created/focused.
         verify()
         run(["key", "--window", xid, "ctrl+a"])
         verify()
         run(["type", "--window", xid, "--delay", "0", "--", args.file])
+        time.sleep(.25)  # Let GTK consume text before activating the default action.
         capture("path-entered")
         verify()
         run(["key", "--window", xid, "Return"])
@@ -369,6 +374,16 @@ def filename_matches(matches):
     return matches
 
 
+def windows_action_names(title, cancel):
+    if cancel:
+        return {'Cancel'}
+    if title == 'Export all saved collections for this identity; choose a NEW filename':
+        return {'Save'}
+    if title == 'Add collections from a same-identity backup; existing collections stay untouched':
+        return {'Open'}
+    raise RuntimeError('No exact native action defined for this picker title')
+
+
 def windows_picker(args):
     # Maintained native UIA wrapper; unlike stock managed UIA, includes Legacy MSAA.
     sys.coinit_flags = 0  # non-window-owning MTA worker
@@ -429,7 +444,8 @@ def windows_picker(args):
                     if legacy and legacy_allowed(kind, legacy.Name, names, legacy.Role, legacy.State, legacy.DefaultAction or ''):
                         pattern, method = legacy, 'LegacyIAccessiblePattern'
                 evidence.append({'name': name[:96], 'type': node.ControlType, 'method': method if pattern else None,
-                                 'legacyRole': legacy.Role if legacy else None})
+                                 'legacyRole': legacy.Role if legacy else None,
+                                 'automationId': node.AutomationId, 'hierarchy': ancestry})
                 if pattern:
                     if kind != 'value' or method == 'LegacyIAccessiblePattern' or not pattern.IsReadOnly:
                         matches.append((node, pattern, method, ancestry))
@@ -467,7 +483,7 @@ def windows_picker(args):
     current = dialog()
     if not current:
         raise RuntimeError('Picker disappeared before native action')
-    names = {'Cancel'} if args.cancel else {'Save', 'Open'}
+    names = windows_action_names(args.title, args.cancel)
     node, pattern, method = control(current, 'action', names)
     if not dialog() or node.ProcessId != args.pid or node.Name.replace('&', '') not in names or not node.IsEnabled or node.IsOffscreen:
         raise RuntimeError('Owned action control changed')

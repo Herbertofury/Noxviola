@@ -138,9 +138,9 @@ class FilePickerContracts(unittest.TestCase):
         self.assertFalse(picker.legacy_allowed('value','File name:',{'File name:'},42,0x40,''))
 
     def test_native_wrapper_actual_route_with_fake_owned_tree(self):
-        for cancel, duplicate, field_mode in [(True,False,'single'),(False,False,'single'),(True,True,'single'),(False,False,'nested'),(False,False,'siblings'),(False,False,'foreign')]:
+        for cancel, duplicate, field_mode in [(True,False,'single'),(False,False,'single'),(True,True,'single'),(False,False,'nested'),(False,False,'siblings'),(False,False,'foreign'),(False,False,'export')]:
             actions=[]
-            args=SimpleNamespace(pid=314,title='Exact picker',file=os.path.abspath('fixture.noxlibrary'),cancel=cancel,timeout=2)
+            args=SimpleNamespace(pid=314,title=('Export all saved collections for this identity; choose a NEW filename' if field_mode=='export' else 'Add collections from a same-identity backup; existing collections stay untouched'),file=os.path.abspath('fixture.noxlibrary'),cancel=cancel,timeout=2)
             class Legacy:
                 State=0
                 DefaultAction='Press'
@@ -151,6 +151,7 @@ class FilePickerContracts(unittest.TestCase):
             class Node:
                 IsEnabled=True
                 IsOffscreen=False
+                AutomationId=''
                 def __init__(self,name,pid=314,kind=0,pattern=None):
                     self.Name,self.ProcessId,self.ControlType,self.pattern=name,pid,kind,pattern
                     self.children=[];self.sibling=None
@@ -161,7 +162,7 @@ class FilePickerContracts(unittest.TestCase):
                 def GetFirstChildControl(self): return self.children[0] if self.children else None
                 def GetNextSiblingControl(self): return self.sibling
                 def GetPattern(self,kind): return self.pattern if kind==18 else None
-            button_name='Cancel' if cancel else 'Open'
+            button_name='Cancel' if cancel else ('Save' if field_mode=='export' else 'Open')
             button=Node(button_name,pattern=Legacy(button_name,43))
             field=Node('File name:',kind=50004,pattern=Legacy('File name:',42))
             if field_mode == 'nested':
@@ -171,6 +172,7 @@ class FilePickerContracts(unittest.TestCase):
             picker_node=Node(args.title,kind=32).add(field,button)
             if duplicate: picker_node.add(field,button,Node(button_name,pattern=Legacy(button_name,43)))
             if field_mode == 'siblings': picker_node.add(field,button,Node('File name:',kind=50003,pattern=Legacy('File name:',42)))
+            if field_mode == 'export': picker_node.add(field,button,Node('Open',pattern=Legacy('Open',43)),Node('Open',pattern=Legacy('Open',43)))
             main=Node('Main',kind=32).add(picker_node)
             foreign=Node(args.title,pid=999,kind=32)
             root=Node('Desktop',pid=0).add(foreign,main)
@@ -185,6 +187,12 @@ class FilePickerContracts(unittest.TestCase):
                     self.assertTrue(result['dialogDismissed'])
                     self.assertIn('LegacyIAccessiblePattern',result['delivery'])
                     self.assertEqual(actions,['action'] if cancel else ['value','action'])
+
+    def test_windows_action_is_bound_to_exact_operation_title(self):
+        self.assertEqual(picker.windows_action_names('Export all saved collections for this identity; choose a NEW filename', False), {'Save'})
+        self.assertEqual(picker.windows_action_names('Add collections from a same-identity backup; existing collections stay untouched', False), {'Open'})
+        self.assertEqual(picker.windows_action_names('Exact picker', True), {'Cancel'})
+        with self.assertRaises(RuntimeError): picker.windows_action_names('Other export title', False)
 
     def test_filename_combo_collapses_only_its_unique_edit_descendant(self):
         def match(kind, ancestry): return (SimpleNamespace(ControlType=kind), object(), 'ValuePattern', ancestry)

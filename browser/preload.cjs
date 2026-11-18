@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld('browser', Object.freeze({
   onSidebarLayout:callback => subscribe('sidebar-layout',callback),
   onSidebarWebState:callback => subscribe('sidebar-web-state',callback),
   onPasswords:callback => subscribe('passwords',callback),
+  onSnapshotEditor:callback => subscribe('snapshot-editor',callback),
   onMods:callback => subscribe('mods',callback),
   onPlayerState:callback => subscribe('player-state',callback),
   onMediaChanged:callback => subscribe('media-changed',callback),

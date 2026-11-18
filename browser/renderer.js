@@ -358,7 +358,9 @@ function renderPanes(){
  if(focused){const input=[...root.querySelectorAll('[data-pane-id]')].find(n=>n.dataset.paneId===focused.id)?.querySelector('input');if(input){input.focus();input.setSelectionRange(focused.start,focused.end);}}
 }
 function renderState(state) {
-  const old = currentState; currentState = state;toolbarMini?.update(state.player);if(state.paneGeometry)paneGeometry=state.paneGeometry;renderPanes();
+  const old = currentState; currentState = state;
+  if(old.panel==='snapshot-editor'&&state.panel!==old.panel)snapshotEditor?.clear();
+  syncModSplash(state);toolbarMini?.update(state.player);if(state.paneGeometry)paneGeometry=state.paneGeometry;renderPanes();
   const currentTabs=new Set(state.tabs.map(tab=>tab.id)),priorTabs=new Set(old.tabs.map(tab=>tab.id));
   if(old.engine&&state.tabs.some(tab=>!priorTabs.has(tab.id)))playModSound('browser_sounds','TAB_INSERT');
   if(old.tabs.some(tab=>!currentTabs.has(tab.id)))playModSound('browser_sounds','TAB_CLOSE');
@@ -1143,7 +1145,11 @@ $('sidebar-extension-reload').onclick=()=>run('sidebar-extension-reload');$('sid
 $('sidebar-extension-back').onclick=()=>run('sidebar-select','extension-panels');
 document.querySelector('[data-password-link]').onclick=()=>run('sidebar-select','passwords');
 
-let wallpaperKey='',backgroundMusic,modAudioGesture=false;
+let wallpaperKey='',modAudioGesture=false,modFontKey='',modFontRevision=0,modFaces=[],modCursorKey='';
+const snapshotEditor=window.createSnapshotEditor?.(api,announce);
+const modSidebarIcons=window.createModIcons?.(announce);
+const modMusic=window.createModMusic?.(message=>announce('Mod music: '+message));
+let modSplashVideo=null;
 const soundPosition=new Map();
 function playModSound(category,event){
   const files=currentState.modPresentation?.[category]?.[event];
@@ -1157,9 +1163,69 @@ function playModSound(category,event){
     void audio.play().catch(()=>{});
   }
 }
+function applyModFonts(roles){
+  const key=JSON.stringify(roles||{});
+  if(key===modFontKey)return;
+  modFontKey=key;
+  const revision=++modFontRevision,style=document.body.style;
+  for(const face of modFaces)document.fonts.delete(face);
+  modFaces=[];
+  for(const [role,family] of [['header','Noxviola Mod Header'],['body','Noxviola Mod Body']]){
+    style.removeProperty('--mod-font-'+role);
+    const variants=roles?.[role];
+    if(!variants?.length)continue;
+    for(const variant of variants){
+      const face=new FontFace(family,`url("${variant.url}")`,{weight:String(variant.weight),style:variant.style});
+      void face.load().then(loaded=>{
+        if(revision!==modFontRevision)return;
+        document.fonts.add(loaded);modFaces.push(loaded);
+        style.setProperty('--mod-font-'+role,'"'+family+'"');
+      }).catch(()=>{if(revision===modFontRevision)announce('A mod font could not be decoded.');});
+    }
+  }
+}
+function applyModCursors(cursors){
+  const key=JSON.stringify(cursors||{});
+  if(key===modCursorKey)return;
+  const style=document.body.style;
+  for(const role of Object.keys(JSON.parse(modCursorKey||'{}')))style.removeProperty('--mod-cursor-'+role);
+  for(const [role,url] of Object.entries(cursors||{}))style.setProperty('--mod-cursor-'+role,`url("${url}"), ${role}`);
+  modCursorKey=key;
+}
+function finishModSplash(){
+  const overlay=$('mod-splash');
+  if(overlay.hidden)return;
+  overlay.hidden=true;modSplashVideo?.pause();modSplashVideo=null;
+  $('mod-splash-video').replaceChildren();
+  return run('mods-splash-finished');
+}
+function syncModSplash(state){
+  if(!state.showingModSplash||!state.modPresentation?.splash_screen){
+    if(modSplashVideo)void finishModSplash();
+    return;
+  }
+  if(modSplashVideo)return;
+  const overlay=$('mod-splash'),video=node('video');
+  modSplashVideo=video;video.autoplay=true;video.muted=true;video.playsInline=true;
+  video.onended=finishModSplash;video.onerror=finishModSplash;
+  video.src=state.modPresentation.splash_screen;
+  $('mod-splash-video').replaceChildren(video);overlay.hidden=false;$('mod-splash-skip').focus();
+}
+$('mod-splash-skip').onclick=finishModSplash;
+$('mod-splash').onkeydown=event=>{
+  if(event.key==='Escape'){event.preventDefault();void finishModSplash();}
+  if(event.key==='Tab'){event.preventDefault();$('mod-splash-skip').focus();}
+};
+
 function applyModAppearance(){
   const appearance=currentState.modPresentation||{},tone=document.body.dataset.theme;
   const theme=appearance.theme?.[tone],style=document.body.style;
+  applyModFonts(appearance.fonts);applyModCursors(appearance.cursors);modSidebarIcons?.update(appearance.image_overrides);
+  const brand=document.querySelector('.chrome-brand'),icon=appearance.app_icon||'assets/noxviola.png';
+  if(brand.dataset.modIcon!==icon){
+    brand.dataset.modIcon=icon;brand.src=icon;
+    brand.onerror=()=>{if(brand.getAttribute('src')!=='assets/noxviola.png')brand.src='assets/noxviola.png';};
+  }
   if(theme){
     document.body.dataset.modTheme='true';
     const hsl=([h,s,l])=>`hsl(${h} ${s}% ${l}%)`;
@@ -1172,27 +1238,38 @@ function applyModAppearance(){
   const wallpaper=appearance.wallpaper?.[tone];
   const active=currentState.tabs.find(tab=>tab.id===currentState.activeId);
   const show=active?.url==='about:blank'&&!currentState.panel;
-  const key=show?wallpaper?.url||'':'';
+  const key=show?JSON.stringify(wallpaper||{}):'';
   if(wallpaperKey!==key){
     wallpaperKey=key;
-    const host=$('mod-wallpaper');host.replaceChildren();
+    const host=$('mod-wallpaper'),start=$('start');
+    host.replaceChildren();
+    for(const property of ['color','shadow','opacity','blur','vignette'])start.style.removeProperty('--mod-wallpaper-'+property);
     if(wallpaper&&show){
+      if(wallpaper.color)start.style.setProperty('--mod-wallpaper-color',wallpaper.color);
+      if(wallpaper.shadow)start.style.setProperty('--mod-wallpaper-shadow','0 1px 6px '+wallpaper.shadow);
+      if(wallpaper.opacity!==null&&wallpaper.opacity!==undefined)start.style.setProperty('--mod-wallpaper-opacity',String(wallpaper.opacity/100));
+      if(wallpaper.blur)start.style.setProperty('--mod-wallpaper-blur',Math.round(wallpaper.blur/5)+'px');
+      if(wallpaper.vignette)start.style.setProperty('--mod-wallpaper-vignette',String(wallpaper.vignette/100));
       const element=node(wallpaper.video?'video':'img');
       if(wallpaper.video){element.loop=true;element.muted=true;element.autoplay=true;element.playsInline=true;if(wallpaper.poster)element.poster=wallpaper.poster;}
       else element.alt='';
       element.src=wallpaper.url;host.append(element);
     }
   }
-  if(backgroundMusic&&backgroundMusic.getAttribute('src')!==appearance.music){backgroundMusic.pause();backgroundMusic=null;}
-  if(modAudioGesture&&appearance.music){
-    if(!backgroundMusic){backgroundMusic=new Audio(appearance.music);backgroundMusic.loop=true;backgroundMusic.volume=.18;}
-    if(currentState.tabs.some(tab=>tab.audible&&!tab.muted)||sidebarWebState.audible)backgroundMusic.pause();
-    else if(backgroundMusic.paused)void backgroundMusic.play().catch(()=>{});
-  }
+  if(modAudioGesture)modMusic?.update(appearance.music,currentState.tabs.some(tab=>tab.audible&&!tab.muted)||sidebarWebState.audible);
 }
 function renderMods(data){
   errorMessage('mods-error',data.error);
   $('mods-recover').hidden=!data.recovery;
+  const presetList=$('mods-preset-list');
+  presetList.replaceChildren(...(data.presets||[]).map(preset=>{
+    const group=node('div',undefined,'mod-preset');
+    const apply=action(preset.name,'mods-apply-preset',preset.id);
+    apply.setAttribute('aria-label','Apply preset '+preset.name);
+    const remove=action('×','mods-remove-preset',preset.id);
+    remove.setAttribute('aria-label','Remove preset '+preset.name);
+    group.append(apply,remove);return group;
+  }));
   const labels=node('p','Select a category below to apply it. Imported mods start off.','subtle');
   const review=$('mods-review');
   review.hidden=!data.review;
@@ -1202,6 +1279,7 @@ function renderMods(data){
     review.append(node('h2',`Review ${item.name}`),node('p',[item.author,item.version,'Local package'].filter(Boolean).join(' · ')),labels);
     for(const category of item.categories){
       review.append(node('p',`${category.label} · ${category.supported?'Available':'Unsupported'}${category.detail?' · '+category.detail:''}`));
+      if(category.variants?.length>1)review.append(node('p',category.variants.map(variant=>variant.name).join(' · '),'subtle'));
       if(category.matches?.length)review.append(node('p',category.matches.join(', '),'source'));
     }
     const actions=node('div',undefined,'card-actions');
@@ -1213,32 +1291,59 @@ function renderMods(data){
     card.append(node('h2',item.name),node('p',[item.author,item.version].filter(Boolean).join(' · '),'subtle'));
     if(item.description)card.append(node('p',item.description));
     if(item.error)card.append(node('p',item.error,'error'));
+    const componentsList=node('div',undefined,'mod-components');
     for(const category of item.categories){
       const row=node('div',undefined,'mod-category'),label=node('span',category.label);
       row.append(label);
       if(category.supported){
         const selected=data.active[category.key]===item.id;
-        const toggle=action(selected?'Turn off':'Use','mods-choose',{category:category.key,id:selected?null:item.id});
+        const components=category.variants||[],chosen=selected?data.variants?.[category.key]:null;
+        const select=components.length>1?node('select'):null;
+        const getChoice=()=>select?.value||components[0]?.id;
+        const choose=enable=>api.command('mods-choose',{category:category.key,id:enable?item.id:null,variant:enable?getChoice():undefined});
+        if(select){
+          setOptions(select,components,chosen||components[0].id);
+          select.setAttribute('aria-label',`${category.label} component from ${item.name}`);
+          if(selected)select.onchange=()=>choose(true).catch(error=>announce(error.message));
+          row.append(select);
+        }
+        const toggle=button(selected?'Turn off':'Use',()=>choose(!selected));
         toggle.setAttribute('aria-label',`${selected?'Turn off':'Use'} ${category.label} from ${item.name}`);
         toggle.setAttribute('aria-pressed',String(selected));toggle.title=category.detail||'';row.append(toggle);
       }else row.append(node('span','Unsupported','subtle'));
-      card.append(row);
+      componentsList.append(row);
     }
+    card.append(componentsList);
     card.append(action('Remove from library','mods-remove',item.id));return card;
   },'Import a GX mod folder or source ZIP to start.');
 }
 api.onMods?.(data=>{if(currentState.panel==='mods')renderMods(data);});
+$('mods-preset-form').onsubmit=event=>{
+  event.preventDefault();
+  const form=event.currentTarget;
+  return saveForm(form,'mods-save-preset',form.elements.namedItem('name').value,()=>form.reset());
+};
 $('mods-folder').onclick=()=>run('mods-inspect','directory');
 $('mods-zip').onclick=()=>run('mods-inspect','zip');
 $('mods-recover').onclick=()=>run('mods-recover');
 document.addEventListener('click',event=>{
   if(!event.isTrusted)return;
   if(!modAudioGesture){modAudioGesture=true;applyModAppearance();}
-  if(event.target.closest('button'))playModSound('browser_sounds','CLICK');
+  modMusic?.activity();
+  const button=event.target.closest('button');
+  if(button){
+    const pressed=button.getAttribute('aria-pressed'),sounds=currentState.modPresentation?.browser_sounds;
+    const type=pressed==='true'?'FEATURE_SWITCH_OFF':pressed==='false'?'FEATURE_SWITCH_ON':button.matches('.primary')?'IMPORTANT_CLICK':'CLICK';
+    playModSound('browser_sounds',sounds?.[type]?.length?type:'CLICK');
+  }
 });
 document.addEventListener('pointerover',event=>{
   const hovered=event.target.closest('button');
   if(event.isTrusted&&hovered&&!(event.relatedTarget instanceof Node&&hovered.contains(event.relatedTarget)))playModSound('browser_sounds','HOVER');
+});
+document.addEventListener('pointerout',event=>{
+  const hovered=event.target.closest('button');
+  if(event.isTrusted&&hovered&&!(event.relatedTarget instanceof Node&&hovered.contains(event.relatedTarget)))playModSound('browser_sounds','HOVER_UP');
 });
 document.addEventListener('change',event=>{
   if(event.isTrusted&&event.target.matches('input[type=checkbox]'))playModSound('browser_sounds','SWITCH_TOGGLE');
@@ -1246,5 +1351,5 @@ document.addEventListener('change',event=>{
 document.addEventListener('keydown',event=>{
   if(!event.isTrusted||event.isComposing||event.ctrlKey||event.metaKey||event.altKey||!event.target.matches('input:not([type=password]),textarea'))return;
   const suffix={Backspace:'BACKSPACE',Enter:'ENTER',' ':'SPACE'}[event.key]||(event.key.length===1?'LETTER':null);
-  if(suffix)playModSound('keyboard_sounds','TYPING_'+suffix);
+  if(suffix){modMusic?.activity();playModSound('keyboard_sounds','TYPING_'+suffix);}
 });

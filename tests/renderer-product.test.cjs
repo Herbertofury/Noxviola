@@ -108,7 +108,7 @@ test('extension toolbar icons preserve host PNG resolutions and reject remote or
   h.emit('onExtensionActions',[{...item,icon:null,iconError:'The accepted package icon could not be read.'}]);
   const fallback=h.$('extension-actions').querySelector('button');assert.equal(fallback.textContent,'Image action');assert.match(fallback.title,/could not be read/);assert.equal(fallback.getAttribute('aria-description'),'The accepted package icon could not be read.');
   const policy=h.document.querySelector('meta[http-equiv="Content-Security-Policy"]').content;
-  assert.match(policy,/img-src 'self' data:/);assert.match(policy,/script-src 'self'/);assert.match(policy,/connect-src 'none'/);
+  assert.match(policy,/img-src 'self' data:/);assert.match(policy,/script-src 'self'/);assert.match(policy,/connect-src nox-mod:;/);
 });
 
 test('workspace state refreshes actual counts and toggles while preserving focused assignment and form drafts',async t=>{

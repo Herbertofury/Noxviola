@@ -2,10 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: nox-mod:; media-src 'self' nox-mod:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: nox-mod:; media-src 'self' nox-mod:; font-src 'self' nox-mod:; connect-src nox-mod:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Noxviola</title><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="player-mini.css">
 </head>
 <body>
+<div id="mod-splash" role="dialog" aria-label="Mod startup animation" aria-modal="true" hidden><div id="mod-splash-video"></div><button id="mod-splash-skip" type="button">Skip intro</button></div>
 <header>
  <div id="tab-strip">
   <img class="chrome-brand" src="assets/noxviola.png" alt="Noxviola">
@@ -154,11 +155,20 @@
  <p id="permission-error" class="error" hidden></p><button id="permission-recover" data-command="permission-recover" hidden>Review previous permission checkpoint</button>
  <div class="controls"><button id="permission-reset">Forget decisions for current identity</button></div><div id="permission-items" class="cards"></div>
 </section>
+<section id="snapshot-editor" class="panel" hidden>
+ <div class="panel-heading"><h1>Snapshot</h1><button data-command="panel-close">Back to page</button></div>
+ <div class="snapshot-toolbar"><div id="snapshot-stickers" aria-label="Mod stickers"></div><button id="snapshot-undo" type="button" disabled>Undo sticker</button><button id="snapshot-save" type="button" class="primary" disabled>Save PNG</button></div>
+ <div class="snapshot-canvas"><canvas id="snapshot-canvas" aria-label="Screenshot with placed stickers"></canvas></div>
+</section>
 <section id="mods" class="panel" hidden>
  <div class="panel-heading"><div><h1>Mods</h1><p>Mix the look and sound of your browser, one category at a time.</p></div><button data-command="panel-close">Back to page</button></div>
  <div class="controls"><button class="primary" data-command="mods-store">Browse GX Store</button><button data-command="mods-addons">Browse Opera Add-ons</button><button id="mods-folder" type="button">Inspect mod folder</button><button id="mods-zip" type="button">Inspect mod ZIP</button></div>
  <p id="mods-error" class="error" hidden></p><button id="mods-recover" type="button" hidden>Recover previous mod checkpoint</button>
  <div id="mods-review" class="review" hidden></div>
+ <section id="mods-presets" aria-label="Mod presets">
+  <form id="mods-preset-form" class="controls"><input name="name" aria-label="Preset name" maxlength="100" required placeholder="Name this combination"><button class="primary">Save preset</button></form>
+  <div id="mods-preset-list"></div>
+ </section>
  <div id="mods-list" class="cards"></div>
 </section>
 <section id="settings" class="panel" hidden>
@@ -247,5 +257,8 @@
 </main>
 <div id="pane-chrome" aria-label="Split browser panes"></div>
 <script src="player-mini-ui.js"></script>
+<script src="gx-mod-audio.js"></script>
+<script src="gx-mod-icons.js"></script>
+<script src="gx-snapshot-editor.js"></script>
 <script src="renderer.js"></script>
 </body></html>

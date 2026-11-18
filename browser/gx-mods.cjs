@@ -6,112 +6,44 @@ const crypto=require('node:crypto');
 const storage=require('./storage.cjs');
 const {parseJson,packageFiles}=require('./extensions.cjs');
 const {safeRelative,safeDirectory,copyDirectory,extractArchive,packageRoot,regularFile,walk}=packageFiles;
-const {validMatch,offlineCss,matchedStyles}=require('./gx-web-styles.cjs');
+const {offlineCss,matchedStyles}=require('./gx-web-styles.cjs');
+const {readPayload,supported,mime,isObject,checkVectorAnimation}=require('./gx-mod-format.cjs');
 
-const labels=Object.freeze({
-  theme:'Theme', wallpaper:'Wallpaper', background_music:'Background music',
-  browser_sounds:'Browser sounds', keyboard_sounds:'Keyboard sounds', page_styles:'Web modding',
-  shaders:'Shaders', fonts:'Fonts', icons:'Icons', app_icon:'App icon',
-  cursors:'Cursors', splash_screen:'Splash screen', stickers:'Stickers',
-  game_strips:'Game strip', mobile_icons:'Mobile icons', speed_dial_effects:'Speed Dial effects',
-});
-const supported=['theme','wallpaper','background_music','browser_sounds','keyboard_sounds','page_styles'];
 const emptyDigest='0'.repeat(64);
-const mediaTypes=Object.freeze({
-  '.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp','.gif':'image/gif','.avif':'image/avif',
-  '.webm':'video/webm','.mp4':'video/mp4','.wav':'audio/wav','.ogg':'audio/ogg','.opus':'audio/ogg','.mp3':'audio/mpeg','.m4a':'audio/mp4','.flac':'audio/flac',
-});
-const soundEvents={
-  browser_sounds:new Set(['CLICK','HOVER','TAB_CLOSE','TAB_INSERT','SWITCH_TOGGLE']),
-  keyboard_sounds:new Set(['TYPING_BACKSPACE','TYPING_ENTER','TYPING_LETTER','TYPING_SPACE']),
-};
 const idPattern=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const digestPattern=/^[0-9a-f]{64}$/;
-const isObject=value=>value&&typeof value==='object'&&!Array.isArray(value);
 const sha=bytes=>crypto.createHash('sha256').update(bytes).digest('hex');
-const mime=file=>mediaTypes[path.extname(file).toLowerCase()]||'';
 const mediaUrl=(id,file)=>`nox-mod://${id}/${file.split('/').map(encodeURIComponent).join('/')}`;
 function fail(message){throw new Error(message);}
 
-function color(value){
-  if(!isObject(value))return null;
-  const {h,s,l}=value;
-  return [h,s,l].every(x=>typeof x==='number'&&Number.isFinite(x))&&h>=0&&h<=360&&s>=0&&s<=100&&l>=0&&l<=100?[h,s,l]:null;
-}
-
-function readPayload(manifest, files) {
-  if(!isObject(manifest)||typeof manifest.name!=='string'||!manifest.name.trim()||typeof manifest.version!=='string')
-    fail('This package needs a name and version.');
-  const source=manifest.mod?.payload;
-  if(!isObject(source))fail('This package has no Opera GX mod payload. Use Extensions for browser add-ons.');
-  const payload={},categories=[];
-  const asset=(value,type)=>{
-    if(typeof value!=='string'||!value)return null;
-    const file=safeRelative(value),kind=mime(file);
-    if(!files.has(file))fail(`The mod refers to a missing asset: ${file}`);
-    return kind&&kind.startsWith(type)?file:null;
-  };
-  // Recognize the single-payload variants described in the publisher's template.
-  // Other variants appear individually in the review instead of being applied blindly.
-  for(const [key,value] of Object.entries(source)){
-    let result,detail='';
-    if(key==='theme'&&isObject(value)){
-      result={};
-      for(const tone of ['dark','light']){
-        const accent=color(value[tone]?.gx_accent),base=color(value[tone]?.gx_secondary_base);
-        if(accent&&base)result[tone]={accent,base};
+function restrictAssets(meta,inventory){
+  const verified=file=>Object.hasOwn(inventory,file)&&inventory[file]!==emptyDigest;
+  for(const category of meta.categories){
+    const variants=meta.payload[category.key];
+    if(!variants)continue;
+    if(category.key==='page_styles'){
+      const originalCount=variants.reduce((count,variant)=>count+variant.value.length,0);
+      for(const variant of variants){
+        variant.value=variant.value.filter(rule=>rule.css.every(verified));
+        variant.resources=new Map(variant.value.flatMap(rule=>rule.css.map(file=>[file,'css'])));
       }
-    }else if(key==='wallpaper'&&isObject(value)){
-      result={};
-      for(const tone of ['dark','light']){
-        const entry=value[tone],file=asset(entry?.image,'image/')||asset(entry?.image,'video/');
-        if(file)result[tone]={file,video:mime(file).startsWith('video/'),poster:asset(entry.first_frame,'image/')};
-      }
-    }else if(key==='page_styles'&&Array.isArray(value)){
-      result=[];
-      for(const rule of value){
-        if(!isObject(rule)||!Array.isArray(rule.css)||!rule.css.length||!Array.isArray(rule.matches)||!rule.matches.length||
-          !rule.matches.every(validMatch)||(rule.exclude_matches!==undefined&&(!Array.isArray(rule.exclude_matches)||!rule.exclude_matches.every(validMatch))))continue;
-        const css=rule.css.map(safeRelative);
-        if(!css.every(file=>path.extname(file).toLowerCase()==='.css'&&files.has(file)))continue;
-        result.push({css,matches:rule.matches,exclude:rule.exclude_matches||[]});
-      }
-    }else if(key==='background_music'&&Array.isArray(value)){
-      result=value.map(file=>asset(file,'audio/')).filter(Boolean);
-      detail='Play the first track as a loop. Additional layers are retained in the package.';
-    }else if(Object.hasOwn(soundEvents,key)&&isObject(value)){
-      result={};
-      for(const event of soundEvents[key]){
-        const values=value[event];
-        if(Array.isArray(values))result[event]=values.map(file=>file===''?'':asset(file,'audio/')).filter(file=>file!==null);
-      }
-      const remaining=Object.keys(value).filter(event=>!soundEvents[key].has(event));
-      if(remaining.length)detail=`Additional events retained: ${remaining.join(', ')}.`;
+      category.matches=[...new Set(variants.flatMap(variant=>variant.value.flatMap(rule=>rule.matches)))];
+      const after=variants.reduce((count,variant)=>count+variant.value.length,0);
+      category.detail=after===originalCount?'Styles run on the declared websites.':'Some styles have linked or unverified resources.';
     }
-    const ready=result&&Object.keys(result).length>0;
-    if(ready)payload[key]=result;
-    categories.push({key,label:labels[key]||key,supported:Boolean(ready),
-      detail:ready?detail:supported.includes(key)?'This package uses a variant the preview cannot play or render.':'This category is retained in the package.'});
+    const allowed=variants.filter(variant=>Object.keys(variant.value).length&&[...variant.resources.keys()].every(verified));
+    if(allowed.length)meta.payload[category.key]=allowed;
+    else delete meta.payload[category.key];
+    category.supported=Boolean(allowed.length);
+    category.variants=allowed.map(({id,name})=>({id,name}));
+    if(allowed.length<variants.length)category.detail='Some components have unsupported or previously unverified assets. Reimport the original package to review newly supported files.';
   }
-  return {
-    name:manifest.name.trim().slice(0,180),
-    version:manifest.version.slice(0,60),
-    description:typeof manifest.description==='string'?manifest.description.slice(0,1000):'',
-    author:typeof manifest.developer?.name==='string'?manifest.developer.name.slice(0,180):'',
-    schema:Number.isSafeInteger(manifest.mod.schema_version)?manifest.mod.schema_version:null,
-    payload,categories,
-  };
 }
 
-function restrictWebStyles(meta,inventory){
-  const rules=meta.payload.page_styles,category=meta.categories.find(item=>item.key==='page_styles');
-  if(!rules)return;
-  const allowed=rules.filter(rule=>rule.css.every(file=>inventory[file]&&inventory[file]!==emptyDigest));
-  if(allowed.length)meta.payload.page_styles=allowed;
-  else delete meta.payload.page_styles;
-  category.supported=allowed.length>0;
-  category.detail=allowed.length<rules.length?'Some styles need linked resources or unsupported CSS syntax.':'Styles run only on the declared websites.';
-  category.matches=[...new Set(allowed.flatMap(rule=>rule.matches))];
+function validateSelection(active,variants,ids){
+  if(!isObject(active)||!isObject(variants))fail('The saved mod selection is invalid.');
+  for(const [category,id] of Object.entries(active))if(!supported.includes(category)||!ids.has(id))fail('A saved mod selection is unavailable.');
+  for(const [category,id] of Object.entries(variants))if(!Object.hasOwn(active,category)||typeof id!=='string'||!id||id.length>1200)fail('A saved mod component is invalid.');
 }
 
 function decode(value){
@@ -123,7 +55,17 @@ function decode(value){
       !Object.entries(row.inventory).every(([file,digest])=>safeRelative(file)===file&&digestPattern.test(digest)))fail('The mod inventory is invalid.');
     ids.add(row.id);
   }
-  for(const [category,id] of Object.entries(value.active))if(!supported.includes(category)||!ids.has(id))fail('A saved mod selection is unavailable.');
+  validateSelection(value.active,value.variants??{},ids);
+  if(value.presets!==undefined){
+    if(!Array.isArray(value.presets))fail('Saved mod presets are invalid.');
+    const presets=new Set();
+    for(const preset of value.presets){
+      if(!isObject(preset)||!idPattern.test(preset.id)||presets.has(preset.id)||typeof preset.name!=='string'||!preset.name.trim()||preset.name.length>100)
+        fail('A saved mod preset is invalid.');
+      presets.add(preset.id);
+      validateSelection(preset.active,preset.variants,ids);
+    }
+  }
   return value;
 }
 
@@ -147,7 +89,7 @@ class GxModLibrary {
         const bytes=await regularFile(path.join(this.directory,row.id,'manifest.json'));
         if(sha(bytes)!==row.manifestSha256)fail('The imported manifest changed. Reimport the original package.');
         const meta=readPayload(parseJson(bytes,'GX mod manifest'),new Set(Object.keys(row.inventory)));
-        restrictWebStyles(meta,row.inventory);
+        restrictAssets(meta,row.inventory);
         this.records.set(row.id,{id:row.id,...meta});
       }catch(error){
         this.records.set(row.id,{id:row.id,name:row.name,categories:[],payload:{},error:error.message});
@@ -161,23 +103,61 @@ class GxModLibrary {
   }
   snapshot(){
     const publicMod=({payload,...entry})=>entry;
-    return {mods:[...this.records.values()].map(publicMod),active:{...this.data.active},error:this.error,
+    return {mods:[...this.records.values()].map(publicMod),active:{...this.data.active},
+      variants:{...this.data.variants},presets:(this.data.presets||[]).map(({id,name})=>({id,name})),error:this.error,
       review:this.review?publicMod(this.review.meta):null,busy:Boolean(this.pending),recovery:Boolean(this.recovery)};
   }
-  choose(category,id){
+  variant(category,id,variantId){
+    const available=this.records.get(id)?.payload[category];
+    return variantId===undefined?available?.[0]:available?.find(variant=>variant.id===variantId);
+  }
+  component(category){
+    return this.variant(category,this.data.active[category],this.data.variants?.[category]);
+  }
+  selectionKey(category){
+    return this.data.active[category]?JSON.stringify([this.data.active[category],this.component(category)?.id]):null;
+  }
+  choose(category,id,variantId){
     if(!supported.includes(category))fail('This mod category is unsupported.');
-    const active={...this.data.active};
-    if(id===null)delete active[category];
-    else {
-      if(!this.records.get(id)?.payload[category])fail('That mod does not provide a supported asset for this category.');
+    const active={...this.data.active},variants={...this.data.variants};
+    if(id===null){
+      delete active[category];delete variants[category];
+    }else{
+      const chosen=this.variant(category,id,variantId);
+      if(!chosen)fail('That mod does not provide the selected component.');
       active[category]=id;
+      variants[category]=chosen.id;
     }
-    this.update({...this.data,active});
+    this.update({...this.data,active,variants});
+  }
+  savePreset(name){
+    if(typeof name!=='string'||!name.trim()||name.trim().length>100)fail('Enter a preset name up to 100 characters.');
+    const preset={id:crypto.randomUUID(),name:name.trim(),active:{...this.data.active},variants:{...this.data.variants}};
+    this.update({...this.data,presets:[...(this.data.presets||[]),preset]});
+  }
+  applyPreset(id){
+    const preset=this.data.presets?.find(item=>item.id===id);
+    if(!preset)fail('Choose a saved mod preset.');
+    for(const [category,mod] of Object.entries(preset.active)){
+      const variant=preset.variants[category];
+      if(!this.variant(category,mod,variant))
+        fail('This preset contains an unavailable component. Review and reimport the original mod.');
+    }
+    this.update({...this.data,active:{...preset.active},variants:{...preset.variants}});
+  }
+  removePreset(id){
+    if(!this.data.presets?.some(item=>item.id===id))fail('Choose a saved mod preset.');
+    this.update({...this.data,presets:this.data.presets.filter(item=>item.id!==id)});
   }
   remove(id){
     if(!this.records.has(id))fail('Choose an imported mod.');
-    const active=Object.fromEntries(Object.entries(this.data.active).filter(([,selected])=>selected!==id));
-    this.update({version:1,mods:this.data.mods.filter(row=>row.id!==id),active});
+    const retain=selection=>{
+      const active=Object.fromEntries(Object.entries(selection.active).filter(([,selected])=>selected!==id));
+      const variants=Object.fromEntries(Object.entries(selection.variants||{}).filter(([category])=>Object.hasOwn(active,category)));
+      return {active,variants};
+    };
+    const presets=(this.data.presets||[]).map(preset=>({...preset,...retain(preset)}));
+    this.update({...this.data,...retain(this.data),mods:this.data.mods.filter(row=>row.id!==id),presets});
     this.records.delete(id);
     // Preserve the owned snapshot for the older checkpoint and recovery.
   }
@@ -202,21 +182,21 @@ class GxModLibrary {
       const files=new Set();
       await walk(root,async (name,stat)=>{if(stat.isFile())files.add(name);});
       const meta={id,...readPayload(parseJson(bytes,'GX mod manifest'),files)};
-      // Hash only supported, declared assets; keep unsupported bytes inert.
-      const resources=new Set();
-      for(const [category,value] of Object.entries(meta.payload)){
-        if(category==='wallpaper')for(const image of Object.values(value)){resources.add(image.file);if(image.poster)resources.add(image.poster);}
-        else if(category==='background_music')for(const file of value)resources.add(file);
-        else if(soundEvents[category])for(const list of Object.values(value))for(const file of list)if(file)resources.add(file);
-      }
+      // Hash supported declared assets. A checkpoint with previously unknown
+      // resources remains inert until the original package is explicitly reviewed.
+      const resources=new Map(Object.values(meta.payload).flatMap(variants=>variants.flatMap(variant=>[...variant.resources])));
       const inventory=Object.fromEntries([...files].map(name=>[name,emptyDigest]));
-      for(const name of resources)inventory[name]=await this.hashAsset(path.join(root,name));
-      const styles=new Set((meta.payload.page_styles||[]).flatMap(rule=>rule.css));
-      for(const name of styles){
-        const bytes=await regularFile(path.join(root,name));
-        try{offlineCss(bytes);inventory[name]=sha(bytes);}catch{/* Preserve the unsupported stylesheet for future compatibility. */}
+      for(const [name,kind] of resources){
+        const location=path.join(root,name);
+        if(kind==='media'){inventory[name]=await this.hashAsset(location);continue;}
+        try{
+          const bytes=await regularFile(location);
+          if(kind==='css')offlineCss(bytes);
+          else checkVectorAnimation(parseJson(bytes,'GX sidebar icon'));
+          inventory[name]=sha(bytes);
+        }catch{/* Preserve unsupported styles and icons. */}
       }
-      restrictWebStyles(meta,inventory);
+      restrictAssets(meta,inventory);
       this.review={id,root,stage,meta,inventory,manifestSha256:sha(bytes)};
       complete=true;
       return this.snapshot();
@@ -271,26 +251,27 @@ class GxModLibrary {
   presentation(){
     const active={};
     for(const [key,id] of Object.entries(this.data.active)){
-      const value=this.records.get(id)?.payload[key];
-      if(!value)continue;
-      if(key==='page_styles')continue;
+      const value=this.component(key)?.value;
+      if(!value||key==='page_styles')continue;
+      const url=file=>mediaUrl(id,file);
       if(key==='theme')active.theme=value;
-      else if(key==='wallpaper'){
-        active.wallpaper=Object.fromEntries(Object.entries(value).map(([tone,item])=>[tone,{
-          url:mediaUrl(id,item.file),video:item.video,poster:item.poster?mediaUrl(id,item.poster):null,
-        }]));
-      }else if(key==='background_music')active.music=mediaUrl(id,value[0]);
-      else active[key]=Object.fromEntries(Object.entries(value).map(([event,files])=>[event,files.map(file=>file?mediaUrl(id,file):'')]));
+      else if(key==='wallpaper')active.wallpaper=Object.fromEntries(Object.entries(value).map(([tone,{file,poster,...settings}])=>[tone,{
+        ...settings,url:url(file),poster:poster?url(poster):null,
+      }]));
+      else if(key==='background_music')active.music=value.map(url);
+      else if(key==='stickers')active.stickers=value.map(url);
+      else if(key==='fonts')active.fonts=Object.fromEntries(Object.entries(value).map(([role,faces])=>[role,faces.map(({file,...face})=>({...face,url:url(file)}))]));
+      else if(key==='cursors'||key==='image_overrides')active[key]=Object.fromEntries(Object.entries(value).map(([role,file])=>[role,url(file)]));
+      else if(key==='app_icon'||key==='splash_screen')active[key]=url(value);
+      else active[key]=Object.fromEntries(Object.entries(value).map(([event,files])=>[event,files.map(file=>file?url(file):'')]));
     }
     return active;
   }
   async verifyAsset(url){
     const parsed=new URL(url);
     if(parsed.protocol!=='nox-mod:'||parsed.username||parsed.password||parsed.port||parsed.search||!idPattern.test(parsed.hostname))return null;
-    const id=parsed.hostname;
-    if(!Object.values(this.data.active).includes(id))return null;
-    const file=safeRelative(decodeURIComponent(parsed.pathname.slice(1))),format=mime(file);
-    if(!format)return null;
+    const id=parsed.hostname,file=safeRelative(decodeURIComponent(parsed.pathname.slice(1))),format=mime(file);
+    if(!format||!Object.entries(this.data.active).some(([key,owner])=>owner===id&&['media','lottie'].includes(this.component(key)?.resources.get(file))))return null;
     const owned=await this.ownedFile(id,file);
     if(!owned||await this.hashAsset(owned.location)!==owned.digest)return null;
     return {location:owned.location,format};
@@ -305,7 +286,7 @@ class GxModLibrary {
     return {location,digest};
   }
   async styles(url){
-    const id=this.data.active.page_styles,rules=this.records.get(id)?.payload.page_styles;
+    const id=this.data.active.page_styles,rules=this.component('page_styles')?.value;
     if(!rules)return '';
     const files=matchedStyles(rules,url),css=[];
     for(const file of files){

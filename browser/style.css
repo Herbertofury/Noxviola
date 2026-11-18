@@ -200,7 +200,7 @@ body[data-mod-theme=true] header,body[data-mod-theme=true] #sidebar-rail,body[da
 #mods-list article>button{margin-top:12px}
 #start{position:relative;isolation:isolate;overflow:hidden}
 #mod-wallpaper{position:absolute;inset:0;z-index:-1;pointer-events:none}
-#mod-wallpaper img,#mod-wallpaper video{width:100%;height:100%;object-fit:cover;opacity:.52}
+#mod-wallpaper img,#mod-wallpaper video{width:100%;height:100%;object-fit:cover;opacity:var(--mod-wallpaper-opacity,.52);filter:blur(var(--mod-wallpaper-blur,0px))}
 #sidebar-browser-content{padding:10px;overflow:auto;flex:1}
 #sidebar-account-controls{display:grid;gap:6px;margin-bottom:10px}#sidebar-account-controls label{font-size:11px;color:var(--muted)}#sidebar-account-controls select,#sidebar-account-controls button{min-height:29px;font-size:11px}#sidebar-account-controls p{margin:1px 0 3px;color:var(--muted);font-size:10px;line-height:1.4}
 #sidebar-search{height:31px;font-size:12px;border-radius:7px}
@@ -244,3 +244,42 @@ body[data-theme=light] .settings-navigation{background:#f0eaf5;border-color:#d0c
 .player-setting span{display:grid;gap:4px}
 .player-setting small{opacity:.76;line-height:1.4}
 .player-setting select,.player-setting input{flex:none;width:auto}
+
+#mods-preset-list{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 16px}
+.mod-preset{display:flex;background:var(--surface,#21182c);border:1px solid var(--border);border-radius:8px}
+.mod-preset button{background:transparent;border:0;border-radius:6px}
+.mod-preset button:hover{background:#ffffff15}
+.mod-category>span:first-child{flex:1}
+.mod-category>select{width:min(140px,44%);min-width:0;font-size:11px}
+body{font-family:var(--mod-font-body,system-ui),system-ui,sans-serif;cursor:var(--mod-cursor-default,auto)}
+body h1,body h2,body h3,.tab-title{font-family:var(--mod-font-header,var(--mod-font-body,system-ui)),system-ui,sans-serif}
+body button,body a,body select,body summary{cursor:var(--mod-cursor-pointer,pointer)}
+body input:not([type=checkbox]):not([type=range]),body textarea{cursor:var(--mod-cursor-text,text)}
+body .tab[draggable]{cursor:var(--mod-cursor-grab,grab)}
+body .tab[draggable]:active{cursor:var(--mod-cursor-grabbing,grabbing)}
+body #sidebar-resize{cursor:var(--mod-cursor-col-resize,col-resize)}
+body .pane-divider[data-axis=x]{cursor:var(--mod-cursor-col-resize,col-resize)}
+body .pane-divider[data-axis=y]{cursor:var(--mod-cursor-row-resize,row-resize)}
+#start h1,#start>p{color:var(--mod-wallpaper-color,var(--text));text-shadow:var(--mod-wallpaper-shadow,none)}
+#mod-wallpaper:after{content:'';position:absolute;inset:0;background:radial-gradient(ellipse,#0000 25%,rgb(0 0 0 / var(--mod-wallpaper-vignette,0)) 100%)}
+#mod-splash{position:fixed;z-index:100;inset:0;display:grid;place-items:center;background:#0b080f}
+#mod-splash-video,#mod-splash video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+#mod-splash-skip{position:absolute;right:24px;bottom:24px;box-shadow:0 8px 24px #0008}
+
+.snapshot-toolbar,.snapshot-toolbar #snapshot-stickers{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+#snapshot-stickers button{width:44px;height:44px;display:grid;place-items:center;padding:4px}
+#snapshot-stickers img{width:100%;height:100%;object-fit:contain}
+.snapshot-canvas{margin-top:14px;background:#110d16;border:1px solid var(--border);padding:8px;border-radius:10px;display:grid;place-items:center}
+#snapshot-canvas{display:block;max-width:100%;max-height:calc(100vh - 230px);touch-action:none}
+
+.mod-sidebar-icon{width:18px;height:18px;flex:none;display:inline-grid;place-items:center;pointer-events:none}
+#sidebar-rail button[data-mod-icon]>.mod-sidebar-icon>svg{width:100%;height:100%}
+#sidebar-rail button[data-mod-icon]>svg{display:none}
+
+#mods-preset-form{max-width:580px}
+#mods-list{grid-template-columns:repeat(auto-fit,minmax(min(390px,100%),1fr))}
+#mods-list>article{container-type:inline-size}
+.mod-components{display:grid;gap:0 20px}
+@container(min-width:760px){.mod-components{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+body button:disabled{cursor:var(--mod-cursor-default,default)}

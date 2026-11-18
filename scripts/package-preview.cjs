@@ -16,7 +16,7 @@ const APP_FILES = [
   'browser/player-mini-preload.cjs', 'browser/player-mini.html', 'browser/player-mini.css',
   'browser/player-mini-ui.js', 'browser/player-mini-window.js',
   'browser/media-controls.cjs', 'browser/passwords.cjs', 'browser/password-page.cjs',
-  'browser/player-audio.cjs', 'browser/gx-mods.cjs', 'browser/gx-web-styles.cjs',
+  'browser/player-audio.cjs', 'browser/gx-mods.cjs', 'browser/gx-mod-format.cjs', 'browser/gx-mod-audio.js', 'browser/gx-mod-icons.js', 'browser/assets/lottie-light.min.js', 'browser/assets/lottie-LICENSE.md', 'browser/gx-snapshot-editor.js', 'browser/gx-web-styles.cjs',
   'browser/capabilities.json', 'browser/state.cjs', 'browser/favicons.cjs', 'browser/find-session.cjs',
   'browser/storage.cjs', 'browser/session-writer.cjs', 'browser/session-path.cjs',
   'browser/permissions.cjs', 'browser/downloads.cjs', 'browser/extensions.cjs', 'browser/extension-runtime.cjs',

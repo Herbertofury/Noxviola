@@ -36,4 +36,8 @@ The isolated/main-world extension preload architecture is adapted from `electron
 
 Mozilla's **webextension-polyfill 0.12.0** distribution is embedded byte-for-byte in the extension preload to implement the `browser.*` Promise facade and asynchronous message semantics. Its MPL-2.0 license and provenance are retained in [extension-browser-polyfill-LICENSE.txt](browser/extension-browser-polyfill-LICENSE.txt); the enclosing source identifies the unchanged vendored block. It adds no downloaded-at-runtime script or package dependency. The facade does not create missing browser-host API implementations or grant additional permissions.
 
+## GX sidebar animation renderer
+
+The app ships the unmodified `lottie_light.min.js` bundle from [lottie-web 5.13.0](https://github.com/airbnb/lottie-web/tree/v5.13.0) under the [MIT license](browser/assets/lottie-LICENSE.md). Its SHA-256 is `9588432bec30c8ef8200bac4a67d8aaad881047bc2a6c9fa624d90ec96402410`. Noxviola loads it when a reviewed local mod selects a compatible sidebar vector icon.
+
 CEF, CefSharp, WebView2, Servo and Hermes research does not imply they are bundled into the Electron application.

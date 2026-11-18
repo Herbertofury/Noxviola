@@ -15101,7 +15101,7 @@
           "browser/gx-web-styles.cjs"
         ],
         "integrationStrategy": "Compose independent options over canonical services, with conflict handling and reset.",
-        "note": "Local GX folders and ZIPs can enable verified category assets independently. The store catalog browses through a normal tab."
+        "note": "Local GX folders and ZIPs support named schema-v2 components and presets, with fonts, icon and cursor assets, startup video, layered audio, sidebar vectors and snapshot stickers verified on Windows. The catalog opens in a browser tab."
       },
       "performance": "Disabled modules must create no ongoing work; pause decorative media when hidden.",
       "privacy": "Keep customization local; downloaded assets require provenance and permission.",
@@ -15503,7 +15503,7 @@
           "browser/gx-mods.cjs"
         ],
         "integrationStrategy": "Compose independent options over canonical services, with conflict handling and reset.",
-        "note": "An independently selected local GX track loops with website-audio ducking. Windows observed playback of the local track."
+        "note": "Named local GX tracks can loop alone or in synchronized layers with website-audio interruption. Windows verified the layers began on the same audio clock."
       },
       "performance": "Disabled modules must create no ongoing work; pause decorative media when hidden.",
       "privacy": "Keep customization local; downloaded assets require provenance and permission.",

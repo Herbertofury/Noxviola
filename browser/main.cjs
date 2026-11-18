@@ -41,7 +41,7 @@ const findSession = require('./find-session.cjs').createFindSession();
 const accountStore = require('./accounts.cjs');
 const vaultStore = require('./vault.cjs');
 app.enableSandbox();
-protocol.registerSchemesAsPrivileged([{scheme:'nox-mod',privileges:{standard:true,secure:true,stream:true}}]);
+protocol.registerSchemesAsPrivileged([{scheme:'nox-mod',privileges:{standard:true,secure:true,stream:true,supportFetchAPI:true,corsEnabled:true}}]);
 
 let win, tabs = [], profiles = [{id:'personal', name:'Personal'}], activeId, currentIdentity = 'personal';
 let originalSession = cleanState({}), preferences = originalSession.preferences;
@@ -52,6 +52,7 @@ let vaultFile, vaultDocument = {version:1, items:[]}, vaultError = '', vaultReco
 let accountFile, accounts = [], accountError = '', accountRecovery = null;
 let permissionOpening = null, extensionBusy = false;
 let passwords,sidebarExtension,sidebarExtensionAPI,mods,modPresentation={};
+let showingModSplash=false,modIconURL=null,modIconRevision=0,snapshotDraft=null;
 let activeWebMod;
 let playerTakeover=false,miniStarted=null,miniDismissed=null,playerPresentation={visible:false};
 let resolveIdentitySession, history, bookmarks, workspaces, follows, followTimer, resourceMonitor, extensionBridge, spellcheck;
@@ -109,7 +110,7 @@ function tabDescriptor(tab) {
 }
 function stateView() {
   return {version:1, profiles, preferences, activeId, currentIdentity, splitId, paneTree, paneLayouts, paneGeometry:currentPaneGeometry(), panel, closing, saveError,
-    activeWorkspaceId,chromeHeight:chromeHeight(),sidebarGeometry:currentSidebarGeometry(),sidebarWeb:sidebarWeb.state(),sidebarExtension:sidebarExtension?.state(),modPresentation,player:playerPresentation,playerExpanded:playerTakeover,shortcuts:preferenceStore.shortcutList(preferences),downloadHistory:downloads?.getStatus(),
+    activeWorkspaceId,chromeHeight:chromeHeight(),sidebarGeometry:currentSidebarGeometry(),sidebarWeb:sidebarWeb.state(),sidebarExtension:sidebarExtension?.state(),modPresentation,showingModSplash,player:playerPresentation,playerExpanded:playerTakeover,shortcuts:preferenceStore.shortcutList(preferences),downloadHistory:downloads?.getStatus(),
     canRestore:closed.length > 0, tabs:tabs.map(tab => ({id:tab.id,url:tab.url,title:tab.title,identity:tab.identity,loading:tab.loading,live:!!tab.view,favicon:tab.favicon,
       workspaceId:tabWorkspace(tab),groupId:tab.saved.groupId||null,pinned:!!tab.saved.pinned,muted:tab.view?.webContents.isAudioMuted()??!!tab.saved.muted,audible:tab.view?.webContents.isCurrentlyAudible()||false})),
     canBack:active()?.view?.webContents.navigationHistory.canGoBack() || false,
@@ -166,11 +167,35 @@ function openPlayer(provider){
 }
 function publishMods(){
   modPresentation=mods.presentation();
-  const selected=mods.data.active.page_styles;
+  void syncModWindowIcon();
+  const selected=mods.selectionKey('page_styles');
   if(selected!==activeWebMod){activeWebMod=selected;gxStyles.refresh();}
   if(panel==='mods')send('mods',mods.snapshot());
   publish(false);
 }
+async function syncModWindowIcon(){
+  if(!win||win.isDestroyed()||process.platform==='darwin')return;
+  const url=modPresentation.app_icon||null;
+  if(url===modIconURL)return;
+  modIconURL=url;
+  const revision=++modIconRevision;
+  let icon=nativeImage.createFromPath(path.join(__dirname,'assets/noxviola.png'));
+  if(url){
+    try{
+      const asset=await mods.verifyAsset(url);
+      if(asset){
+        const custom=nativeImage.createFromBuffer(await fs.promises.readFile(asset.location));
+        if(!custom.isEmpty())icon=custom;
+        else notice('The selected mod icon could not be decoded.');
+      }
+    }catch(error){notice('Mod app icon: '+error.message);}
+  }
+  if(revision===modIconRevision&&win&&!win.isDestroyed())win.setIcon(icon);
+}
+const finishModSplash=()=>{
+  if(!showingModSplash)return;
+  showingModSplash=false;layout();publish(false);
+};
 function requireCurrentIdentity(value){if(value?.identity!==currentIdentity)throw new Error('The browser identity changed. Try again.');return currentIdentity;}
 function passwordTarget(identity){const tab=active(),contents=tab?.view?.webContents;if(!contents||contents.isDestroyed()||tab.identity!==identity||currentIdentity!==identity)throw new Error('Open a login page in the selected identity first.');return {tab,contents};}
 function requirePasswordTarget(target,identity){const current=passwordTarget(identity);if(current.tab!==target.tab||current.contents!==target.contents)throw new Error('The selected login page changed. Try again.');}
@@ -254,10 +279,10 @@ function layout() {
   if (!win || win.isDestroyed()) return;
   syncPanes();const [width,height] = win.getContentSize(), geometry=currentSidebarGeometry(),panes=currentPaneGeometry();
   const visible=new Map(panes.panes.map(pane=>[pane.tabId,pane]));
-  for (const tab of tabs) {if(!tab.view)continue;const pane=visible.get(tab.id);tab.view.setVisible(Boolean(pane)&&!panel);if(pane)tab.view.setBounds(pane.content);}
+  for (const tab of tabs) {if(!tab.view)continue;const pane=visible.get(tab.id);tab.view.setVisible(Boolean(pane)&&!panel&&!showingModSplash);if(pane)tab.view.setBounds(pane.content);}
   send('pane-layout',panes);
   const grip=Math.min(6,geometry.panel);
-  const sidebarBounds={x:geometry.panelX+(preferences.sidebarSide==='right'?grip:0),y:chromeHeight()+40,width:Math.max(0,geometry.panel-grip),height:Math.max(0,height-chromeHeight()-40)};
+  const sidebarBounds={x:geometry.panelX+(preferences.sidebarSide==='right'?grip:0),y:chromeHeight()+40,width:Math.max(0,geometry.panel-grip),height:showingModSplash?0:Math.max(0,height-chromeHeight()-40)};
   sidebarWeb.layout(sidebarBounds);sidebarExtension?.layout(sidebarBounds);
   send('sidebar-layout',geometry);
   tabPreview.layout();
@@ -266,13 +291,14 @@ function setPanel(value) {
   playerTakeover=false;
   tabPreview.hide();
   panel = panel === value ? null : value;
+  if(panel!=='snapshot-editor')snapshotDraft=null;
   layout(); publish(false); publishVault(); publishAccounts(); publishExtensions(); publishPermissions();
   publishHistory();publishBookmarks();publishWorkspaces();publishFollows();
   if (panel === 'downloads') send('downloads', downloads.list());
   if (panel === 'capabilities') send('capabilities', require('./capabilities.json'));
   if (panel === 'resources') send('resources',resourceMonitor.sample());
 }
-function showPage() { if (panel) { panel = null; layout(); publish(false); publishVault(); publishAccounts(); publishExtensions(); publishPermissions(); } }
+function showPage() { if (panel) { panel = null;snapshotDraft=null; layout(); publish(false); publishVault(); publishAccounts(); publishExtensions(); publishPermissions(); } }
 function identitySession(identity) {
   if (!profiles.some(profile => profile.id === identity)) throw new Error('Select an existing browser identity.');
   const partition = `persist:noxviola-identity-${identity}`, target = resolveIdentitySession(identity);
@@ -630,24 +656,51 @@ async function exportPage(kind,wc) {
   const extension=kind==='pdf'?'pdf':'png',choice=await dialog.showSaveDialog(win,{title:kind==='pdf'?'Save page as PDF':'Save visible page screenshot',defaultPath:`noxviola-page.${extension}`,filters:[{name:extension.toUpperCase(),extensions:[extension]}]});
   if(choice.canceled||!choice.filePath)return;
   const data=kind==='pdf'?await wc.printToPDF({printBackground:true,preferCSSPageSize:true}):(await wc.capturePage()).toPNG();
+  await writePageExport(choice.filePath,data);
+  notice(`Page ${kind==='pdf'?'PDF':'screenshot'} saved to the selected local file.`);
+}
+async function openSnapshotEditor(wc){
+  if(panel==='snapshot-editor'||!wc||!httpUrl(wc.getURL()))throw new Error('Open a website before editing its screenshot.');
+  const tab=active(),identity=currentIdentity,url=wc.getURL(),image=await wc.capturePage();
+  if(closing||panel==='snapshot-editor'||!win||win.isDestroyed()||tab!==active()||identity!==currentIdentity||wc.isDestroyed()||wc.getURL()!==url)
+    throw new Error('The selected page changed during capture.');
+  if(image.isEmpty())throw new Error('The page did not return a visible screenshot.');
+  snapshotDraft={id:crypto.randomUUID(),size:image.getSize(),identity};
+  setPanel('snapshot-editor');
+  send('snapshot-editor',{id:snapshotDraft.id,image:image.toDataURL(),stickers:modPresentation.stickers||[]});
+}
+async function saveSnapshotEditor(value){
+  const draft=snapshotDraft;
+  if(panel!=='snapshot-editor'||!draft||draft.id!==value?.id||draft.identity!==currentIdentity)throw new Error('Capture a new screenshot before saving.');
+  if(typeof value.image!=='string'||!value.image.startsWith('data:image/png;base64,')||value.image.length>draft.size.width*draft.size.height*8+10000)
+    throw new Error('The edited snapshot is invalid.');
+  const png=Buffer.from(value.image.slice(22),'base64');
+  if(png.length<24||png.subarray(0,8).toString('hex')!=='89504e470d0a1a0a'||
+    png.readUInt32BE(16)!==draft.size.width||png.readUInt32BE(20)!==draft.size.height)throw new Error('The edited snapshot dimensions changed.');
+  const result=await dialog.showSaveDialog(win,{title:'Save edited screenshot',defaultPath:'noxviola-snapshot.png',filters:[{name:'PNG',extensions:['png']}]});
+  if(result.canceled||!result.filePath)return;
+  if(snapshotDraft!==draft)throw new Error('The edited snapshot is no longer open.');
+  await writePageExport(result.filePath,png);
+  notice('Edited screenshot saved to the selected local file.');
+}
+async function writePageExport(destination,data){
   // A new file avoids replacing a file changed between the picker and export.
   // Existing destinations can be replaced only after a separate exact-byte check.
   let previous=null;
-  try{previous=storage.readRegular(choice.filePath);}catch(error){if(error.code!=='ENOENT')throw error;}
+  try{previous=storage.readRegular(destination);}catch(error){if(error.code!=='ENOENT')throw error;}
   if(previous){
-    const confirmation=await dialog.showMessageBox(win,{type:'question',message:'Replace the selected file?',detail:choice.filePath,buttons:['Cancel','Replace'],defaultId:0,cancelId:0,noLink:true});
+    const confirmation=await dialog.showMessageBox(win,{type:'question',message:'Replace the selected file?',detail:destination,buttons:['Cancel','Replace'],defaultId:0,cancelId:0,noLink:true});
     if(confirmation.response!==1)return;
-    if(!storage.readRegular(choice.filePath).equals(previous))throw new Error('The selected file changed; export again to review the current file.');
-    storage.replace(choice.filePath,data);
-  }else{const handle=await fs.promises.open(choice.filePath,'wx',0o600);try{await handle.writeFile(data);await handle.sync();}finally{await handle.close();}}
-  notice(`Page ${kind==='pdf'?'PDF':'screenshot'} saved to the selected local file.`);
+    if(!storage.readRegular(destination).equals(previous))throw new Error('The selected file changed; export again to review the current file.');
+    storage.replace(destination,data);
+  }else{const handle=await fs.promises.open(destination,'wx',0o600);try{await handle.writeFile(data);await handle.sync();}finally{await handle.close();}}
 }
 function buildMenu() {
   const invoke=(name,value)=>runBrowserOperation(name,value).catch(error=>{notice(error.message);layout();publish(false);});
   const entries=preferenceStore.shortcutList(preferences).map(item=>({label:item.label,...(item.accelerator?{accelerator:item.accelerator}:{}),click:()=>invoke(item.id==='close'&&panel?'panel-close':item.id,item.id==='close'?activeId:undefined)}));
   Menu.setApplicationMenu(Menu.buildFromTemplate([{label:'Browser',submenu:[...entries,{type:'separator'},
     {label:'Following · creators and projects',click:()=>invoke('following')},{label:'Workspaces and tab groups',click:()=>invoke('workspaces')},{label:'Save page as PDF',click:()=>invoke('save-pdf')},
-    {label:'Save visible screenshot',click:()=>invoke('save-screenshot')},{label:'Resource monitor',click:()=>invoke('resources')},
+    {label:'Save visible screenshot',click:()=>invoke('save-screenshot')},{label:'Edit screenshot',click:()=>invoke('edit-snapshot')},{label:'Resource monitor',click:()=>invoke('resources')},
     {label:'Customize',click:()=>invoke('settings')},{type:'separator'},{role:'quit'}]}]));
 }
 function showBrowserMenu(anchor){
@@ -660,7 +713,7 @@ function showBrowserMenu(anchor){
     item('Find in page','focus-find'),item('Search tabs','search-tabs'),{label:'Zoom',submenu:[item('Zoom in','zoom-in'),item('Zoom out','zoom-out'),item('Reset zoom','zoom-reset')]},
     {type:'separator'},item('History','history'),item('Downloads','downloads'),item('Bookmarks','bookmarks'),item('Extensions','extensions'),item('Library','vault'),
     item('Workspaces and tab groups','workspaces'),item('Accounts and identities','accounts'),item('Passwords','show-passwords'),item('Site permissions','permissions'),
-    {label:'More tools',submenu:[item('Following','following'),item('Resource monitor','resources'),item('Save page as PDF','save-pdf'),item('Save visible screenshot','save-screenshot'),item('Developer tools','devtools'),item('All browser tools','tools')]},
+    {label:'More tools',submenu:[item('Following','following'),item('Resource monitor','resources'),item('Save page as PDF','save-pdf'),item('Save visible screenshot','save-screenshot'),item('Edit screenshot','edit-snapshot'),item('Developer tools','devtools'),item('All browser tools','tools')]},
     item('Mods','mods'),{type:'separator'},item('Settings','settings'),{type:'separator'},{role:'quit',label:'Exit Noxviola'}
   ]);
   const [width,height]=win.getContentSize(),valid=anchor&&['x','y','width','height'].every(key=>Number.isFinite(anchor[key]));
@@ -753,7 +806,11 @@ async function perform(name, value) {
     }
     case 'mods-accept':try{await mods.accept();}finally{publishMods();}break;
     case 'mods-cancel':await mods.cancel();publishMods();break;
-    case 'mods-choose':mods.choose(value?.category,value?.id);publishMods();break;
+    case 'mods-choose':mods.choose(value?.category,value?.id,value?.variant);publishMods();break;
+    case 'mods-save-preset':mods.savePreset(value);publishMods();break;
+    case 'mods-apply-preset':mods.applyPreset(value);publishMods();break;
+    case 'mods-remove-preset':mods.removePreset(value);publishMods();break;
+    case 'mods-splash-finished':finishModSplash();break;
     case 'mods-remove':mods.remove(value);publishMods();break;
     case 'mods-recover':{
       const choice=await dialog.showMessageBox(win,{type:'question',message:'Restore the previous mod library?',detail:'The current checkpoint is preserved separately.',buttons:['Cancel','Restore'],defaultId:0,cancelId:0,noLink:true});
@@ -827,6 +884,8 @@ async function perform(name, value) {
     case 'print':if(!wc)throw new Error('Open a website before printing.');await new Promise((resolve,reject)=>wc.print({silent:false,printBackground:true},(success,reason)=>success?resolve():reject(new Error(reason||'Printing was canceled.'))));break;
     case 'save-pdf':await exportPage('pdf',wc);break;
     case 'save-screenshot':await exportPage('png',wc);break;
+    case 'edit-snapshot':await openSnapshotEditor(wc);break;
+    case 'snapshot-save':await saveSnapshotEditor(value);break;
     case 'identity-add': {
       const name = typeof value === 'string' ? value.trim() : ''; if (!name) throw new Error('Enter an identity name.');
       const profile = {id:crypto.randomUUID(),name}; profiles.push(profile); currentIdentity = profile.id; newTab(); break;
@@ -1029,7 +1088,8 @@ async function requestClose() {
 async function start() {
   app.setAppUserModelId('org.noxviola.browser'); dataDirectory = app.getPath('userData'); sessionFile = path.join(dataDirectory,'browser-session.json');
   mods=new GxModLibrary(path.join(dataDirectory,'gx-mods'));
-  try{await mods.open();modPresentation=mods.presentation();activeWebMod=mods.data.active.page_styles;}catch(error){mods.error=error.message;}
+  try{await mods.open();modPresentation=mods.presentation();activeWebMod=mods.selectionKey('page_styles');}catch(error){mods.error=error.message;}
+  showingModSplash=Boolean(modPresentation.splash_screen);
   session.defaultSession.protocol.handle('nox-mod',async request=>{
     try{
       if(!['GET','HEAD'].includes(request.method))return new Response(null,{status:405});
@@ -1038,6 +1098,7 @@ async function start() {
       const response=await net.fetch(pathToFileURL(asset.location).href,{method:request.method,signal:request.signal});
       const headers=new Headers(response.headers);
       headers.set('Content-Type',asset.format);
+      headers.set('Access-Control-Allow-Origin','*');
       headers.set('Content-Security-Policy','sandbox');
       headers.set('X-Content-Type-Options','nosniff');
       return new Response(response.body,{status:response.status,headers});
@@ -1112,6 +1173,7 @@ async function start() {
   win = new BrowserWindow({title:'Noxviola',icon:path.join(__dirname,'assets/noxviola.png'),width:1320,height:860,minWidth:700,minHeight:480,backgroundColor:'#171122',autoHideMenuBar:true,
     ...(process.platform === 'win32' ? {titleBarStyle:'hidden',titleBarOverlay:{color:'#171021',symbolColor:'#d9c7ee',height:38}} : {}),
     webPreferences:{preload:path.join(__dirname,'preload.cjs'),nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true}});
+  void syncModWindowIcon();
   win.webContents.setWindowOpenHandler(() => ({action:'deny'})); win.webContents.on('will-navigate',event => event.preventDefault());
   win.webContents.on('context-menu',(_event,params)=>Menu.buildFromTemplate([
     ...spellcheck.contextMenu(win.webContents,params),{role:'copy',enabled:!!params.selectionText},{role:'paste',enabled:params.isEditable},

@@ -92,7 +92,7 @@ Search by capability ID or name. The application exposes the same JSON in its ex
 | devtools | Developer tools suite | development | absent | Wire explicit menu/shortcut access to engine tooling and document supported panels. |
 | picture-in-picture | Floating video playback | media | absent | Use supported native video surfaces and test each reference variant independently. |
 | mini-window | Floating page or region window | media | absent | Evaluate Firefox160 early Mini Window behavior and a reversible engine-backed implementation. |
-| media-control-center | Cross-tab media controls | media | partial | Add media session transport commands, provider playback lifecycles, and verify independent sources across navigation and restart. |
+| media-control-center | Cross-tab media controls | media | partial | Qualify real provider sessions and protected playback, including controls on composite players and media key routing. |
 | drm-media | DRM-protected media compatibility | media | blocked | Audit Electron codec/DRM availability; retain explicit service/platform blockers. |
 | cast-media | Media casting | media | absent | Confirm supported runtime discovery and casting APIs before advertising availability. |
 | gx-volume | Per-tab volume amplification | media | partial | Evaluate native whole-tab audio for protected, Web Audio-only and provider streams. |
@@ -130,7 +130,7 @@ Search by capability ID or name. The application exposes the same JSON in its ex
 | browser-games | Browser game discovery | optional-services | absent | Reuse ordinary sandboxed web tabs with explicit discovery providers. |
 | personal-news | Optional news feeds | optional-services | absent | Use an opt-in feed reader; avoid recommendation telemetry. |
 | smart-home-panel | Optional smart-home panel | optional-services | absent | Investigate provider-supported APIs; do not imply access from a browser feature label. |
-| music-sidebar | Shared music-service panel | optional-services | partial | Qualify provider sign-in, protected playback, local controls and transport commands with synthetic accounts. |
+| music-sidebar | Shared music-service panel | optional-services | partial | Qualify commercial account sign-in and playback on each service and review artwork, native media keys and sidebar Mini Player behavior. |
 | messenger-sidebar | Shared messenger and social panel | optional-services | partial | Verify provider sign-in, push delivery, visible OS toast actions and sidebar unread states using synthetic accounts. |
 | flow-transfer | Optional cross-device transfer | optional-services | absent | Evaluate a consented encrypted transfer protocol rather than silently copying provider accounts. |
 | panel-twitch | Twitch panel variant | optional-services | absent | Audit provider-specific embedding, permissions and terms before enabling this adapter. |

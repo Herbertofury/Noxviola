@@ -31,6 +31,8 @@ const {PasswordStore}=require('./passwords.cjs');
 const passwordPage=require('./password-page.cjs');
 const {createMediaControls}=require('./media-controls.cjs');
 const {services:playerServices,presets:audioPresets}=require('./player-audio.cjs');
+const {createPlayerSession}=require('./player-session.cjs');
+const {createMiniHost}=require('./player-mini-host.cjs');
 const {GxModLibrary}=require('./gx-mods.cjs');
 const {mountStyles}=require('./gx-web-styles.cjs');
 const {createSidebarExtensionPanel}=require('./sidebar-extension-panel.cjs');
@@ -51,6 +53,7 @@ let accountFile, accounts = [], accountError = '', accountRecovery = null;
 let permissionOpening = null, extensionBusy = false;
 let passwords,sidebarExtension,sidebarExtensionAPI,mods,modPresentation={};
 let activeWebMod;
+let playerTakeover=false,miniStarted=null,miniDismissed=null,playerPresentation={visible:false};
 let resolveIdentitySession, history, bookmarks, workspaces, follows, followTimer, resourceMonitor, extensionBridge, spellcheck;
 let activeWorkspaceId = 'default', nextRuntimeTabId = 1, preferencePreview = null;
 let sidebarProgress=0,sidebarRailProgress=0,sidebarTimer=null,sidebarDismissTimer=null,sidebarDismissGeneration=0;
@@ -63,11 +66,16 @@ const tabWorkspace = tab => tab.saved.workspaceId || 'default';
 const visibleTabs = () => tabs.filter(tab => tabWorkspace(tab) === activeWorkspaceId);
 const favicons = createFaviconLoader({nativeImage});
 const gxStyles=mountStyles(url=>mods.styles(url),error=>notice(error.message));
-const sidebarWeb=createSidebarWebPanel({WebContentsView,getWindow:()=>win,getSession:identitySession,identityReady,loadFavicon:favicons.load,onInteraction:cancelSidebarDismiss,onChange:value=>send('sidebar-web-state',value),onContents:gxStyles.attach});
-const mediaControls=createMediaControls({getSources:()=>[
+const sidebarWeb=createSidebarWebPanel({WebContentsView,getWindow:()=>win,getSession:identitySession,identityReady,loadFavicon:favicons.load,onInteraction:cancelSidebarDismiss,
+  onChange:value=>{send('sidebar-web-state',value);void player.schedule();},onContents:gxStyles.attach,onPlayback:()=>void player.schedule()});
+const mediaSources=()=>[
   ...tabs.filter(tab=>tab.view&&!tab.view.webContents.isDestroyed()).map(tab=>({id:`tab:${tab.id}`,identity:tab.identity,kind:'tab',title:tab.title,webContents:tab.view.webContents})),
   ...sidebarWeb.sources(),
-],onChange:()=>send('media-changed',{})});
+];
+const mediaControls=createMediaControls({getSources:mediaSources,onChange:()=>{send('media-changed',{});void player.schedule();}});
+const miniHost=createMiniHost({BrowserWindow,screen,onDismiss:()=>dismissMiniPlayer()});
+const player=createPlayerSession({media:mediaControls,identity:()=>currentIdentity,sources:mediaSources,settings:()=>preferences.player,
+  changed:()=>publishPlayer(),report:error=>notice(error.message)});
 const tabPreview = require('./tab-preview-host.cjs').createTabPreview({
   WebContentsView, ipcMain, root:__dirname, getWindow:()=>win, blocked:()=>Boolean(panel)||closing,
   getTabInfo:id=>{const tab=tabs.find(row=>row.id===id && tabWorkspace(row)===activeWorkspaceId);return tab?{title:tab.title,url:tab.url,identity:tab.identity,contents:tab.view?.webContents}:null;},
@@ -101,7 +109,7 @@ function tabDescriptor(tab) {
 }
 function stateView() {
   return {version:1, profiles, preferences, activeId, currentIdentity, splitId, paneTree, paneLayouts, paneGeometry:currentPaneGeometry(), panel, closing, saveError,
-    activeWorkspaceId,chromeHeight:chromeHeight(),sidebarGeometry:currentSidebarGeometry(),sidebarWeb:sidebarWeb.state(),sidebarExtension:sidebarExtension?.state(),modPresentation,shortcuts:preferenceStore.shortcutList(preferences),downloadHistory:downloads?.getStatus(),
+    activeWorkspaceId,chromeHeight:chromeHeight(),sidebarGeometry:currentSidebarGeometry(),sidebarWeb:sidebarWeb.state(),sidebarExtension:sidebarExtension?.state(),modPresentation,player:playerPresentation,playerExpanded:playerTakeover,shortcuts:preferenceStore.shortcutList(preferences),downloadHistory:downloads?.getStatus(),
     canRestore:closed.length > 0, tabs:tabs.map(tab => ({id:tab.id,url:tab.url,title:tab.title,identity:tab.identity,loading:tab.loading,live:!!tab.view,favicon:tab.favicon,
       workspaceId:tabWorkspace(tab),groupId:tab.saved.groupId||null,pinned:!!tab.saved.pinned,muted:tab.view?.webContents.isAudioMuted()??!!tab.saved.muted,audible:tab.view?.webContents.isCurrentlyAudible()||false})),
     canBack:active()?.view?.webContents.navigationHistory.canGoBack() || false,
@@ -129,6 +137,33 @@ function publishVault() { send('vault', {items:vaultDocument.items, open:panel =
 function publishAccounts() { send('accounts', {accounts,profiles,open:panel === 'accounts',error:accountError,recoveryAvailable:!!accountRecovery}); }
 function passwordData(){const state=passwords?.state()||{locked:true};return {...state,identity:currentIdentity,items:state.locked?[]:passwords.list(currentIdentity)};}
 function publishPasswords(){send('passwords',passwordData());}
+function publishPlayer(){
+  const {item,provider,interrupted,identity}=player.state(),options=preferences.player;
+  if(!item||miniStarted&&item.id!==miniStarted)miniStarted=null;
+  if(item&&!item.paused)miniStarted=item.id;
+  if(!item||miniDismissed!==item.id)miniDismissed=null;
+  const presentation=options.enabled&&identity===currentIdentity?item:null;
+  playerPresentation={item:presentation,identity,provider,providerName:playerServices[provider]?.[0]||'Player',interrupted,
+    visible:Boolean(presentation&&miniStarted===item.id&&miniDismissed!==item.id&&options.mini!=='off'),mode:options.mini,background:options.background};
+  send('player-state',playerPresentation);
+  miniHost.update(playerPresentation);
+}
+function dismissMiniPlayer(){
+  miniDismissed=player.state().item?.id||null;
+  publishPlayer();
+}
+async function setMiniMode(mode){
+  if(!['toolbar','floating','off'].includes(mode))throw new Error('Choose a Mini Player location.');
+  miniDismissed=null;
+  await savePreferences({player:{mini:mode}});
+}
+function openPlayer(provider){
+  if(!preferences.player.enabled)throw new Error('Enable the Player in Settings first.');
+  const target=provider??player.state().provider;
+  if(target&&!Object.hasOwn(playerServices,target))throw new Error('Choose a music service.');
+  if(panel)setPanel(panel);
+  changeSidebar({sidebarVisible:true,sidebarExpanded:true,sidebarActive:target?`player:${target}`:'media'});
+}
 function publishMods(){
   modPresentation=mods.presentation();
   const selected=mods.data.active.page_styles;
@@ -157,7 +192,7 @@ function recordHistory(tab,url) {
 }
 function currentSidebarGeometry(){
   const [width,height]=win&&!win.isDestroyed()?win.getContentSize():[1320,860];
-  return sidebarLayout({width,height,chromeHeight:chromeHeight(),verticalTabs:preferences.tabLayout==='vertical',visible:preferences.sidebarVisible||sidebarProgress>0,expanded:sidebarProgress>0,side:preferences.sidebarSide,panelWidth:preferences.sidebarWidth,progress:sidebarProgress,railProgress:sidebarRailProgress});
+  return sidebarLayout({width,height,chromeHeight:chromeHeight(),verticalTabs:preferences.tabLayout==='vertical',visible:preferences.sidebarVisible||sidebarProgress>0,expanded:sidebarProgress>0,side:preferences.sidebarSide,panelWidth:preferences.sidebarWidth,progress:sidebarProgress,railProgress:sidebarRailProgress,takeover:playerTakeover});
 }
 function syncSidebarWeb({skipExtension=false,tabChanged=false}={}){
   const extension=preferences.sidebarActive.match(/^extension:([^:]+):(sidebar_action|side_panel)$/);
@@ -175,13 +210,18 @@ function syncSidebarWeb({skipExtension=false,tabChanged=false}={}){
       }
     }else if(state.visible)sidebarExtension.hide();
   }
-  const provider=preferences.sidebarActive.startsWith('player:')&&playerServices[preferences.sidebarActive.slice(7)];
+  const providerId=preferences.player.enabled&&preferences.sidebarActive.startsWith('player:')?preferences.sidebarActive.slice(7):null;
+  const provider=providerId&&playerServices[providerId];
   const appEntry=provider?{url:provider[1]}:preferences.sidebarActive.startsWith('app:')?preferences.sidebarApps.find(item=>item.id===preferences.sidebarActive.slice(4)):null;
   const visible=preferences.sidebarVisible&&preferences.sidebarExpanded&&appEntry;
   const state=sidebarWeb.state();
+  if(!provider||!visible)playerTakeover=false;
   if(!visible){if(state.visible)sidebarWeb.hide();return;}
-  if(!state.visible||state.identity!==currentIdentity||state.site!==httpUrl(appEntry.url)){
-    try{sidebarWeb.open({identity:currentIdentity,url:appEntry.url});}catch(error){notice(`Sidebar page could not open: ${error.message}`);}
+  if(!state.visible||state.identity!==currentIdentity||state.site!==httpUrl(appEntry.url)||state.provider!==providerId){
+    try{
+      sidebarWeb.open({identity:currentIdentity,url:appEntry.url,provider:providerId});
+      if(provider)player.select(currentIdentity,providerId);
+    }catch(error){notice(`Sidebar page could not open: ${error.message}`);}
   }
 }
 function changeSidebar(patch,options){
@@ -223,6 +263,7 @@ function layout() {
   tabPreview.layout();
 }
 function setPanel(value) {
+  playerTakeover=false;
   tabPreview.hide();
   panel = panel === value ? null : value;
   layout(); publish(false); publishVault(); publishAccounts(); publishExtensions(); publishPermissions();
@@ -303,7 +344,7 @@ function ensureView(tab) {
   } });
   wc.on('did-start-loading', () => {tabPreview.invalidate(tab.id);tab.loading=true;publish(false);hostEvent(tab.identity,'tabs.onUpdated',tab.runtimeId,{status:'loading'},tabDescriptor(tab));});
   wc.on('did-stop-loading', () => {tab.loading=false;publish(false);hostEvent(tab.identity,'tabs.onUpdated',tab.runtimeId,{status:'complete'},tabDescriptor(tab));});
-  wc.on('audio-state-changed',()=>{publish(false);hostEvent(tab.identity,'tabs.onUpdated',tab.runtimeId,{audible:wc.isCurrentlyAudible()},tabDescriptor(tab));});
+  wc.on('audio-state-changed',()=>{publish(false);void player.schedule();hostEvent(tab.identity,'tabs.onUpdated',tab.runtimeId,{audible:wc.isCurrentlyAudible()},tabDescriptor(tab));});
   wc.on('found-in-page',(_event,result)=>{if(tab.id===activeId && findSession.accepts(wc,result))send('find-result',result);});
   function navigated(_event,url,isMainFrame=true,sameDocument=false) {
     if(isMainFrame===false)return;tabPreview.invalidate(tab.id);const target=httpUrl(url)||(tabNavigationAllowed(tab,url)?extensionUrl(url):null);
@@ -337,6 +378,7 @@ function activate(id) {
   tabPreview.hide();
   const tab = tabs.find(row => row.id === id); if (!tab || closing) return;
   const changed = activeId !== id; activeId = id; currentIdentity = tab.identity;activeWorkspaceId=tabWorkspace(tab);workspaceLastTabs.set(activeWorkspaceId,id);
+  if(player.state().identity!==currentIdentity){miniStarted=null;miniDismissed=null;player.invalidate();}
   if(!paneLayout.ids(paneTree).includes(id)){
     if(paneLayout.ids(paneTree).length>1)paneLayouts.push(paneTree);
     const saved=paneLayouts.find(tree=>paneLayout.ids(tree).includes(id));
@@ -362,7 +404,7 @@ function removeView(tab) {
   tab.faviconRevision++;tab.favicon='';
   if (!tab.view) return;
   const view = tab.view; tab.view = null;
-  nativeTabs.delete(view.webContents.id);win.contentView.removeChildView(view);view.webContents.close();
+  nativeTabs.delete(view.webContents.id);win.contentView.removeChildView(view);view.webContents.close();void player.schedule();
 }
 function closeTab(id) {
   tabPreview.invalidate(id);
@@ -416,7 +458,7 @@ function pinTab(tab,pinned) {
 function muteTab(tab,muted) {
   if(typeof muted!=='boolean')throw new Error('Choose whether this tab is muted.');
   if(Boolean(tab.saved.muted)===muted&&(!tab.view||tab.view.webContents.isAudioMuted()===muted))return;
-  tab.saved={...tab.saved,muted};tab.view?.webContents.setAudioMuted(muted);publish();
+  tab.saved={...tab.saved,muted};tab.view?.webContents.setAudioMuted(muted);publish();void player.schedule();
   hostEvent(tab.identity,'tabs.onUpdated',tab.runtimeId,{mutedInfo:{muted}},tabDescriptor(tab));
 }
 function assignTab(tab,workspaceId,groupId=null) {
@@ -566,6 +608,11 @@ async function savePreferences(value) {
   const oldApps=preferences.sidebarApps;
   spellcheck.setEnabled(proposed.spellcheckEnabled);
   preferences=proposed;
+  if(!preferences.player.enabled){
+    if(preferences.sidebarActive.startsWith('player:'))preferences=preferenceStore.applyPreferences(preferences,{sidebarActive:'media'});
+    sidebarWeb.releasePlayer();player.invalidate();
+  }
+  publishPlayer();void player.schedule();
   for(const old of oldApps)if(!proposed.sidebarApps.some(item=>item.id===old.id&&item.url===old.url))for(const profile of profiles)sidebarWeb.release({identity:profile.id,url:old.url});
   preferencePreview=null;buildMenu();syncSidebarWeb();animateSidebar();publish(false);publishHistory();publishBookmarks();
   writer.request(snapshot());await writer.flush();notice('Preferences saved.');
@@ -648,7 +695,7 @@ async function perform(name, value) {
     case 'sidebar-web-unload':{
       const opened=sidebarWeb.state();
       if(!opened.visible||opened.identity!==currentIdentity)throw new Error('Choose an open sidebar application.');
-      changeSidebar({sidebarExpanded:false});sidebarWeb.release({identity:currentIdentity,url:opened.site});break;
+      changeSidebar({sidebarExpanded:false});sidebarWeb.release({identity:currentIdentity,url:opened.site,provider:opened.provider});break;
     }
     case 'sidebar-data':{
       const type=preferences.sidebarActive;
@@ -681,6 +728,17 @@ async function perform(name, value) {
     }
     case 'password-recover':{const choice=await dialog.showMessageBox(win,{type:'warning',message:'Restore the previous encrypted password checkpoint?',detail:'The current file will be preserved separately.',buttons:['Cancel','Restore'],defaultId:0,cancelId:0,noLink:true});if(choice.response===1)await passwords.recover();publishPasswords();break;}
     case 'player-options':return {services:Object.entries(playerServices).map(([id,[name]])=>({id,name})),presets:Object.keys(audioPresets)};
+    case 'player-open':openPlayer(value);break;
+    case 'player-home':changeSidebar({sidebarVisible:true,sidebarExpanded:true,sidebarActive:'media'});break;
+    case 'player-expand':
+      if(!sidebarWeb.state().visible||!sidebarWeb.state().provider)throw new Error('Open a music service first.');
+      playerTakeover=!playerTakeover;layout();publish(false);break;
+    case 'player-settings':
+      if(preferences.sidebarActive.startsWith('player:'))changeSidebar({sidebarActive:'media'});
+      if(panel!=='settings')setPanel('settings');break;
+    case 'player-act':return player.perform(requireCurrentIdentity(value),value);
+    case 'player-mini-mode':return setMiniMode(value);
+    case 'player-mini-dismiss':dismissMiniPlayer();break;
     case 'mods-state':return mods.snapshot();
     case 'mods-store':return newTab('https://store.gx.me/mods/');
     case 'mods-addons':return newTab('https://addons.opera.com/');
@@ -962,7 +1020,7 @@ async function requestClose() {
     const choice = await dialog.showMessageBox(win,{type:'warning',message:'Recent tabs could not be saved.',detail:`${error.message}\nKeep the browser open to preserve important addresses, or explicitly exit without saving recent tabs.`,buttons:['Keep browser open','Exit without saving recent tabs'],defaultId:0,cancelId:0,noLink:true});
     if (choice.response !== 1) {resumeAfterCloseError('Close canceled. Fix the save error and choose Retry save.');return;}
   }
-  closeExtensionWindows();sidebarWeb.destroy();sidebarExtensionAPI?.destroy();sidebarExtension?.destroy();passwords?.dispose();mediaControls.dispose();
+  closeExtensionWindows();miniHost.close();player.dispose();sidebarWeb.destroy();sidebarExtensionAPI?.destroy();sidebarExtension?.destroy();passwords?.dispose();mediaControls.dispose();
   try { if (!extensionError) await extensions.dispose(); } catch (error) { notice(error.message); }
   try{await extensionBridge?.dispose();}catch(error){notice(`Extension host cleanup: ${error.message}`);}clearInterval(followTimer);follows?.dispose();history?.dispose();bookmarks?.dispose();workspaces?.dispose();
   permissions.dispose(); downloads.dispose(); await writer.close().catch(() => {});
@@ -1058,7 +1116,24 @@ async function start() {
   win.webContents.on('context-menu',(_event,params)=>Menu.buildFromTemplate([
     ...spellcheck.contextMenu(win.webContents,params),{role:'copy',enabled:!!params.selectionText},{role:'paste',enabled:params.isEditable},
   ]).popup({window:win}));
-  ipcMain.handle('command',command); win.on('resize',()=>{layout();tabSearch.dismiss();});win.on('move',tabSearch.dismiss);win.on('blur',()=>{tabPreview.hide();cancelSidebarDismiss();});win.on('minimize',()=>{tabPreview.hide();tabSearch.dismiss();});
+  ipcMain.handle('command',command);
+  ipcMain.on('player-source-changed',event=>{
+    if(!event.sender.isDestroyed()&&event.senderFrame===event.sender.mainFrame&&sidebarWeb.sources().some(source=>source.provider&&source.webContents===event.sender))void player.schedule();
+  });
+  ipcMain.handle('mini-command',(event,{action,value}={})=>{
+    if(closing||!miniHost.accepts(event)||playerPresentation.mode!=='floating'||!playerPresentation.visible||playerPresentation.identity!==currentIdentity)
+      throw new Error('The Mini Player session has changed.');
+    if(action==='act')return runBrowserOperation('player-act',value);
+    if(action==='dock')return runBrowserOperation('player-mini-mode','toolbar');
+    if(action==='dismiss')return runBrowserOperation('player-mini-dismiss');
+    if(action==='open'){
+      if(win.isMinimized())win.restore();
+      win.show();win.focus();
+      return runBrowserOperation('player-open',playerPresentation.provider);
+    }
+    throw new Error('Unsupported Mini Player command.');
+  });
+  win.on('resize',()=>{layout();tabSearch.dismiss();});win.on('move',tabSearch.dismiss);win.on('blur',()=>{tabPreview.hide();cancelSidebarDismiss();});win.on('minimize',()=>{tabPreview.hide();tabSearch.dismiss();});
   win.webContents.on('before-mouse-event',(_event,input)=>{if(input.type==='mouseDown')cancelSidebarDismiss();});win.webContents.on('before-input-event',(_event,input)=>{if(input.type==='keyDown')cancelSidebarDismiss();});
   win.on('close',event => {if (!allowClose) {event.preventDefault();requestClose().catch(error => resumeAfterCloseError(error.message));}});
   win.webContents.on('did-finish-load',() => {

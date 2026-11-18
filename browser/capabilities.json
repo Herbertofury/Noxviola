@@ -14018,10 +14018,13 @@
           "browser/renderer.js",
           "browser/media-controls.cjs",
           "browser/sidebar-web-panel.cjs",
-          "tests/native/sidebar-media-notifications.cjs"
+          "tests/native/sidebar-media-notifications.cjs",
+          "browser/player-session.cjs",
+          "browser/player-provider-preload.cjs",
+          "tests/player-session.test.cjs"
         ],
         "integrationStrategy": "Use native engine media controls and isolate optional enhancements.",
-        "note": "Native playback, pause, seek, volume, element mute and page mute verified in a synthetic sidebar player. Controls and enumeration are scoped to the active identity."
+        "note": "Identity-scoped transport and mixer. Windows synthetic tests verified next and previous for registered Media Session handlers, playback, seeking, volume, mute and automatic interruption."
       },
       "performance": "Measure decode, GPU, power and audio latency with equivalent media quality.",
       "privacy": "Do not capture, send, or retain media without explicit scope; respect service and DRM boundaries.",
@@ -14031,7 +14034,8 @@
           "procedure": "Play multiple sources; controls target the correct media session through navigation, identity changes and tab closure.",
           "result": "partial",
           "evidence": [
-            "docs/browser/SIDEBAR-SERVICES.md"
+            "docs/browser/SIDEBAR-SERVICES.md",
+            "docs/browser/GX-MODS-AND-PLAYER.md"
           ]
         }
       ],
@@ -14044,15 +14048,15 @@
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
         "installedBrowserAudit": "not-run",
-        "nativeRuntime": "Native playback, pause, seek, volume, element mute and page mute verified in a synthetic sidebar player. Controls and enumeration are scoped to the active identity.",
-        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established"
+        "nativeRuntime": "Identity-scoped transport and mixer. Windows synthetic tests verified next and previous for registered Media Session handlers, playback, seeking, volume, mute and automatic interruption.",
+        "workingTreeReview": "2026-11-17 Windows runtime and controller test"
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Add media session transport commands, provider playback lifecycles, and verify independent sources across navigation and restart.",
+      "nextAction": "Qualify real provider sessions and protected playback, including controls on composite players and media key routing.",
       "priority": "P2",
-      "updatedAt": "2026-11-15"
+      "updatedAt": "2026-11-17"
     },
     {
       "id": "drm-media",
@@ -17584,12 +17588,19 @@
         {
           "browser": "opera-gx",
           "versionBasis": "139.0.6053.63",
-          "availability": "reference feature family documented; exact options, platform, rollout and installed behavior remain unresolved",
+          "availability": "Installed GX resources and native names inspected for the Player and Mini Player. Toolbar, floating, and audio interruption behavior documented by Opera.",
           "options": [
             "provider",
             "open/close",
             "play/pause",
-            "mute"
+            "mute",
+            "toolbar or floating Mini Player",
+            "automatic display",
+            "background",
+            "pause for other tab audio",
+            "resume delay",
+            "expand",
+            "pin"
           ],
           "sourceIds": [
             "gx-index"
@@ -17604,7 +17615,14 @@
           "provider",
           "open/close",
           "play/pause",
-          "mute"
+          "mute",
+          "toolbar or floating Mini Player",
+          "automatic display",
+          "background",
+          "pause for other tab audio",
+          "resume delay",
+          "expand",
+          "pin"
         ],
         "coverage": "partial",
         "remaining": "Inspect every relevant setting and interaction in a synthetic profile of each exact reference build; record defaults, range, persistence and platform conditions."
@@ -17622,10 +17640,14 @@
           "browser/sidebar-layout.cjs",
           "browser/sidebar-web-panel.cjs",
           "browser/preferences.cjs",
-          "browser/player-audio.cjs"
+          "browser/player-audio.cjs",
+          "browser/player-session.cjs",
+          "browser/player-mini-host.cjs",
+          "browser/player-mini-ui.js",
+          "tests/player-session.test.cjs"
         ],
         "integrationStrategy": "Use a shared opt-in panel/adaptor service; preserve provider-specific behavior as variants.",
-        "note": "Six named music service routes share the current identity’s existing web panel host and media mixer."
+        "note": "Six services with expand, reload and unload. A single session powers the address-bar-adjacent or floating Mini Player, with persistent settings and local audio interruption."
       },
       "performance": "No startup, polling or hidden page processes for disabled integrations.",
       "privacy": "Disclose data recipients and account scope; never transmit browsing or extension inventories to Noxviola.",
@@ -17645,17 +17667,17 @@
           "gx-index"
         ],
         "noxviolaBaseline": "362fb016c2239c6a00ef844357f0bb1dccf282b3",
-        "installedBrowserAudit": "partial: installed Firefox 160.0 and Opera GX 139.0.6053.42 sidebar resources and synthetic-profile behaviors; not a complete browser audit",
-        "nativeRuntime": "Six named music service routes share the current identity’s existing web panel host and media mixer.",
-        "workingTreeReview": "2026-11-15 PR5 continuation; native acceptance not established",
+        "installedBrowserAudit": "Installed GX 139.0.6053.63 media resources and native toolbar/sidebar Mini Player symbol names inspected.",
+        "nativeRuntime": "Windows source run verified dock, float, seek, next/previous, interruption, Never resume, identity isolation and restart with generated audio.",
+        "workingTreeReview": "2026-11-17 Windows runtime and controller test",
         "sidebarResearch": "docs/browser/SIDEBAR-REFERENCE-2026-11-16.md"
       },
       "improvements": [
         "Expose the independent preference and preserve the complete workflow when other optional modules are disabled."
       ],
-      "nextAction": "Qualify provider sign-in, protected playback, local controls and transport commands with synthetic accounts.",
+      "nextAction": "Qualify commercial account sign-in and playback on each service and review artwork, native media keys and sidebar Mini Player behavior.",
       "priority": "P2",
-      "updatedAt": "2026-11-16"
+      "updatedAt": "2026-11-17"
     },
     {
       "id": "messenger-sidebar",

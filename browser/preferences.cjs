@@ -1,5 +1,6 @@
 'use strict';
 const {services:playerServices}=require('./player-audio.cjs');
+const DEFAULT_PLAYER=Object.freeze({enabled:true,mini:'toolbar',background:true,autoPause:true,resumeSeconds:1});
 
 const storage = require('./storage.cjs');
 const SHORTCUTS = Object.freeze([
@@ -38,10 +39,10 @@ const ENUMS = Object.freeze({
 const DEFAULTS = Object.freeze({searchEngine:'duckduckgo',tabLayout:'horizontal',theme:'dark',accent:'violet',density:'comfortable',tabSearchPosition:'left',tabSearchStyle:'detailed',
   sidebarVisible:true,sidebarExpanded:false,sidebarPanelPinned:true,sidebarRailExpanded:false,sidebarShowWorkspaces:true,sidebarSide:'left',sidebarWidth:320,sidebarActive:'bookmarks',sidebarApps:[],sidebarTools:[{id:'tabs',visible:true},{id:'bookmarks',visible:true},{id:'history',visible:true},{id:'downloads',visible:true},{id:'passwords',visible:true},{id:'accounts',visible:true},{id:'media',visible:true},{id:'notifications',visible:true},{id:'extension-panels',visible:true},{id:'extensions',visible:true},{id:'settings',visible:true},{id:'mods',visible:true},{id:'vault',visible:true},{id:'following',visible:false},{id:'resources',visible:false},{id:'start',visible:false}],
   homePage:'about:blank',customSearchURL:'https://duckduckgo.com/?q={searchTerms}',showBookmarksBar:false,spellcheckEnabled:true,
-  toolbar:{library:true,extensions:true,split:true,home:true},shortcuts:{}});
+  toolbar:{library:true,extensions:true,split:true,home:true},shortcuts:{},player:DEFAULT_PLAYER});
 const PREFERENCE_KEYS = Object.freeze(Object.keys(DEFAULTS));
 // Appearance imports do not alter the separate local spelling choice.
-const PRESET_KEYS = Object.freeze(PREFERENCE_KEYS.filter(name=>!['spellcheckEnabled','sidebarApps','sidebarActive'].includes(name)));
+const PRESET_KEYS = Object.freeze(PREFERENCE_KEYS.filter(name=>!['spellcheckEnabled','sidebarApps','sidebarActive','player'].includes(name)));
 const modifierNames = new Map([['cmdorctrl','CmdOrCtrl'],['commandorcontrol','CmdOrCtrl'],['ctrl','Ctrl'],['control','Ctrl'],
   ['cmd','Command'],['command','Command'],['alt','Alt'],['option','Alt'],['shift','Shift'],['super','Super']]);
 const namedKeys = new Map(['Plus','Space','Tab','Enter','Escape','Backspace','Delete','Insert','Home','End','PageUp','PageDown','Up','Down','Left','Right'].map(key=>[key.toLowerCase(),key]));
@@ -117,6 +118,11 @@ function preferences(raw={}, {strict=true,platform=process.platform}={}) {
   for(const name of ['toolbar','shortcuts'])if(result[name]!==undefined&&!object(result[name]))fail(`Saved ${name} preferences must be an object.`);
   result.toolbar={...DEFAULTS.toolbar,...result.toolbar};
   for(const name of Object.keys(DEFAULTS.toolbar))if(typeof result.toolbar[name]!=='boolean')fail('Toolbar visibility settings must be true or false.');
+  if(result.player!==undefined&&!object(result.player))fail('Saved Player settings must be an object.');
+  result.player={...DEFAULT_PLAYER,...result.player};
+  for(const name of ['enabled','background','autoPause'])if(typeof result.player[name]!=='boolean')fail(`Saved Player ${name} must be true or false.`);
+  if(!['toolbar','floating','off'].includes(result.player.mini))fail('Choose a toolbar, floating or hidden Mini Player.');
+  if(result.player.resumeSeconds!==null&&(!Number.isInteger(result.player.resumeSeconds)||result.player.resumeSeconds<0||result.player.resumeSeconds>300))fail('Choose a resume delay between 0 and 300 seconds or Never.');
   result.shortcuts={...result.shortcuts};
   for(const item of SHORTCUTS)if(Object.hasOwn(result.shortcuts,item.id))result.shortcuts[item.id]=accelerator(result.shortcuts[item.id]);
   shortcutList(result,platform);
@@ -126,7 +132,8 @@ function applyPreferences(current, patch) {
   if(!object(patch))fail('Choose browser preferences to save.');
   const accepted={};
   for(const name of PREFERENCE_KEYS)if(Object.hasOwn(patch,name))accepted[name]=patch[name];
-  return preferences({...current,...accepted,toolbar:{...current.toolbar,...accepted.toolbar},shortcuts:{...current.shortcuts,...accepted.shortcuts}});
+  const player=accepted.player===undefined?current.player:object(accepted.player)?{...current.player,...accepted.player}:accepted.player;
+  return preferences({...current,...accepted,player,toolbar:{...current.toolbar,...accepted.toolbar},shortcuts:{...current.shortcuts,...accepted.shortcuts}});
 }
 function exportPreset(current) {
   const validated=preferences(current), supported={};

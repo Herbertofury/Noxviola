@@ -3,6 +3,14 @@
 const $ = id => document.getElementById(id);
 const api = window.browser;
 let currentState = {profiles:[],tabs:[],preferences:{},currentIdentity:'personal',panel:null};
+const toolbarMini=window.createMiniPlayer?.($('toolbar-miniplayer'), async (action,value)=>{
+  try{
+    if(action==='act')return await api.command('player-act',value);
+    if(action==='float')return await api.command('player-mini-mode','floating');
+    if(action==='dismiss')return await api.command('player-mini-dismiss');
+    if(action==='open')return await api.command('player-open',value);
+  }catch(error){announce(error.message);}
+});
 let vaultItems = [], accountItems = [], extensionData = {items:[],profiles:[],busy:false};
 let permissionData = {items:[]}, downloadItems = [], capabilityData = null, extensionPreview = null;
 const followCompatibilityDrafts=new Map();
@@ -219,9 +227,20 @@ function renderSidebarChrome(){
   $('sidebar-resize').setAttribute('aria-valuenow',String(pref.sidebarWidth||320));
   $('sidebar-web-controls').hidden=!web||player;$('sidebar-extension-controls').hidden=!extension;$('sidebar-browser-content').hidden=web||extension;
   $('sidebar-player-controls').hidden=!player;
+  $('sidebar-panel').classList.toggle('has-provider',player);
+  const playerExpand=$('sidebar-player-expand'),expanded=pref.sidebarExpanded&&currentState.playerExpanded===true;
+  playerExpand.setAttribute('aria-pressed',String(expanded));
+  const playerExpandLabel=expanded?'Restore sidebar Player':'Expand Player';
+  playerExpand.title=playerExpandLabel;playerExpand.setAttribute('aria-label',playerExpandLabel);
   if(player){
     $('sidebar-title').textContent=sidebarWebState.error?'Page failed':'Player';
-    void loadPlayerOptions().then(options=>{const select=$('sidebar-player-service');if(!select.options.length)setOptions(select,options.services,active.slice(7));select.value=currentState.preferences.sidebarActive.slice(7);}).catch(error=>announce(error.message));
+    void loadPlayerOptions().then(({services})=>{
+      const selection=currentState.preferences.sidebarActive;
+      if(!selection?.startsWith('player:'))return;
+      const select=$('sidebar-player-service');
+      if(!select.options.length)setOptions(select,[{id:'home',name:'Player Home'},...services,{id:'settings',name:'Player Settings'}],selection.slice(7));
+      select.value=selection.slice(7);
+    }).catch(error=>announce(error.message));
   }
   if(extension)$('sidebar-title').textContent=sidebarExtensionState.title||'Extension panel';
   $('sidebar-account-controls').hidden=active!=='accounts';const identitySelect=$('sidebar-account-identity'),profileKey=JSON.stringify(currentState.profiles.map(item=>[item.id,item.name]));if(identitySelect.dataset.options!==profileKey){setOptions(identitySelect,currentState.profiles,currentState.currentIdentity);identitySelect.dataset.options=profileKey;}else identitySelect.value=currentState.currentIdentity;
@@ -304,6 +323,17 @@ function renderPreferenceForm(state) {
   sidebarDraftApps=values.sidebarApps.map(item=>({...item}));renderSidebarAppEditor();sidebarDraftTools=values.sidebarTools.map(item=>({...item}));for(const [id] of SIDEBAR_TOOLS)if(!sidebarDraftTools.some(item=>item.id===id))sidebarDraftTools.push({id,visible:false});renderSidebarToolEditor();
   form.elements.namedItem('showBookmarksBar').checked=Boolean(values.showBookmarksBar);
   form.elements.namedItem('spellcheckEnabled').checked=values.spellcheckEnabled!==false;
+  const player=values.player||{};
+  form.elements.namedItem('playerEnabled').checked=player.enabled!==false;
+  form.elements.namedItem('playerMini').value=player.mini||'toolbar';
+  form.elements.namedItem('playerBackground').checked=player.background!==false;
+  form.elements.namedItem('playerAutoPause').checked=player.autoPause!==false;
+  const resume=form.elements.namedItem('playerResume'),delay=player.resumeSeconds===null?'never':String(player.resumeSeconds??1);
+  resume.querySelector('[data-custom-delay]')?.remove();
+  if(!Array.from(resume.options).some(option=>option.value===delay)){
+    const option=node('option',delay+' seconds');option.value=delay;option.dataset.customDelay='';resume.append(option);
+  }
+  resume.value=delay;
   for(const name of ['home','library','extensions','split'])form.elements.namedItem(`toolbar.${name}`).checked=values.toolbar?.[name]!==false;
   $('shortcut-fields').replaceChildren(...(state.shortcuts||[]).map(shortcut=>{
     const label=node('label',shortcut.label),input=node('input');input.name=`shortcut.${shortcut.id}`;input.value=shortcut.accelerator;input.autocomplete='off';input.spellcheck=false;label.append(input);return label;
@@ -328,7 +358,7 @@ function renderPanes(){
  if(focused){const input=[...root.querySelectorAll('[data-pane-id]')].find(n=>n.dataset.paneId===focused.id)?.querySelector('input');if(input){input.focus();input.setSelectionRange(focused.start,focused.end);}}
 }
 function renderState(state) {
-  const old = currentState; currentState = state;if(state.paneGeometry)paneGeometry=state.paneGeometry;renderPanes();
+  const old = currentState; currentState = state;toolbarMini?.update(state.player);if(state.paneGeometry)paneGeometry=state.paneGeometry;renderPanes();
   const currentTabs=new Set(state.tabs.map(tab=>tab.id)),priorTabs=new Set(old.tabs.map(tab=>tab.id));
   if(old.engine&&state.tabs.some(tab=>!priorTabs.has(tab.id)))playModSound('browser_sounds','TAB_INSERT');
   if(old.tabs.some(tab=>!currentTabs.has(tab.id)))playModSound('browser_sounds','TAB_CLOSE');
@@ -438,6 +468,7 @@ $('tabs').onkeydown=event=>{
   const target=event.key==='Home'?0:event.key==='End'?count-1:(index+(event.key===next?1:-1)+count)%count;
   run('activate',selectable[target].id);tabNodes.get(selectable[target].id).firstElementChild.focus();
 };
+api.onPlayerState?.(value=>toolbarMini?.update(value));
 api.onAddress(()=>{$('address').focus();$('address').select();});api.onFind(showFind);api.onNotice(announce);api.onState(renderState);
 
 function resetVaultForm() {$('vault-add').reset();$('vault-add').elements.namedItem('id').value='';$('vault-editor').open=false;}
@@ -648,6 +679,13 @@ $('settings-form').onsubmit=event=>{
   for(const name of ['searchEngine','tabLayout','tabSearchPosition','tabSearchStyle','theme','accent','density','homePage','customSearchURL'])value[name]=data.get(name);
   value.showBookmarksBar=form.elements.namedItem('showBookmarksBar').checked;
   value.spellcheckEnabled=form.elements.namedItem('spellcheckEnabled').checked;
+  value.player={
+    enabled:form.elements.namedItem('playerEnabled').checked,
+    mini:data.get('playerMini'),
+    background:form.elements.namedItem('playerBackground').checked,
+    autoPause:form.elements.namedItem('playerAutoPause').checked,
+    resumeSeconds:data.get('playerResume')==='never'?null:Number(data.get('playerResume'))
+  };
   value.sidebarVisible=form.elements.namedItem('sidebarVisible').checked;value.sidebarPanelPinned=form.elements.namedItem('sidebarPanelPinned').checked;value.sidebarRailExpanded=form.elements.namedItem('sidebarRailExpanded').checked;value.sidebarShowWorkspaces=form.elements.namedItem('sidebarShowWorkspaces').checked;value.sidebarSide=data.get('sidebarSide');value.sidebarWidth=Number(data.get('sidebarWidth'));value.sidebarApps=sidebarDraftApps.map(item=>({...item}));value.sidebarTools=sidebarDraftTools.map(item=>({...item}));
   if(currentState.preferences.sidebarActive?.startsWith('app:')&&!value.sidebarApps.some(item=>`app:${item.id}`===currentState.preferences.sidebarActive)){value.sidebarActive='bookmarks';value.sidebarExpanded=false;}
   for(const name of ['home','library','extensions','split'])value.toolbar[name]=form.elements.namedItem(`toolbar.${name}`).checked;
@@ -958,9 +996,22 @@ let sidebarServiceType='',passwordFormIdentity=null,sidebarExtensionState={};
 let playerOptionsRequest;
 const audioDrafts=new Map();
 function loadPlayerOptions(){return playerOptionsRequest||=(api.command('player-options').catch(error=>{playerOptionsRequest=null;throw error;}));}
-$('sidebar-player-service').onchange=event=>run('sidebar-select',`player:${event.currentTarget.value}`);
-$('sidebar-player-mixer').onclick=()=>run('sidebar-select','media');
+$('sidebar-player-service').onchange=event=>{
+  const provider=event.currentTarget.value;
+  if(provider==='home')return run('player-home');
+  if(provider==='settings')return openPlayerSettings();
+  return run('player-open',provider);
+};
+$('sidebar-player-mixer').onclick=()=>run('player-home');
+$('sidebar-player-expand').onclick=()=>run('player-expand');
+$('sidebar-player-reload').onclick=()=>run('sidebar-web-reload');
 $('sidebar-player-stop').onclick=()=>run('sidebar-web-unload');
+function openPlayerSettings(){
+  settingsCategory='player';
+  $('settings-search').value='';
+  applySettingsSearch();
+  return run('player-settings');
+}
 function clearPasswordSecrets(){
   for(const input of $('sidebar-services').querySelectorAll('input'))input.value='';
   $('sidebar-services').replaceChildren();passwordFormIdentity=null;sidebarServiceType='';
@@ -972,12 +1023,28 @@ function renderSidebarServices(type,data){
   if(sidebarServiceType!==type){clearPasswordSecrets();sidebarServiceType=type;}
   if(data.identity&&data.identity!==identity){clearPasswordSecrets();return;}
   if(type==='passwords'){renderPasswordSidebar(data);return;}
-  root.replaceChildren();root.append(node('p',identityName(identity),'sidebar-service-identity'),button('Refresh',serviceRefresh));
-  if(data.error)root.append(serviceParagraph(data.error));
+  root.replaceChildren();
+  if(type!=='media'){
+    root.append(node('p',identityName(identity),'sidebar-service-identity'),button('Refresh',serviceRefresh));
+    if(data.error)root.append(serviceParagraph(data.error));
+  }
   if(type==='media'){
-    const providers=node('div',undefined,'sidebar-player-services');
-    root.append(providers,serviceParagraph('Control media in this identity’s tabs and sidebar pages.'));
-    void loadPlayerOptions().then(({services})=>{for(const {id,name} of services)providers.append(button(name,()=>api.command('sidebar-select',`player:${id}`)));}).catch(error=>announce(error.message));
+    const heading=node('div',undefined,'sidebar-player-home');
+    const primary=node('div');
+    primary.append(node('h2','Player'),node('p',identityName(identity)));
+    heading.append(primary,button('Settings',openPlayerSettings));
+    root.append(heading);
+    if(currentState.preferences.player?.enabled!==false){
+      const providers=node('div',undefined,'sidebar-player-services');
+      root.append(providers);
+      void loadPlayerOptions().then(({services})=>{
+        for(const {id,name} of services)providers.append(button(name,()=>api.command('player-open',id)));
+      }).catch(error=>announce(error.message));
+    }else root.append(serviceParagraph('Enable Player in Settings to open music services.'));
+    const mixer=node('div',undefined,'sidebar-player-home sidebar-mixer-heading');
+    mixer.append(node('h3','Audio mixer'),button('Refresh',serviceRefresh));
+    root.append(mixer);
+    if(data.error)root.append(serviceParagraph(data.error));
     const mediaIds=new Set((data.items||[]).map(item=>item.id));
     for(const id of audioDrafts.keys())if(!mediaIds.has(id))audioDrafts.delete(id);
     for(const item of data.items||[]){

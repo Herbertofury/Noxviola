@@ -320,6 +320,9 @@ test('DOM product: preference controls preserve a dirty draft and apply committe
   h.check(field(form,'sidebarShowWorkspaces'),false);
   assert.equal(field(form,'spellcheckEnabled').checked,true);
   h.check(field(form,'spellcheckEnabled'),false);
+  h.select(field(form,'playerMini'),'floating');
+  h.select(field(form,'playerResume'),'never');
+  h.check(field(form,'playerBackground'),false);
   h.check(field(form,'toolbar.home'),false); h.check(field(form,'toolbar.extensions'),false);
   h.input(field(form,'shortcut.new'),'Ctrl+Shift+N');
   h.input(field(form,'shortcut.focus-address'),'');
@@ -332,6 +335,7 @@ test('DOM product: preference controls preserve a dirty draft and apply committe
   const expected = {searchEngine:'custom',tabLayout:'vertical',tabSearchPosition:'right',tabSearchStyle:'compact',theme:'light',accent:'teal',density:'compact',
     sidebarVisible:true,sidebarPanelPinned:false,sidebarRailExpanded:true,sidebarShowWorkspaces:false,sidebarSide:'left',sidebarWidth:320,sidebarApps:[],sidebarTools:require('../browser/preferences.cjs').DEFAULTS.sidebarTools,
     homePage:'https://home.example/',customSearchURL:'https://search.example/?q={searchTerms}',showBookmarksBar:true,spellcheckEnabled:false,
+    player:{enabled:true,mini:'floating',background:false,autoPause:true,resumeSeconds:null},
     toolbar:{home:false,library:true,extensions:false,split:true},shortcuts:{new:'Ctrl+Shift+N','focus-address':''}};
   assert.deepEqual(h.calls.find(call => call.name === 'settings-save').value,expected);
   h.update({preferences:expected,shortcuts:shortcuts.map(item => ({...item,accelerator:expected.shortcuts[item.id]}))});

@@ -73,7 +73,7 @@ test('real play failures, invalid inputs, and unseekable positions surface as fa
   await assert.rejects(service.act('personal',{id:item.id,action:'play'}),/NotAllowedError/);
   for(const value of [-1,1.01,Infinity,NaN,'0.5'])await assert.rejects(service.act('personal',{id:item.id,action:'volume',value}),/Volume/);
   await assert.rejects(service.act('personal',{id:item.id,action:'seek',value:61}),/seekable range/);
-  await assert.rejects(service.act('personal',{id:item.id,action:'nexttrack'}),/Unsupported media action/);assert.equal(f.prepared[0].operations.length,0);
+  await assert.rejects(service.act('personal',{id:item.id,action:'nexttrack'}),/Track controls are only available in the Player/);assert.equal(f.prepared[0].operations.length,0);
  }finally{service.dispose();f.close();}
 });
 

@@ -1,0 +1,283 @@
+name: Release builds
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_PROFILE_TEST_DEBUG: "0"
+
+jobs:
+  build-linux:
+    name: Linux x86-64
+    # Build against glibc 2.35 so the release also runs on distributions older
+    # than the runner used to publish it. Linux binaries cannot use an older
+    # glibc than the one they were linked against.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    env:
+      # Keep bindgen's clang executable and dynamically loaded libclang on the
+      # same version. The runner also ships Clang 15, and mixing its libclang
+      # with Clang 14's headers breaks mozangle's generated bindings.
+      CLANG_PATH: /usr/bin/clang-14
+      LIBCLANG_PATH: /usr/lib/llvm-14/lib
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v6
+
+      - name: Free disk space for Servo
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          df -h /
+
+          sudo rm -rf \
+            /opt/ghc \
+            /usr/local/lib/android \
+            /usr/share/dotnet
+          sudo apt-get clean
+
+          df -h /
+
+      - name: Install Rust
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          rustup update stable
+          rustup default stable
+          rustup component add clippy rustfmt
+
+          rustc --version
+          cargo --version
+
+      - name: Install Linux dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sudo apt-get update
+
+          # GitHub's Ubuntu 22.04 image preinstalls LLVM's libunwind 14,
+          # which conflicts with the GNU libunwind required by GStreamer.
+          sudo apt-get remove --yes libunwind-14-dev
+
+          sudo apt-get install --yes \
+            build-essential \
+            clang-14 \
+            cmake \
+            gstreamer1.0-libav \
+            gstreamer1.0-plugins-bad \
+            gstreamer1.0-plugins-base \
+            gstreamer1.0-plugins-good \
+            gstreamer1.0-tools \
+            gstreamer1.0-plugins-ugly \
+            gstreamer1.0-pulseaudio \
+            libclang-14-dev \
+            libfontconfig1-dev \
+            libgstreamer1.0-dev \
+            libgstreamer-plugins-base1.0-dev \
+            libgstreamer-plugins-bad1.0-dev \
+            libunwind-dev \
+            libx11-dev \
+            libx11-xcb-dev \
+            libxcursor-dev \
+            libxkbcommon-x11-dev \
+            ninja-build \
+            pkg-config \
+            xinput
+
+          test -x "${CLANG_PATH}"
+          test -e "${LIBCLANG_PATH}/libclang.so"
+          "${CLANG_PATH}" --version
+
+          pkg-config --atleast-version=1.18 gstreamer-1.0
+          pkg-config --atleast-version=1.18 gstreamer-app-1.0
+          pkg-config --atleast-version=1.18 gstreamer-audio-1.0
+          pkg-config --atleast-version=1.18 gstreamer-video-1.0
+          pkg-config --atleast-version=1.18 gstreamer-webrtc-1.0
+          gst-inspect-1.0 playbin3 >/dev/null
+          gst-inspect-1.0 autoaudiosink >/dev/null
+          gst-inspect-1.0 avdec_h264 >/dev/null
+
+      - name: Run quality checks
+        shell: bash
+        env:
+          CARGO_TARGET_DIR: ${{ runner.temp }}/hermes-qa-target
+        run: |
+          set -euo pipefail
+
+          df -h /
+          make qa
+
+      - name: Reclaim quality-check build space
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cargo clean --target-dir "${RUNNER_TEMP}/hermes-qa-target"
+          df -h /
+
+      - name: Build release executable
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cargo build \
+            --locked \
+            --release \
+            --package hermes-desktop
+
+      - name: Verify Linux compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          executable="target/release/hermes-desktop"
+          maximum_glibc="GLIBC_2.35"
+
+          ldd "${executable}"
+
+          required_glibc="$(
+            readelf --version-info "${executable}" |
+              grep --only-matching --extended-regexp 'GLIBC_[0-9]+(\.[0-9]+)+' |
+              sort --version-sort --unique |
+              tail --lines=1
+          )"
+
+          if [[ -z "${required_glibc}" ]]; then
+            echo "Unable to determine the executable's glibc requirement." >&2
+            exit 1
+          fi
+
+          echo "Maximum required glibc symbol: ${required_glibc}"
+
+          newest_glibc="$(
+            printf '%s\n%s\n' "${maximum_glibc}" "${required_glibc}" |
+              sort --version-sort |
+              tail --lines=1
+          )"
+
+          if [[ "${newest_glibc}" != "${maximum_glibc}" ]]; then
+            echo \
+              "The executable requires ${required_glibc}; the supported maximum is ${maximum_glibc}." \
+              >&2
+            exit 1
+          fi
+
+      - name: Create Linux archive
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          package="hermes-browser-linux-x86_64"
+          executable="target/release/hermes-desktop"
+          output_directory="dist/${package}"
+          archive="dist/${package}.tar.gz"
+          checksum="${archive}.sha256"
+
+          test -f "${executable}"
+
+          mkdir -p "${output_directory}"
+
+          install \
+            -m 0755 \
+            "${executable}" \
+            "${output_directory}/hermes-browser"
+
+          strip --strip-unneeded \
+            "${output_directory}/hermes-browser"
+
+          cp README.md \
+            "${output_directory}/README.md"
+
+          if [[ -f LICENSE ]]; then
+            cp LICENSE \
+              "${output_directory}/LICENSE"
+          fi
+
+          tar \
+            -C dist \
+            -czf "${archive}" \
+            "${package}"
+
+          (
+            cd dist
+            sha256sum \
+              "${package}.tar.gz" \
+              > "${package}.tar.gz.sha256"
+          )
+
+          test -f "${archive}"
+          test -f "${checksum}"
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: hermes-browser-linux-x86_64
+          path: |
+            dist/hermes-browser-linux-x86_64.tar.gz
+            dist/hermes-browser-linux-x86_64.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - build-linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List release artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          find dist -maxdepth 1 -type f -print
+
+      - name: Create or update the GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          tag="${GITHUB_REF_NAME}"
+
+          if ! gh release view "${tag}" >/dev/null 2>&1; then
+            gh release create \
+              "${tag}" \
+              --verify-tag \
+              --generate-notes \
+              --title "${tag}"
+          fi
+
+          gh release upload \
+            "${tag}" \
+            dist/* \
+            --clobber

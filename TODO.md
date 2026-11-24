@@ -10,6 +10,10 @@ Updated 2026-11-07 UTC. This is the maintained Noxviola continuation index. Proj
 
 **Athena is the requested unified home for learning, Engineering Atlas and Feature Foundry. AoA remains unfinished, and the engineering research and implementation goal remains ongoing under Athena.** Migration, a single article, experiment or release does not complete that ongoing goal. Keep Athena and AoA in the working queue. Check the existing work and current owner before starting another pass, then record a concrete result or the exact remaining blocker.
 
+### Athena: shared capability coordination and zero-loss evolution
+
+- [ ] Follow the single authoritative [Athena reusable-package coordination roadmap](https://github.com/Herbertofury/Athena/blob/main/docs/REUSABLE-PACKAGE-COORDINATION.md) and [shared capability index](https://github.com/Herbertofury/Athena/blob/main/guidance/registry/shared-capabilities.json). Extend actual consumer inventory, compare overlapping implementations with equivalent workloads, select and maintain verified shared implementations per compatible target, and preserve unique local features, rollback and portable data. Link evidence and status in Athena rather than duplicating the backlog. Initial source inventory exists; runtime comparison and consumer adoption remain open.
+
 ### Athena: one unified app, current migration priority
 
 - [ ] **Combine the learning academy, Engineering Atlas and Feature Foundry into ONE integrated app named Athena.** Shared navigation, overlapping features, data flows and the learning/research experience must work together; separate apps copied into one repository do not complete this request. Preserve working source and history during integration. [Athena](https://github.com/Herbertofury/Athena) · [Current engineering import](https://github.com/Herbertofury/Athena/blob/main/engineering/README.md).

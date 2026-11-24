@@ -10,6 +10,10 @@ Updated 2026-11-07 UTC. This is the maintained Noxviola continuation index. Proj
 
 **Athena is the requested unified home for learning, Engineering Atlas and Feature Foundry. AoA remains unfinished, and the engineering research and implementation goal remains ongoing under Athena.** Migration, a single article, experiment or release does not complete that ongoing goal. Keep Athena and AoA in the working queue. Check the existing work and current owner before starting another pass, then record a concrete result or the exact remaining blocker.
 
+### Portfolio catch-up: shared capability and frontier modernization · 2026-11-24
+
+- [ ] Use the single [Athena portfolio alignment index](https://github.com/Herbertofury/Athena/blob/main/docs/PORTFOLIO-ALIGNMENT.md) to route active work across all 42 repositories. It assigns ordered M0–M4 milestones and links existing local issues. Start with M1 provider/site adapter identity, shared transfer and two-consumer proof, then M2 current stack/reusable runtime tools. Preserve each project's last-good features, native acceptance, portable data and original work records. Do not duplicate the checklist here; update the linked owner/evidence and portfolio status at material checkpoints.
+
 ### Athena: shared capability coordination and zero-loss evolution
 
 - [ ] Follow the single authoritative [Athena reusable-package coordination roadmap](https://github.com/Herbertofury/Athena/blob/main/docs/REUSABLE-PACKAGE-COORDINATION.md) and [shared capability index](https://github.com/Herbertofury/Athena/blob/main/guidance/registry/shared-capabilities.json). Extend actual consumer inventory, compare overlapping implementations with equivalent workloads, select and maintain verified shared implementations per compatible target, and preserve unique local features, rollback and portable data. Link evidence and status in Athena rather than duplicating the backlog. Initial source inventory exists; runtime comparison and consumer adoption remain open.

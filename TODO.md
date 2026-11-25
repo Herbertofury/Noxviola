@@ -2,6 +2,11 @@
 
 Updated 2026-11-07 UTC. This is the maintained Noxviola continuation index. Project-local plans remain authoritative for implementation detail. The earlier checklist and verified checkpoints are preserved below; an old checkpoint does not close a whole project.
 
+
+## Native AI orchestration command center · 2026-11-25
+
+- [ ] Deliver Noxviola's native multi-chat AI command center and Project Constellation parity, with real user-selected Extra High/Pro and other provider modes, parallel independent or cooperating jobs, dependency orchestration, live dashboard, project knowledge/output vault, recovery, permissions, native local tooling and zero-loss performance. The [living master directive and AI-M1–AI-M6 milestones](https://github.com/Herbertofury/Noxviola/blob/browser/enderloom-baseline-20261115/docs/browser/MASTER-GOAL.md#8a-flagship-feature-native-ai-orchestration-command-center) are authoritative; continue the existing PR #5 implementation without duplicating the backlog or merging held PRs. All milestones remain open; this is a planning checkpoint, not implemented functionality.
+
 ## New character/catalog requests · 2026-11-15
 
 - [ ] Reconcile and deliver the [Memories / JetSetCraft character backlog](docs/MEMORIES-JETSETCRAFT-BACKLOG.md): Grinions, AMYGDALA/Lucy, SCP variants, Honkistas guests, Edgerunners and other favorites, with author lore/socials/credits, rights and native acceptance tracked separately. The linked November 15 index is scoped new work; it does not merge or replace held PR #4. Draft CI and abstract roster logic are not visible game appearances. Continue the existing implementation pass rather than duplicating it.

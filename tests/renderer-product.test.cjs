@@ -427,3 +427,18 @@ test('split pane chrome keeps independent identity/address commands and explicit
 test('group actions expose every-tab split and keyboard-accessible native menu without acting on cancel',async t=>{
  const tabs=[{id:'a',title:'A',url:'https://example.com',identity:'personal',workspaceId:'default',groupId:'g'},{id:'b',title:'B',url:'https://example.com',identity:'work',workspaceId:'default',groupId:'g'}],h=await harness(t,{initial:state({tabs,activeId:'a',panel:'workspaces'})});h.emit('onWorkspaces',{items:[{id:'default',name:'Default',color:'purple'}],groups:[{id:'g',workspaceId:'default',name:'All research',color:'purple',collapsed:false},{id:'empty',workspaceId:'default',name:'Empty',color:'grey',collapsed:false}]});await tick();const menu=h.$('tabs').querySelector('.tab-group-actions');assert.equal(menu.getAttribute('aria-haspopup'),'menu');assert.equal(menu.getAttribute('aria-label'),'Actions for group All research');menu.click();await tick();assert.deepEqual(h.calls.at(-1),{name:'group-menu',value:'g'});assert.equal(h.calls.some(c=>c.name==='group-split'),false,'Opening or canceling a native menu must not split tabs');const button=h.$('group-items').querySelector('[data-group-id=g] [data-split-group]');assert.equal(button.textContent,'Show all 2 tabs in split view');button.click();await tick();assert.deepEqual(h.calls.at(-1),{name:'group-split',value:'g'});assert.equal(h.$('group-items').querySelector('[data-group-id=empty] [data-split-group]').disabled,true);
 });
+
+test('switching a live tab updates selection only on the outgoing and incoming tabs',async t=>{
+  const tabs=Array.from({length:100},(_,index)=>({
+    id:'tab-'+index,identity:'personal',workspaceId:'default',title:'Page '+index,url:'https://example.test/'+index,live:true,
+  }));
+  const h=await harness(t,{initial:state({tabs,activeId:tabs[0].id})});
+  const observer=new h.window.MutationObserver(()=>{});
+  observer.observe(h.$('tabs'),{attributes:true,subtree:true,attributeFilter:['aria-selected']});
+  h.update({activeId:tabs[37].id});
+  const changed=observer.takeRecords().map(record=>record.target.parentElement.dataset.tabId);
+  assert.deepEqual(changed,[tabs[0].id,tabs[37].id]);
+  assert.equal(h.$('tabs').querySelectorAll('[role=tab]').length,tabs.length);
+  assert.equal(h.$('tabs').querySelector('[aria-selected=true]').parentElement.dataset.tabId,tabs[37].id);
+  observer.disconnect();
+});

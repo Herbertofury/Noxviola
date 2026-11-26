@@ -25,6 +25,7 @@ const bookmarkSnapshots=new Map();
 function retainBookmarkDrafts(){const retained=new Set([bookmarkData.identity,bookmarkDraftIdentity,bookmarkMoveIdentity]);for(const identity of bookmarkSnapshots.keys())if(!retained.has(identity))bookmarkSnapshots.delete(identity);}
 let lastProfiles = '', lastSettings = '', lastSaveError = '', addressDirty = false;
 const tabNodes = new Map(), groupNodes=new Map(), painting = new WeakMap();
+const tabLooks=new WeakMap();
 let hideTabPreview = () => {};
 let revealedTabKey = '';
 const SIDEBAR_TOOLS=[['tabs','Open tabs'],['bookmarks','Bookmarks'],['history','History'],['downloads','Downloads'],['passwords','Passwords'],['accounts','Accounts & identities'],['media','Media player'],['notifications','Notifications'],['extension-panels','Extension panels'],['extensions','Extensions','extensions'],['settings','Settings','settings'],['mods','Mods','mods'],['vault','Library','vault'],['following','Following','following',false],['resources','Resource monitor','resources',false],['start','New tab','new',false]];
@@ -118,26 +119,33 @@ function renderTabs(state) {
       wrap.ondragover=event=>{if([...event.dataTransfer?.types||[]].includes('application/x-noxviola-tab'))event.preventDefault();};
       wrap.ondrop=event=>{event.preventDefault();const moving=event.dataTransfer?.getData('application/x-noxviola-tab'),target=currentState.tabs.find(row=>row.id===wrap.dataset.tabId);if(moving&&target){const peers=currentState.tabs.filter(row=>(row.workspaceId||'default')===(target.workspaceId||'default'));run('tab-move',{id:moving,index:peers.findIndex(row=>row.id===target.id)});}};
     }
-    const [select,close] = wrap.children;
-    const label = tab.title || 'New tab',status = `${tab.pinned?'⌖ ':''}${tab.muted?'♬̸':tab.audible?'♬':''}`.trim();
-    const icon=select.children[0],favicon=typeof tab.favicon==='string'&&/^data:image\/(?:png|x-icon);base64,/.test(tab.favicon)?tab.favicon:'';
-    if (icon.dataset.favicon !== favicon) {
-      icon.dataset.favicon=favicon; icon.replaceChildren();
-      if(favicon){const image=node('img');image.alt='';image.src=favicon;icon.append(image);}
-    }
-    if (select.children[1].textContent !== label) select.children[1].textContent = label;
-    if (select.children[2].textContent !== status) select.children[2].textContent = status;
-    wrap.dataset.loading=String(Boolean(tab.loading));
-    wrap.dataset.active=String(tab.id === state.activeId);
-    select.title = `${identityName(tab.identity)} · ${tab.url} · Right-click or Shift+F10 for tab actions`;
-    select.setAttribute('aria-selected',String(tab.id === state.activeId));
-    select.setAttribute('aria-label',`${label}, ${identityName(tab.identity)}${tab.pinned?', pinned':''}${tab.muted?', muted':tab.audible?', playing audio':''}${tab.loading?', loading':''}`);
-    select.tabIndex = tab.id === state.activeId ? 0 : -1;
-    close.setAttribute('aria-label',`Close ${tab.title || 'New tab'}`);
-    wrap.dataset.pinned=String(Boolean(tab.pinned));
+    const label=tab.title||'New tab',identity=identityName(tab.identity),selected=tab.id===state.activeId;
     const group=groups.get(tab.groupId),inWorkspace=(tab.workspaceId||'default')===activeWorkspace;
-    wrap.hidden=!inWorkspace||Boolean(group?.collapsed&&tab.id!==state.activeId);
-    if(group)wrap.dataset.groupColor=group.color;else delete wrap.dataset.groupColor;
+    const hidden=!inWorkspace||Boolean(group?.collapsed&&!selected);
+    const look=[label,identity,tab.url,tab.favicon,tab.loading,tab.pinned,tab.muted,tab.audible,selected,hidden,group?.color];
+    const previous=tabLooks.get(wrap);
+    if(!previous||look.some((value,index)=>value!==previous[index])){
+      tabLooks.set(wrap,look);
+      const [select,close]=wrap.children,[icon,title,status]=select.children;
+      const favicon=typeof tab.favicon==='string'&&/^data:image\/(?:png|x-icon);base64,/.test(tab.favicon)?tab.favicon:'';
+      if(icon.dataset.favicon!==favicon){
+        icon.dataset.favicon=favicon;icon.replaceChildren();
+        if(favicon){const image=node('img');image.alt='';image.src=favicon;icon.append(image);}
+      }
+      if(title.textContent!==label)title.textContent=label;
+      const flags=`${tab.pinned?'⌖ ':''}${tab.muted?'♬̸':tab.audible?'♬':''}`.trim();
+      if(status.textContent!==flags)status.textContent=flags;
+      wrap.dataset.loading=String(Boolean(tab.loading));
+      wrap.dataset.active=String(selected);
+      select.title=`${identity} · ${tab.url} · Right-click or Shift+F10 for tab actions`;
+      select.setAttribute('aria-selected',String(selected));
+      select.setAttribute('aria-label',`${label}, ${identity}${tab.pinned?', pinned':''}${tab.muted?', muted':tab.audible?', playing audio':''}${tab.loading?', loading':''}`);
+      select.tabIndex=selected?0:-1;
+      close.setAttribute('aria-label',`Close ${label}`);
+      wrap.dataset.pinned=String(Boolean(tab.pinned));
+      wrap.hidden=hidden;
+      if(group)wrap.dataset.groupColor=group.color;else delete wrap.dataset.groupColor;
+    }
     if(group&&inWorkspace&&!seenGroups.has(group.id)){
       seenGroups.add(group.id);let control=groupNodes.get(group.id);
       if(!control){control=button('',()=>api.command('group-update',{id:group.id,collapsed:!workspaceData.groups.find(row=>row.id===group.id)?.collapsed}),'tab-group');control.oncontextmenu=event=>{event.preventDefault();api.command('group-menu',group.id);};control.onkeydown=event=>{if(event.key==='ContextMenu'||event.shiftKey&&event.key==='F10'){event.preventDefault();api.command('group-menu',group.id);}};control.groupActions=button('⋯',()=>api.command('group-menu',group.id),'tab-group-actions');control.groupActions.setAttribute('aria-haspopup','menu');groupNodes.set(group.id,control);}
@@ -341,14 +349,25 @@ function renderPreferenceForm(state) {
   applySettingsSearch();
 }
 function renderPanes(){
- const root=$('pane-chrome');if(!root)return;const renderKey=JSON.stringify([paneGeometry,currentState.panel,currentState.closing,currentState.activeId,currentState.profiles,currentState.tabs.map(t=>[t.id,t.title,t.url,t.identity])]);if(renderKey===paneChromeKey)return;paneChromeKey=renderKey;const focused=root.contains(document.activeElement)&&document.activeElement.tagName==='INPUT'?{id:document.activeElement.closest('[data-pane-id]')?.dataset.paneId,start:document.activeElement.selectionStart,end:document.activeElement.selectionEnd}:null;root.replaceChildren();if(currentState.panel||currentState.closing||(paneGeometry.panes?.length||0)<2)return;
- for(const pane of paneGeometry.panes){const tab=currentState.tabs.find(t=>t.id===pane.tabId);if(!tab)continue;const bar=node('form',undefined,'pane-toolbar'),r=pane.bounds;bar.dataset.paneId=tab.id;bar.style.cssText=`left:${r.x}px;top:${r.y}px;width:${r.width}px;height:${pane.toolbar}px`;bar.classList.toggle('active',tab.id===currentState.activeId);
+ const root=$('pane-chrome');
+ if(!root)return;
+ if(currentState.panel||currentState.closing||(paneGeometry.panes?.length||0)<2){
+   if(paneChromeKey){paneChromeKey='';root.replaceChildren();}
+   return;
+ }
+ const tabsByPane=new Map(paneGeometry.panes.map(({tabId})=>[tabId,currentState.tabs.find(tab=>tab.id===tabId)]));
+ const renderKey=JSON.stringify([paneGeometry,currentState.activeId,currentState.profiles,[...tabsByPane.values()].map(tab=>tab&&[tab.id,tab.title,tab.url,tab.identity])]);
+ if(renderKey===paneChromeKey)return;
+ paneChromeKey=renderKey;
+ const focused=root.contains(document.activeElement)&&document.activeElement.tagName==='INPUT'?{id:document.activeElement.closest('[data-pane-id]')?.dataset.paneId,start:document.activeElement.selectionStart,end:document.activeElement.selectionEnd}:null;
+ root.replaceChildren();
+ for(const pane of paneGeometry.panes){const tab=tabsByPane.get(pane.tabId);if(!tab)continue;const bar=node('form',undefined,'pane-toolbar'),r=pane.bounds;bar.dataset.paneId=tab.id;bar.style.cssText=`left:${r.x}px;top:${r.y}px;width:${r.width}px;height:${pane.toolbar}px`;bar.classList.toggle('active',tab.id===currentState.activeId);
   const focus=button('●',()=>api.command('pane-focus',tab.id));focus.title=`Focus ${tab.title}`;focus.setAttribute('aria-label',focus.title);
   const identity=node('select');setOptions(identity,currentState.profiles,tab.identity);identity.setAttribute('aria-label',`Account container for ${tab.title}`);identity.onchange=()=>api.command('pane-identity',{id:tab.id,identity:identity.value}).catch(error=>announce(error.message));
   const input=node('input');input.value=paneDrafts.get(tab.id)??(tab.url==='about:blank'?'':tab.url);input.placeholder='Address or search';input.setAttribute('aria-label',`Address for ${tab.title}`);input.oninput=()=>paneDrafts.set(tab.id,input.value);
   bar.onsubmit=event=>{event.preventDefault();const submitted=input.value;api.command('pane-navigate',{id:tab.id,url:submitted}).then(()=>{if(paneDrafts.get(tab.id)===submitted)paneDrafts.delete(tab.id);}).catch(error=>announce(error.message));};
   const right=button('↔',()=>api.command('pane-split',{id:tab.id,axis:'x'})),below=button('↕',()=>api.command('pane-split',{id:tab.id,axis:'y'})),hide=button('×',()=>api.command('pane-hide',tab.id));right.title='Split this pane side by side';below.title='Split this pane above and below';hide.title='Hide this pane; keep its tab';for(const b of [right,below,hide])b.setAttribute('aria-label',b.title);
-  const move=node('select');move.append(node('option','Move…'));move.firstChild.value='';move.setAttribute('aria-label',`Swap position of ${tab.title}`);for(const other of paneGeometry.panes)if(other.tabId!==tab.id){const option=node('option',currentState.tabs.find(t=>t.id===other.tabId)?.title||'Other pane');option.value=other.tabId;move.append(option);}move.onchange=()=>{if(move.value)api.command('pane-swap',{first:tab.id,second:move.value}).catch(error=>announce(error.message));};
+  const move=node('select');move.append(node('option','Move…'));move.firstChild.value='';move.setAttribute('aria-label',`Swap position of ${tab.title}`);for(const other of paneGeometry.panes)if(other.tabId!==tab.id){const option=node('option',tabsByPane.get(other.tabId)?.title||'Other pane');option.value=other.tabId;move.append(option);}move.onchange=()=>{if(move.value)api.command('pane-swap',{first:tab.id,second:move.value}).catch(error=>announce(error.message));};
   bar.append(focus,identity,input,right,below,move,hide);root.append(bar);
  }
  for(const divider of paneGeometry.dividers||[]){const grip=node('button',undefined,'pane-divider'),r=divider.bounds;grip.type='button';grip.style.cssText=`left:${r.x}px;top:${r.y}px;width:${r.width}px;height:${r.height}px`;grip.setAttribute('role','separator');grip.setAttribute('aria-label','Resize split panes');grip.setAttribute('aria-orientation',divider.axis==='x'?'vertical':'horizontal');grip.setAttribute('aria-valuenow',String(Math.round(divider.ratio*100)));grip.dataset.axis=divider.axis;

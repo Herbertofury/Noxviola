@@ -60,7 +60,7 @@ let activeWorkspaceId = 'default', nextRuntimeTabId = 1, preferencePreview = nul
 let sidebarProgress=0,sidebarRailProgress=0,sidebarTimer=null,sidebarDismissTimer=null,sidebarDismissGeneration=0;
 const runtimeTabs = new Map(), nativeTabs = new Map(), sessionTargets = new Map(), workspaceLastTabs = new Map(), browserEvents = new EventEmitter();
 const configuredSessions = new Set(), identityInitializations = new Map(), extensionWindows = new Map(), pendingOperations = new Set();
-const SIDEBAR = 210;
+const visiblePageViews = new Set(), pageViewBounds = new WeakMap();
 const chromeHeight = () => (preferences.tabLayout === 'vertical' ? 40 : 76) + (preferences.showBookmarksBar ? 32 : 0);
 const active = () => tabs.find(tab => tab.id === activeId);
 const tabWorkspace = tab => tab.saved.workspaceId || 'default';
@@ -108,11 +108,13 @@ function tabDescriptor(tab) {
     status:tab.loading?'loading':'complete',title:tab.title,url:tab.url,audible:wc?.isCurrentlyAudible()||false,
     mutedInfo:{muted:wc?.isAudioMuted()??!!tab.saved.muted},groupId:-1,autoDiscardable:false};
 }
+const tabSummaries=()=>tabs.map(tab => ({id:tab.id,url:tab.url,title:tab.title,identity:tab.identity,loading:tab.loading,live:!!tab.view,favicon:tab.favicon,
+      workspaceId:tabWorkspace(tab),groupId:tab.saved.groupId||null,pinned:!!tab.saved.pinned,muted:tab.view?.webContents.isAudioMuted()??!!tab.saved.muted,audible:tab.view?.webContents.isCurrentlyAudible()||false}));
 function stateView() {
-  return {version:1, profiles, preferences, activeId, currentIdentity, splitId, paneTree, paneLayouts, paneGeometry:currentPaneGeometry(), panel, closing, saveError,
-    activeWorkspaceId,chromeHeight:chromeHeight(),sidebarGeometry:currentSidebarGeometry(),sidebarWeb:sidebarWeb.state(),sidebarExtension:sidebarExtension?.state(),modPresentation,showingModSplash,player:playerPresentation,playerExpanded:playerTakeover,shortcuts:preferenceStore.shortcutList(preferences),downloadHistory:downloads?.getStatus(),
-    canRestore:closed.length > 0, tabs:tabs.map(tab => ({id:tab.id,url:tab.url,title:tab.title,identity:tab.identity,loading:tab.loading,live:!!tab.view,favicon:tab.favicon,
-      workspaceId:tabWorkspace(tab),groupId:tab.saved.groupId||null,pinned:!!tab.saved.pinned,muted:tab.view?.webContents.isAudioMuted()??!!tab.saved.muted,audible:tab.view?.webContents.isCurrentlyAudible()||false})),
+  const sidebarGeometry=currentSidebarGeometry();
+  return {version:1, profiles, preferences, activeId, currentIdentity, splitId, paneTree, paneLayouts, paneGeometry:currentPaneGeometry(sidebarGeometry), panel, closing, saveError,
+    activeWorkspaceId,chromeHeight:chromeHeight(),sidebarGeometry,sidebarWeb:sidebarWeb.state(),sidebarExtension:sidebarExtension?.state(),modPresentation,showingModSplash,player:playerPresentation,playerExpanded:playerTakeover,shortcuts:preferenceStore.shortcutList(preferences),downloadHistory:downloads?.getStatus(),
+    canRestore:closed.length > 0, tabs:tabSummaries(),
     canBack:active()?.view?.webContents.navigationHistory.canGoBack() || false,
     canForward:active()?.view?.webContents.navigationHistory.canGoForward() || false,
     engine:{electron:process.versions.electron,chromium:process.versions.chrome,isPackaged:app.isPackaged,appVersion:app.getVersion()}};
@@ -120,7 +122,7 @@ function stateView() {
 function tabSearchData(){
   let workspaceList=[],groups=[];
   try{workspaceList=workspaces?.list()||[];groups=workspaceList.flatMap(item=>workspaces.listGroups(item.id));}catch{}
-  const state=stateView();return {tabs:state.tabs,profiles:state.profiles,activeId:state.activeId,workspaces:workspaceList,groups,style:preferences.tabSearchStyle,
+  return {tabs:tabSummaries(),profiles,activeId,workspaces:workspaceList,groups,style:preferences.tabSearchStyle,
     closed:closed.map(item=>({closedId:item.closedId,title:item.saved.title,url:item.saved.url,identity:item.saved.identity,workspaceId:item.saved.workspaceId,groupId:item.saved.groupId})).reverse()};
 }
 function queueSave() {
@@ -209,14 +211,18 @@ function serviceView(service, read) {
 function publishFollows() { if(panel==='following')send('follows',serviceView(follows,()=>({identity:currentIdentity,items:follows.list(currentIdentity)}))); }
 function publishHistory() { if(panel==='history'||preferences.sidebarVisible&&preferences.sidebarExpanded&&preferences.sidebarActive==='history')send('history',serviceView(history,()=>({identity:currentIdentity,...history.query(currentIdentity,{}),settings:history.settings(currentIdentity)}))); }
 function publishBookmarks() { if(panel==='bookmarks'||preferences.showBookmarksBar||preferences.sidebarVisible&&preferences.sidebarExpanded&&preferences.sidebarActive==='bookmarks')send('bookmarks',serviceView(bookmarks,()=>({identity:currentIdentity,tree:bookmarks.getTree(currentIdentity)}))); }
-function publishWorkspaces() { send('workspaces',serviceView(workspaces,()=>({items:workspaces.list(),groups:workspaces.list().flatMap(item=>workspaces.listGroups(item.id)),activeWorkspaceId}))); }
+function publishWorkspaces(){
+  send('workspaces',serviceView(workspaces,()=>{
+    const items=workspaces.list();
+    return {items,groups:items.flatMap(item=>workspaces.listGroups(item.id)),activeWorkspaceId};
+  }));
+}
 function recordHistory(tab,url) {
   if(!httpUrl(url)||!history)return;
   try{history.record(tab.identity,{url,title:tab.title,transition:tab.pendingTransition||'link'});tab.committedURL=url;tab.pendingTransition=null;publishHistory();}
   catch(error){notice(`History was not saved: ${error.message}`);}
 }
-function currentSidebarGeometry(){
-  const [width,height]=win&&!win.isDestroyed()?win.getContentSize():[1320,860];
+function currentSidebarGeometry([width,height]=win&&!win.isDestroyed()?win.getContentSize():[1320,860]){
   return sidebarLayout({width,height,chromeHeight:chromeHeight(),verticalTabs:preferences.tabLayout==='vertical',visible:preferences.sidebarVisible||sidebarProgress>0,expanded:sidebarProgress>0,side:preferences.sidebarSide,panelWidth:preferences.sidebarWidth,progress:sidebarProgress,railProgress:sidebarRailProgress,takeover:playerTakeover});
 }
 function syncSidebarWeb({skipExtension=false,tabChanged=false}={}){
@@ -274,12 +280,31 @@ function syncPanes(){
   const allowed=new Set(visibleTabs().map(tab=>tab.id));for(const id of paneLayout.ids(paneTree))if(!allowed.has(id))paneTree=paneLayout.remove(paneTree,id);
   if(!paneTree&&activeId)paneTree={tabId:activeId};splitId=paneLayout.ids(paneTree).find(id=>id!==activeId)||null;
 }
-function currentPaneGeometry(){if(!win||win.isDestroyed())return {panes:[],dividers:[]};const [,height]=win.getContentSize(),g=currentSidebarGeometry();return paneLayout.layout(paneTree,{x:g.pageX,y:chromeHeight(),width:g.pageWidth,height:Math.max(0,height-chromeHeight())});}
+function currentPaneGeometry(geometry=currentSidebarGeometry()){
+  if(!win||win.isDestroyed())return {panes:[],dividers:[]};
+  return paneLayout.layout(paneTree,{x:geometry.pageX,y:chromeHeight(),width:geometry.pageWidth,height:geometry.contentHeight});
+}
 function layout() {
   if (!win || win.isDestroyed()) return;
-  syncPanes();const [width,height] = win.getContentSize(), geometry=currentSidebarGeometry(),panes=currentPaneGeometry();
-  const visible=new Map(panes.panes.map(pane=>[pane.tabId,pane]));
-  for (const tab of tabs) {if(!tab.view)continue;const pane=visible.get(tab.id);tab.view.setVisible(Boolean(pane)&&!panel&&!showingModSplash);if(pane)tab.view.setBounds(pane.content);}
+  syncPanes();
+  const size=win.getContentSize(),height=size[1],geometry=currentSidebarGeometry(size),panes=currentPaneGeometry(geometry);
+  const nextVisible=new Set();
+  for(const {tabId,content} of panes.panes){
+    const view=tabs.find(tab=>tab.id===tabId)?.view;
+    if(!view)continue;
+    const previous=pageViewBounds.get(view);
+    if(!previous||previous.x!==content.x||previous.y!==content.y||previous.width!==content.width||previous.height!==content.height){
+      view.setBounds(content);
+      pageViewBounds.set(view,content);
+    }
+    if(!panel&&!showingModSplash)nextVisible.add(view);
+  }
+  for(const view of nextVisible)if(!visiblePageViews.has(view)){
+    view.setVisible(true);visiblePageViews.add(view);
+  }
+  for(const view of visiblePageViews)if(!nextVisible.has(view)){
+    view.setVisible(false);visiblePageViews.delete(view);
+  }
   send('pane-layout',panes);
   const grip=Math.min(6,geometry.panel);
   const sidebarBounds={x:geometry.panelX+(preferences.sidebarSide==='right'?grip:0),y:chromeHeight()+40,width:Math.max(0,geometry.panel-grip),height:showingModSplash?0:Math.max(0,height-chromeHeight()-40)};
@@ -333,6 +358,7 @@ function tabNavigationAllowed(tab, value) {
 function ensureView(tab) {
   if (tab.view || tab.url === 'about:blank') return tab.view;
   const view = new WebContentsView({webPreferences:{session:identitySession(tab.identity),nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true,allowRunningInsecureContent:false,spellcheck:true}});
+  view.setVisible(false);
   tab.view = view; tab.initializing = true; win.contentView.addChildView(view);
   const wc = view.webContents;
   gxStyles.attach(wc);
@@ -403,14 +429,17 @@ function ensureView(tab) {
 function activate(id) {
   tabPreview.hide();
   const tab = tabs.find(row => row.id === id); if (!tab || closing) return;
-  const changed = activeId !== id; activeId = id; currentIdentity = tab.identity;activeWorkspaceId=tabWorkspace(tab);workspaceLastTabs.set(activeWorkspaceId,id);
+  const changed=activeId!==id,workspace=tabWorkspace(tab),workspaceChanged=activeWorkspaceId!==workspace;
+  activeId=id;currentIdentity=tab.identity;activeWorkspaceId=workspace;workspaceLastTabs.set(workspace,id);
   if(player.state().identity!==currentIdentity){miniStarted=null;miniDismissed=null;player.invalidate();}
   if(!paneLayout.ids(paneTree).includes(id)){
     if(paneLayout.ids(paneTree).length>1)paneLayouts.push(paneTree);
     const saved=paneLayouts.find(tree=>paneLayout.ids(tree).includes(id));
     paneLayouts=paneLayouts.filter(tree=>tree!==saved);paneTree=saved||{tabId:id};
   }
-  showPage();for(const paneId of paneLayout.ids(paneTree))ensureView(findTab(paneId));syncSidebarWeb({tabChanged:changed});layout();publish(changed);publishHistory();publishBookmarks();publishWorkspaces();publishExtensionActions();
+  showPage();for(const paneId of paneLayout.ids(paneTree))ensureView(findTab(paneId));syncSidebarWeb({tabChanged:changed});layout();publish(changed);publishHistory();publishBookmarks();
+  if(workspaceChanged)publishWorkspaces();
+  publishExtensionActions();
   if(changed)hostEvent(tab.identity,'tabs.onActivated',{tabId:tab.runtimeId,windowId:win.id});
 }
 function newTab(url = 'about:blank', identity = currentIdentity, saved = null, position = tabs.length, options = {}) {
@@ -430,6 +459,7 @@ function removeView(tab) {
   tab.faviconRevision++;tab.favicon='';
   if (!tab.view) return;
   const view = tab.view; tab.view = null;
+  visiblePageViews.delete(view);
   nativeTabs.delete(view.webContents.id);win.contentView.removeChildView(view);view.webContents.close();void player.schedule();
 }
 function closeTab(id) {

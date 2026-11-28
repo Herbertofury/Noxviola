@@ -6,15 +6,21 @@ const path = require('node:path');
 const { readContext } = require('../../scripts/native-smoke.cjs');
 
 const AREAS = ['local', 'sync'];
-const SOURCES = [
-  'https://github.com/electron/electron/blob/v45.3.2/docs/api/extensions.md#chromestorage',
-  'https://github.com/electron/electron/blob/v45.3.2/shell/browser/extensions/api/storage/electron_sync_value_store_cache.cc',
-  'https://github.com/electron/electron/blob/v45.3.2/shell/browser/extensions/api/storage/electron_managed_value_store_cache.cc',
-  'https://github.com/chromium/chromium/blob/156.0.8078.100/extensions/common/api/storage.json',
-  'https://github.com/chromium/chromium/blob/156.0.8078.100/extensions/browser/api/storage/storage_api.cc',
-  'https://github.com/chromium/chromium/blob/156.0.8078.100/extensions/browser/api/storage/storage_frontend.cc',
-  'https://github.com/chromium/chromium/blob/156.0.8078.100/extensions/browser/api/storage/settings_storage_quota_enforcer.cc',
-];
+function storageSources() {
+  const electron = process.versions.electron;
+  const chromium = process.versions.chrome;
+  const documented = {'45.3.2':'156.0.8078.100', '45.5.0':'156.0.8078.109'};
+  assert.equal(chromium, documented[electron], 'Native storage documentation must match the observed engine pair');
+  return [
+    `https://github.com/electron/electron/blob/v${electron}/docs/api/extensions.md#chromestorage`,
+    `https://github.com/electron/electron/blob/v${electron}/shell/browser/extensions/api/storage/electron_sync_value_store_cache.cc`,
+    `https://github.com/electron/electron/blob/v${electron}/shell/browser/extensions/api/storage/electron_managed_value_store_cache.cc`,
+    `https://github.com/chromium/chromium/blob/${chromium}/extensions/common/api/storage.json`,
+    `https://github.com/chromium/chromium/blob/${chromium}/extensions/browser/api/storage/storage_api.cc`,
+    `https://github.com/chromium/chromium/blob/${chromium}/extensions/browser/api/storage/storage_frontend.cc`,
+    `https://github.com/chromium/chromium/blob/${chromium}/extensions/browser/api/storage/settings_storage_quota_enforcer.cc`,
+  ];
+}
 const DEFAULTS = { shared: 'unused default', nullValue: 'unused default', falseValue: true, zero: 9, empty: 'unused default', missing: { fallback: true } };
 const MANAGED_DEFAULTS = { shared: 'managed query default', nullValue: null, falseValue: false, zero: 0, empty: '', missing: { fallback: true } };
 const MANAGED_READ_ONLY_ERROR = 'This is a read-only store.';
@@ -296,7 +302,7 @@ function createExtensionStorage({ context, result, backgroundPages, partitionFor
     source: 'Actual chrome.storage in the installed synthetic MV2 extension background documents',
     semantics: 'Separate local and sync disk namespaces; managed is empty and read-only with no enterprise policy provider. No cross-device transport is provided or claimed',
     scope: 'Same-candidate normal restart, two identity Sessions, native callbacks and onChanged, query defaults, atomic per-item quota rejection, and actual managed reads/keys/byte counts plus rejected set/remove/clear without changing local or sync. Enterprise policy loading/updates, rate quotas, service workers, content-script storage behavior and data deletion on uninstall are not qualified by this helper.',
-    documentation: SOURCES, contexts: [], runs: [],
+    documentation: storageSources(), contexts: [], runs: [],
   };
   function contexts(expected) {
     const identities = [expected.personalIdentity, expected.secondIdentity];

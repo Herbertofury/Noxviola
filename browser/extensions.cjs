@@ -12,7 +12,7 @@ const {crc32} = require('node:zlib');
 
 // Documentation evidence is version-bound, not a package admission allowlist.
 // An unreviewed engine must not inherit another release's storage claims.
-const STORAGE_EVIDENCE = new Map([['44.11.3', 'unsupported'], ['45.3.2', 'native-local']]);
+const STORAGE_EVIDENCE = new Map([['44.11.3', 'unsupported'], ['45.3.2', 'native-local'], ['45.5.0', 'native-local']]);
 const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const HASH = /^[0-9a-f]{64}$/;
 // Verification inventories stay in main-process memory. They are not registry

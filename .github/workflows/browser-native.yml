@@ -2,7 +2,7 @@ name: Native browser acceptance
 
 on:
   push:
-    branches: ['browser/enderloom-baseline-20261115']
+    branches: ['browser/enderloom-baseline-20261115', 'browser/container-picker-20261128']
     paths:
       - '.gitattributes'
       - 'browser/**'

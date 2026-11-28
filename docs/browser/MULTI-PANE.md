@@ -1,5 +1,9 @@
 # Independent multi-pane browsing
 
+## Open a new pane in a named container
+
+From the New Tab container menu, choose **Split right in container** or **Split below in container**, then pick an enrolled container. The existing pane stays open. The new pane gets a fresh blank tab in the selected session, in the current workspace. It does not move an existing tab from another workspace or copy the originating pane's page or sign-in. A menu opened for a pane that is no longer present cannot split a replacement pane.
+
 ## Owner goal
 
 Arbitrarily many independently controllable browser panes, split in either direction and configurable like windows. Each pane must select its own account/container with real storage isolation. The supplied reference shows side-by-side ChatGPT panes, but appearance alone is not the implementation baseline. Full Firefox/Chrome grouping and movement parity remains the target, not a completion claim.

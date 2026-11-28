@@ -283,3 +283,11 @@ body .pane-divider[data-axis=y]{cursor:var(--mod-cursor-row-resize,row-resize)}
 @container(min-width:760px){.mod-components{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
 body button:disabled{cursor:var(--mod-cursor-default,default)}
+
+#container-menu{flex:none;width:24px;min-width:24px;height:30px;min-height:30px;padding:0;display:grid;place-items:center;color:var(--muted);background:transparent;border-color:transparent;border-radius:8px}
+#account-containers{display:grid;gap:.4rem}
+.container-settings-row{display:flex;align-items:center;flex-wrap:wrap;gap:.4rem}
+.container-settings-row input{min-width:9rem;flex:1}
+#container-menu svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2}
+#container-menu:hover,#container-menu:focus-visible{color:var(--text);border-color:var(--border)}
+body[data-tab-layout=vertical] #container-menu{align-self:flex-start}

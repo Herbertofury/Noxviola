@@ -733,6 +733,17 @@ function buildMenu() {
     {label:'Save visible screenshot',click:()=>invoke('save-screenshot')},{label:'Edit screenshot',click:()=>invoke('edit-snapshot')},{label:'Resource monitor',click:()=>invoke('resources')},
     {label:'Customize',click:()=>invoke('settings')},{type:'separator'},{role:'quit'}]}]));
 }
+function showContainerMenu(anchor){
+  const invoke=(name,value)=>{if(name==='accounts'&&panel==='accounts')return;void runBrowserOperation(name,value).catch(error=>{notice(error.message);layout();publish(false);});};
+  const options={window:win},[width,height]=win.getContentSize();
+  if(anchor&&['x','y','height'].every(key=>Number.isFinite(anchor[key]))){
+    options.x=Math.max(0,Math.min(width-1,Math.round(anchor.x)));
+    options.y=Math.max(0,Math.min(height-1,Math.round(anchor.y+anchor.height)));
+  }
+  const {containerMenuTemplate}=require('./container-menu.cjs');
+  const pane=paneLayout.ids(paneTree).includes(activeId)?{id:activeId,workspaceId:activeWorkspaceId}:null;
+  Menu.buildFromTemplate(containerMenuTemplate(profiles,currentIdentity,invoke,pane)).popup(options);
+}
 function showBrowserMenu(anchor){
   const invoke=(name,value)=>runBrowserOperation(name,value).catch(error=>{notice(error.message);layout();publish(false);});
   const shortcuts=new Map(preferenceStore.shortcutList(preferences).map(item=>[item.id,item.accelerator]));
@@ -754,6 +765,12 @@ async function perform(name, value) {
   switch (name) {
     case 'state': return stateView();
     case 'browser-menu':showBrowserMenu(value?.anchor);break;
+    case 'container-menu':showContainerMenu(value?.anchor);break;
+    case 'container-focus-create':win.webContents.focus();send('focus-container-create');break;
+    case 'new-in-container': {
+      if(typeof value!=='string'||!profiles.some(profile=>profile.id===value))throw new Error('Choose an existing container.');
+      return newTab('about:blank',value);
+    }
     case 'tab-preview': if (value?.open) {void tabPreview.show(String(value.id||''),value.position).catch(()=>notice('Tab preview is unavailable.'));} else tabPreview.hide(); break;
     case 'search-tabs': {const width=win.getContentSize()[0],right=preferences.tabSearchPosition==='right',anchor=value?.anchor||{x:right?width-180:38,y:0,width:28,height:34,align:right?'right':'left'};tabPreview.hide();tabSearch.show(anchor);break;}
     case 'sidebar-toggle':changeSidebar({sidebarVisible:!preferences.sidebarVisible});break;
@@ -894,7 +911,17 @@ async function perform(name, value) {
       ]).popup(popup);break;
     }
     case 'pane-focus':{if(!paneLayout.ids(paneTree).includes(value))throw new Error('Pane not found.');activate(value);active()?.view?.webContents.focus();break;}
-    case 'pane-split':{const id=value?.id||activeId;if(!paneLayout.ids(paneTree).includes(id)||!['x','y'].includes(value?.axis))throw new Error('Invalid pane split.');const tab=tabs.find(t=>t.id===id);const next=newTab('about:blank',tab.identity,null,tabs.length,{active:false});const added=findTab(next);added.saved={...added.saved,groupId:tab.saved.groupId||null,pinned:!!tab.saved.pinned};paneTree=paneLayout.split(paneTree,id,next,value.axis);activate(next);publish();break;}
+    case 'pane-split':{
+      const id=value?.id||activeId,tab=tabs.find(t=>t.id===id);
+      if(!tab||tabWorkspace(tab)!==activeWorkspaceId||!paneLayout.ids(paneTree).includes(id)||!['x','y'].includes(value?.axis))throw new Error('Invalid pane split.');
+      const named=Object.hasOwn(value,'identity'),identity=named?value.identity:tab.identity;
+      if(named&&(value.id!==id||value.workspaceId!==activeWorkspaceId||typeof identity!=='string'||!profiles.some(profile=>profile.id===identity)))throw new Error('Choose an existing pane and container in this workspace.');
+      const next=newTab('about:blank',identity,null,tabs.length,{active:false});
+      const added=findTab(next);added.saved={...added.saved,groupId:tab.saved.groupId||null,pinned:!!tab.saved.pinned};
+      paneTree=paneLayout.split(paneTree,id,next,value.axis);activate(next);publish();
+      if(named)send('focus-address');
+      return named?next:undefined;
+    }
     case 'pane-hide':{if(!paneLayout.ids(paneTree).includes(value)||paneLayout.ids(paneTree).length<2)throw new Error('Keep at least one pane open.');paneTree=paneLayout.remove(paneTree,value);if(activeId===value)activate(paneLayout.ids(paneTree)[0]);layout();publish();break;}
     case 'pane-swap':{const ids=paneLayout.ids(paneTree);if(!ids.includes(value?.first)||!ids.includes(value?.second)||value.first===value.second)throw new Error('Choose two different panes.');const swap=n=>n.tabId?{tabId:n.tabId===value.first?value.second:n.tabId===value.second?value.first:n.tabId}:{...n,first:swap(n.first),second:swap(n.second)};paneTree=swap(paneTree);layout();publish();break;}
     case 'pane-resize':{paneTree=paneLayout.resize(paneTree,value?.path,value?.ratio);layout();publish();break;}
@@ -920,6 +947,7 @@ async function perform(name, value) {
       const name = typeof value === 'string' ? value.trim() : ''; if (!name) throw new Error('Enter an identity name.');
       const profile = {id:crypto.randomUUID(),name}; profiles.push(profile); currentIdentity = profile.id; newTab(); break;
     }
+    case 'container-appearance': profiles=require('./container-menu.cjs').updateAppearance(profiles,value);publish();break;
     case 'identity-switch': {
       if (!profiles.some(profile => profile.id === value)) throw new Error('Unknown identity.');
       currentIdentity = value; const tab = tabs.find(row => row.identity === value); if (tab) activate(tab.id); else newTab(); break;

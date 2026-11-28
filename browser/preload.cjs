@@ -37,4 +37,5 @@ contextBridge.exposeInMainWorld('browser', Object.freeze({
   onNotice:callback => subscribe('notice',callback),
   onAddress:callback => subscribe('focus-address',callback),
   onFind:callback => subscribe('focus-find',callback),
+  onContainerCreate:callback => subscribe('focus-container-create',callback),
 }));

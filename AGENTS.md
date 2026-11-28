@@ -1,6 +1,8 @@
 # Repository instructions
 
 Read `.agents/athena/AGENTS-adapter.md` for the pinned shared engineering core.
+
+For user-facing interface work, apply the [Athena portfolio interface quality contract](https://github.com/Herbertofury/Athena/blob/main/guidance/DESIGN_QUALITY_STANDARD.md#portfolio-interface-quality-contract) and record real host acceptance using the [interface quality receipt](https://github.com/Herbertofury/Athena/blob/main/guidance/templates/INTERFACE_QUALITY_RECEIPT.md). This is an additive requirement; it does not change either governance lock or declare product features implemented. Keep browser profile and container isolation intact; test motion and media surfaces separately from account state.
 Keep this file and nested instructions project-owned: setup, commands, constraints and acceptance belong here.
 
 ## Public index boundary

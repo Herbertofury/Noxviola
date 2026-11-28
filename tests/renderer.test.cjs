@@ -11,7 +11,7 @@ const {JSDOM, VirtualConsole} = require('jsdom');
 const html = fs.readFileSync(path.join(__dirname, '../browser/index.html'), 'utf8');
 const source = fs.readFileSync(path.join(__dirname, '../browser/renderer.js'), 'utf8');
 const inventory = JSON.parse(fs.readFileSync(path.join(__dirname, '../browser/capabilities.json'), 'utf8'));
-const ipcMethods = ['onState', 'onVault', 'onVaultDraft', 'onAccounts', 'onExtensions', 'onExtensionPreview', 'onDownloads', 'onPermissions', 'onCapabilities', 'onNotice', 'onAddress', 'onFind', 'onHistory','onBookmarks','onFollows','onWorkspaces','onResources','onSettingsPreview','onFindResult','onExtensionActions','onSidebarWebState'];
+const ipcMethods = ['onState', 'onVault', 'onVaultDraft', 'onAccounts', 'onExtensions', 'onExtensionPreview', 'onDownloads', 'onPermissions', 'onCapabilities', 'onNotice', 'onAddress', 'onFind', 'onHistory','onBookmarks','onFollows','onWorkspaces','onResources','onSettingsPreview','onFindResult','onExtensionActions','onSidebarWebState','onContainerCreate'];
 const profiles = [{id: 'personal', name: 'Personal'}, {id: 'work', name: 'Work'}];
 const copy = value => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
 const tick = () => new Promise(resolve => setImmediate(resolve));
@@ -546,4 +546,30 @@ test('DOM: focus loss clears an abandoned address composition without losing its
   field.dispatchEvent(new h.window.Event('blur'));
   h.submit(h.$('navigate'));await tick();
   assert.ok(h.calls.some(call=>call.name==='navigate'&&call.value==='draft after cancelled IME'));
+});
+
+test('New Tab keeps ordinary click and offers a keyboard-accessible container chooser and create route',async t=>{
+ const h=await harness(t);
+ h.$('new-tab').click();await tick();
+ assert.equal(h.calls.at(-1).name,'new');
+ h.$('container-menu').click();await tick();
+ assert.equal(h.calls.at(-1).name,'container-menu');
+ assert.equal(h.$('container-menu').getAttribute('aria-haspopup'),'menu');
+ h.$('new-tab').dispatchEvent(new h.window.KeyboardEvent('keydown',{key:'F10',shiftKey:true,bubbles:true,cancelable:true}));
+ await tick();assert.equal(h.calls.at(-1).name,'container-menu');
+ h.$('new-tab').dispatchEvent(new h.window.MouseEvent('contextmenu',{bubbles:true,cancelable:true}));
+ await tick();assert.equal(h.calls.at(-1).name,'container-menu');
+ h.emit('onContainerCreate');
+ assert.equal(h.$('identity-name').hidden,false);
+ assert.equal(h.document.activeElement,h.$('identity-name'));
+ const work=[...h.$('account-containers').querySelectorAll('button')].find(b=>b.textContent==='New tab in Work');
+ work.click();await tick();
+ assert.deepEqual(h.calls.at(-1),{name:'new-in-container',value:'work'});
+ const row=work.closest('form');
+ row.querySelector('input').value='Renamed Work';
+ row.querySelector('select[aria-label="Color for Work"]').value='purple';
+ row.querySelector('select[aria-label="Icon for Work"]').value='shield';
+ h.submit(row);await tick();
+ assert.deepEqual(h.calls.at(-1),{name:'container-appearance',value:{id:'work',name:'Renamed Work',color:'purple',icon:'shield'}});
+
 });

@@ -22,6 +22,17 @@ test('untrusted labels cannot inject menu actions or make identity name the rout
  assert.deepEqual(calls,[['new-in-container','id-from-state']]);
 });
 
+test('split choices pin the originating pane and workspace, not the latest active tab',()=>{
+ const calls=[], profiles=[{id:'one',name:'One'},{id:'two',name:'Two'}], pane={id:'pane-17',workspaceId:'workspace-9'};
+ const rows=containerMenuTemplate(profiles,'one',(...args)=>calls.push(args),pane);
+ rows.find(row=>row.label==='Split right in container').submenu[1].click();
+ rows.find(row=>row.label==='Split below in container').submenu[0].click();
+ assert.deepEqual(calls,[
+  ['pane-split',{id:'pane-17',workspaceId:'workspace-9',axis:'x',identity:'two'}],
+  ['pane-split',{id:'pane-17',workspaceId:'workspace-9',axis:'y',identity:'one'}]
+ ]);
+});
+
 test('renaming or restyling a container retains the session key and survives session decode',()=>{
  const {updateAppearance}=require('../browser/container-menu.cjs');
  const {cleanState}=require('../browser/state.cjs');

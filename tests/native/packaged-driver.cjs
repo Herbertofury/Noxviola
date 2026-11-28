@@ -380,22 +380,39 @@ async function runPackagedPhase(packaged, context, phase, { publicHttps = false 
         assertStores(await evaluate(personal, 'window.fixture.readIdentity()'), 'packaged-personal');
         result.cookieLifetimes = { personal: await cookies(personal, 'packaged-personal'), second: await cookies(second, 'packaged-second') };
       });
-      await check('native New Tab container route keeps existing same-site account sessions', async () => {
+      await check('native New Tab container route opens in the current workspace without redirecting an existing tab', async () => {
         const baseline = await state();
         const personalIdentity = baseline.tabs.find(tab => tab.id === expected.personal).identity;
         assert.notEqual(personalIdentity, expected.secondIdentity);
+        const workspace = await command('workspace-create', {name:'Packaged synthetic container workspace'});
+        await command('workspace-switch', workspace.id);
+        const beforeChoice = await state();
+        const workspaceTab = beforeChoice.activeId;
+        assert.equal(beforeChoice.activeWorkspaceId, workspace.id);
+        assert.equal(beforeChoice.tabs.find(tab => tab.id === expected.personal).workspaceId, baseline.activeWorkspaceId);
         assert.equal(await evaluate(shell, "document.getElementById('container-menu').getAttribute('aria-haspopup')"), 'menu');
         const badId = 'synthetic-invalid-container-id';
         await assert.rejects(() => command('new-in-container', badId), /Choose an existing container/);
-        assert.equal((await state()).tabs.length, baseline.tabs.length);
-        const opened = await command('new-in-container',personalIdentity);
+        assert.equal((await state()).tabs.length, beforeChoice.tabs.length);
+        const opened = await command('new-in-container', personalIdentity);
         assert.notEqual(opened, expected.personal);
-        assert.equal((await state()).tabs.find(tab => tab.id === opened).identity,personalIdentity);
+        const afterChoice = await state();
+        assert.equal(afterChoice.activeWorkspaceId, workspace.id);
+        assert.equal(afterChoice.activeId, opened);
+        const newTab = afterChoice.tabs.find(tab => tab.id === opened);
+        assert.equal(newTab.workspaceId, workspace.id);
+        assert.equal(newTab.identity, personalIdentity);
+        assert.equal(newTab.url, 'about:blank');
         const page=await navigate(`${context.origin}/page?container-picker=personal`);
         assertStores(await evaluate(page,'window.fixture.readIdentity()'),'packaged-personal');
+        const original = await targetAt(personalUrl);
+        assertStores(await evaluate(original, 'window.fixture.readIdentity()'), 'packaged-personal');
         assertStores(await evaluate(await targetAt(secondUrl),'window.fixture.readIdentity()'),'packaged-second');
-        await command('close',opened);
-        await command('activate',expected.second);
+        await command('activate', expected.second);
+        await command('close', opened);
+        await command('close', workspaceTab);
+        await command('workspace-remove', workspace.id);
+        assert.equal((await state()).activeWorkspaceId, baseline.activeWorkspaceId);
         assert.equal((await state()).tabs.length, baseline.tabs.length);
       });
       await check('packaged browser retains more than twelve live tabs and duplicate URLs', async () => {

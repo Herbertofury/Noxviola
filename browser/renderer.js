@@ -394,6 +394,7 @@ function renderState(state) {
   if (profilesKey !== lastProfiles) {
     setOptions($('identity'),state.profiles,state.currentIdentity);
     setOptions($('account-identity'),state.profiles,$('account-identity').value || state.currentIdentity);
+    renderContainerList(state);
     lastProfiles = profilesKey;
   } else $('identity').value = state.currentIdentity;
   renderTabs(state);
@@ -471,6 +472,44 @@ $('open-tools').onclick=()=>{const rect=$('open-tools').getBoundingClientRect();
 $('tab-search-toggle').onclick=()=>{const rect=$('tab-search-toggle').getBoundingClientRect();void run('search-tabs',{anchor:{x:rect.x,y:rect.y,width:rect.width,height:rect.height,align:currentState.preferences.tabSearchPosition==='right'?'right':'left'}});};
 $('start-search').onclick=()=>{$('address').focus();$('address').select();};
 $('identity').onchange=()=>run('identity-switch',$('identity').value);
+function focusContainerCreate(){
+ const field=$('identity-name');field.hidden=false;field.focus();
+}
+function renderContainerList(state){
+ const choice=(name,values,selected)=>{
+  const select=node('select');select.setAttribute('aria-label',name);
+  for(const [label,value] of values){const option=node('option',label);option.value=value;select.append(option);}
+  if(values.some(([,value])=>value===selected))select.value=selected;
+  return select;
+ };
+ $('account-containers').replaceChildren(...state.profiles.map(profile=>{
+  const row=node('form',undefined,'container-settings-row');
+  const name=node('input');name.required=true;name.value=profile.name;name.setAttribute('aria-label','Name for '+profile.name);
+  const color=choice('Color for '+profile.name,[['Automatic',''],...['blue','orange','green','purple','yellow','red'].map(value=>[value,value])],profile.color);
+  const icon=choice('Icon for '+profile.name,[['Circle','circle'],['Person','person'],['Work case','case'],['Shield','shield'],['Shopping','bag'],['Gaming','game']],profile.icon);
+  const open=button(`New tab in ${profile.name}`,()=>run('new-in-container',profile.id));
+  const save=node('button','Save container');save.type='submit';
+  row.append(name,color,icon,save,open);
+  row.onsubmit=event=>{
+   event.preventDefault();
+   void guarded(save,()=>api.command('container-appearance',{id:profile.id,name:name.value,color:color.value,icon:icon.value}));
+  };
+  return row;
+ }));
+}
+function openContainerMenu(target){
+ const {x,y,height}=target.getBoundingClientRect();
+ void run('container-menu',{anchor:{x,y,height}});
+}
+$('container-menu').onclick=event=>openContainerMenu(event.currentTarget);
+$('new-tab').oncontextmenu=event=>{event.preventDefault();openContainerMenu(event.currentTarget);};
+$('new-tab').addEventListener('keydown',event=>{
+ if(event.key==='ContextMenu'||(event.shiftKey&&event.key==='F10')){
+  event.preventDefault();event.stopPropagation();openContainerMenu(event.currentTarget);
+ }
+});
+api.onContainerCreate?.(focusContainerCreate);
+$('account-container-create').onclick=focusContainerCreate;
 $('add-identity').onclick=()=>{const field=$('identity-name');field.hidden=!field.hidden;if(!field.hidden)field.focus();};
 $('identity-name').onkeydown=async event=>{
   if (composing(event)) return;

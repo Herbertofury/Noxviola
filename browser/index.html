@@ -13,6 +13,7 @@
   <button id="tab-search-toggle" type="button" title="Search all tabs" aria-label="Search all tabs"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></button>
   <div id="tabs" role="tablist" aria-label="Browser tabs"></div>
   <button id="new-tab" data-command="new" type="button" title="New tab" aria-label="New tab">＋</button>
+  <button id="container-menu" type="button" aria-haspopup="menu" aria-label="New tab in a container" title="New tab in a container"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
   <p id="notice" role="status"></p><button id="retry-save" data-command="save-session" hidden>Retry save</button>
   <div id="titlebar-drag" aria-hidden="true"></div>
  </div>
@@ -122,6 +123,12 @@
  <p id="account-error" class="error" hidden></p><button id="account-recover" data-command="account-recover" hidden>Restore previous inventory</button>
  <div class="controls"><input id="account-search" aria-label="Search accounts" placeholder="Search label, handle, site or identity"><label><input type="checkbox" id="show-archived">Include archived</label></div>
  <form id="account-form" class="editor"><input name="id" type="hidden"><label>Account label<input name="label" required></label><label>Public handle<input name="handle" autocomplete="off"></label><label>Site origin<input name="origin" type="url" placeholder="https://example.com" required></label><label>Browser identity<select name="identity" id="account-identity"></select></label><label><input name="created" type="checkbox">Account created</label><label><input name="inPasswordManager" type="checkbox">Saved in password manager</label><div class="form-actions"><button class="primary">Save metadata</button><button type="button" id="account-reset">Cancel editing</button></div></form>
+ <section class="review" aria-labelledby="account-containers-title">
+  <h2 id="account-containers-title">Browser containers</h2>
+  <p class="subtle">Each container has a separate browser session. Open a new tab here without moving your existing tabs.</p>
+  <div id="account-containers" class="controls"></div>
+  <button id="account-container-create" type="button">Add new container</button>
+ </section>
  <div id="account-items" class="cards"></div>
 </section>
 <section id="extensions" class="panel" hidden>

@@ -733,6 +733,16 @@ function buildMenu() {
     {label:'Save visible screenshot',click:()=>invoke('save-screenshot')},{label:'Edit screenshot',click:()=>invoke('edit-snapshot')},{label:'Resource monitor',click:()=>invoke('resources')},
     {label:'Customize',click:()=>invoke('settings')},{type:'separator'},{role:'quit'}]}]));
 }
+function showContainerMenu(anchor){
+  const invoke=(name,value)=>{if(name==='accounts'&&panel==='accounts')return;void runBrowserOperation(name,value).catch(error=>{notice(error.message);layout();publish(false);});};
+  const options={window:win},[width,height]=win.getContentSize();
+  if(anchor&&['x','y','height'].every(key=>Number.isFinite(anchor[key]))){
+    options.x=Math.max(0,Math.min(width-1,Math.round(anchor.x)));
+    options.y=Math.max(0,Math.min(height-1,Math.round(anchor.y+anchor.height)));
+  }
+  const {containerMenuTemplate}=require('./container-menu.cjs');
+  Menu.buildFromTemplate(containerMenuTemplate(profiles,currentIdentity,invoke)).popup(options);
+}
 function showBrowserMenu(anchor){
   const invoke=(name,value)=>runBrowserOperation(name,value).catch(error=>{notice(error.message);layout();publish(false);});
   const shortcuts=new Map(preferenceStore.shortcutList(preferences).map(item=>[item.id,item.accelerator]));
@@ -754,6 +764,12 @@ async function perform(name, value) {
   switch (name) {
     case 'state': return stateView();
     case 'browser-menu':showBrowserMenu(value?.anchor);break;
+    case 'container-menu':showContainerMenu(value?.anchor);break;
+    case 'container-focus-create':win.webContents.focus();send('focus-container-create');break;
+    case 'new-in-container': {
+      if(typeof value!=='string'||!profiles.some(profile=>profile.id===value))throw new Error('Choose an existing container.');
+      return newTab('about:blank',value);
+    }
     case 'tab-preview': if (value?.open) {void tabPreview.show(String(value.id||''),value.position).catch(()=>notice('Tab preview is unavailable.'));} else tabPreview.hide(); break;
     case 'search-tabs': {const width=win.getContentSize()[0],right=preferences.tabSearchPosition==='right',anchor=value?.anchor||{x:right?width-180:38,y:0,width:28,height:34,align:right?'right':'left'};tabPreview.hide();tabSearch.show(anchor);break;}
     case 'sidebar-toggle':changeSidebar({sidebarVisible:!preferences.sidebarVisible});break;
@@ -920,6 +936,7 @@ async function perform(name, value) {
       const name = typeof value === 'string' ? value.trim() : ''; if (!name) throw new Error('Enter an identity name.');
       const profile = {id:crypto.randomUUID(),name}; profiles.push(profile); currentIdentity = profile.id; newTab(); break;
     }
+    case 'container-appearance': profiles=require('./container-menu.cjs').updateAppearance(profiles,value);publish();break;
     case 'identity-switch': {
       if (!profiles.some(profile => profile.id === value)) throw new Error('Unknown identity.');
       currentIdentity = value; const tab = tabs.find(row => row.identity === value); if (tab) activate(tab.id); else newTab(); break;

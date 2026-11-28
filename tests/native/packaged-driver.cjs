@@ -380,6 +380,24 @@ async function runPackagedPhase(packaged, context, phase, { publicHttps = false 
         assertStores(await evaluate(personal, 'window.fixture.readIdentity()'), 'packaged-personal');
         result.cookieLifetimes = { personal: await cookies(personal, 'packaged-personal'), second: await cookies(second, 'packaged-second') };
       });
+      await check('native New Tab container route keeps existing same-site account sessions', async () => {
+        const baseline = await state();
+        const personalIdentity = baseline.tabs.find(tab => tab.id === expected.personal).identity;
+        assert.notEqual(personalIdentity, expected.secondIdentity);
+        assert.equal(await evaluate(shell, "document.getElementById('container-menu').getAttribute('aria-haspopup')"), 'menu');
+        const badId = 'synthetic-invalid-container-id';
+        await assert.rejects(() => command('new-in-container', badId), /Choose an existing container/);
+        assert.equal((await state()).tabs.length, baseline.tabs.length);
+        const opened = await command('new-in-container',personalIdentity);
+        assert.notEqual(opened, expected.personal);
+        assert.equal((await state()).tabs.find(tab => tab.id === opened).identity,personalIdentity);
+        const page=await navigate(`${context.origin}/page?container-picker=personal`);
+        assertStores(await evaluate(page,'window.fixture.readIdentity()'),'packaged-personal');
+        assertStores(await evaluate(await targetAt(secondUrl),'window.fixture.readIdentity()'),'packaged-second');
+        await command('close',opened);
+        await command('activate',expected.second);
+        assert.equal((await state()).tabs.length, baseline.tabs.length);
+      });
       await check('packaged browser retains more than twelve live tabs and duplicate URLs', async () => {
         for (let index = 0; index < 14; index++) await command('new', `${context.origin}/page?packaged=duplicate`);
         await until(async () => { const current = await state(); return current.tabs.length === 16 && current.tabs.every(tab => tab.live && !tab.loading); }, 'sixteen actual loaded tabs');

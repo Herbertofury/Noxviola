@@ -741,7 +741,8 @@ function showContainerMenu(anchor){
     options.y=Math.max(0,Math.min(height-1,Math.round(anchor.y+anchor.height)));
   }
   const {containerMenuTemplate}=require('./container-menu.cjs');
-  Menu.buildFromTemplate(containerMenuTemplate(profiles,currentIdentity,invoke)).popup(options);
+  const pane=paneLayout.ids(paneTree).includes(activeId)?{id:activeId,workspaceId:activeWorkspaceId}:null;
+  Menu.buildFromTemplate(containerMenuTemplate(profiles,currentIdentity,invoke,pane)).popup(options);
 }
 function showBrowserMenu(anchor){
   const invoke=(name,value)=>runBrowserOperation(name,value).catch(error=>{notice(error.message);layout();publish(false);});
@@ -910,7 +911,17 @@ async function perform(name, value) {
       ]).popup(popup);break;
     }
     case 'pane-focus':{if(!paneLayout.ids(paneTree).includes(value))throw new Error('Pane not found.');activate(value);active()?.view?.webContents.focus();break;}
-    case 'pane-split':{const id=value?.id||activeId;if(!paneLayout.ids(paneTree).includes(id)||!['x','y'].includes(value?.axis))throw new Error('Invalid pane split.');const tab=tabs.find(t=>t.id===id);const next=newTab('about:blank',tab.identity,null,tabs.length,{active:false});const added=findTab(next);added.saved={...added.saved,groupId:tab.saved.groupId||null,pinned:!!tab.saved.pinned};paneTree=paneLayout.split(paneTree,id,next,value.axis);activate(next);publish();break;}
+    case 'pane-split':{
+      const id=value?.id||activeId,tab=tabs.find(t=>t.id===id);
+      if(!tab||tabWorkspace(tab)!==activeWorkspaceId||!paneLayout.ids(paneTree).includes(id)||!['x','y'].includes(value?.axis))throw new Error('Invalid pane split.');
+      const named=Object.hasOwn(value,'identity'),identity=named?value.identity:tab.identity;
+      if(named&&(value.id!==id||value.workspaceId!==activeWorkspaceId||typeof identity!=='string'||!profiles.some(profile=>profile.id===identity)))throw new Error('Choose an existing pane and container in this workspace.');
+      const next=newTab('about:blank',identity,null,tabs.length,{active:false});
+      const added=findTab(next);added.saved={...added.saved,groupId:tab.saved.groupId||null,pinned:!!tab.saved.pinned};
+      paneTree=paneLayout.split(paneTree,id,next,value.axis);activate(next);publish();
+      if(named)send('focus-address');
+      return named?next:undefined;
+    }
     case 'pane-hide':{if(!paneLayout.ids(paneTree).includes(value)||paneLayout.ids(paneTree).length<2)throw new Error('Keep at least one pane open.');paneTree=paneLayout.remove(paneTree,value);if(activeId===value)activate(paneLayout.ids(paneTree)[0]);layout();publish();break;}
     case 'pane-swap':{const ids=paneLayout.ids(paneTree);if(!ids.includes(value?.first)||!ids.includes(value?.second)||value.first===value.second)throw new Error('Choose two different panes.');const swap=n=>n.tabId?{tabId:n.tabId===value.first?value.second:n.tabId===value.second?value.first:n.tabId}:{...n,first:swap(n.first),second:swap(n.second)};paneTree=swap(paneTree);layout();publish();break;}
     case 'pane-resize':{paneTree=paneLayout.resize(paneTree,value?.path,value?.ratio);layout();publish();break;}

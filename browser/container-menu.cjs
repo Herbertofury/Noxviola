@@ -13,14 +13,16 @@ function marker(id,color,icon) {
 function menuLabel(name) {
   return name.replace(/[\r\n\t]/g, ' ').replace(/&/g, '&&');
 }
-function containerMenuTemplate(profiles, activeIdentity, invoke) {
+function containerMenuTemplate(profiles, activeIdentity, invoke, pane) {
   const action = (label, command, value) => ({label, click: () => invoke(command, value)});
+  const label = ({id,name,color,icon}) => marker(id,color,icon)+' '+menuLabel(name)+(id===activeIdentity?' (current)':'');
+  const split = (title,axis) => ({label:title,submenu:profiles.map(profile=>action(
+    label(profile),'pane-split',{id:pane.id,workspaceId:pane.workspaceId,axis,identity:profile.id}))});
   return [
     action('New Tab','new'),
     {type:'separator'},
-    ...profiles.map(({id,name,color,icon}) => action(
-      marker(id,color,icon)+' '+menuLabel(name)+(id===activeIdentity?' (current)':''),
-      'new-in-container',id)),
+    ...profiles.map(profile=>action(label(profile),'new-in-container',profile.id)),
+    ...(pane?[{type:'separator'},split('Split right in container', 'x'),split('Split below in container', 'y')]:[]),
     {type:'separator'},
     action('Add new container','container-focus-create'),
     action('Manage containers','accounts')

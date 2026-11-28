@@ -426,13 +426,13 @@ test('legacy44 storage diagnostics retain their exact unsupported evidence witho
   assert.equal(fake.calls.length, 0, 'Static evidence must not execute the package');
 });
 
-test('candidate45 storage diagnostics disclose native separate sync and empty read-only managed without a functionality verdict', async t => {
-  const {manager, root} = await setup(t, '45.3.2');
+for (const version of ['45.3.2', '45.5.0']) test(`Electron ${version} storage diagnostics stay version-bound and do not claim functionality`, async t => {
+  const {manager, root} = await setup(t, version);
   const preview = await manager.preview(await fixture(root, {}, {
     'content.js': 'chrome.storage.sync.get(null); browser.storage.sync.set({a:1}); chrome.storage.managed.get(null); browser.storage.managed.set({policy:true});',
   }));
   const report = preview.compatibility;
-  assert.equal(report.documentationVersion, '45.3.2');
+  assert.equal(report.documentationVersion, version);
   for (const api of ['chrome.storage.sync.get', 'browser.storage.sync.set']) {
     const issue = report.issues.find(item => item.api === api);
     assert.equal(issue.code, 'STORAGE_SYNC_LOCAL_ONLY'); assert.equal(issue.status, 'limited');
@@ -444,7 +444,7 @@ test('candidate45 storage diagnostics disclose native separate sync and empty re
   assert.equal(managedRead.code, 'MANAGED_STORAGE_EMPTY_READ_ONLY'); assert.equal(managedRead.status, 'limited');
   assert.match(managedRead.detail, /empty, read-only/); assert.match(managedRead.detail, /no enterprise policy provider/);
   assert.equal(report.issues.find(item => item.api === 'browser.storage.managed.set').status, 'unsupported');
-  assert.ok(report.sources.every(url => url.includes('/v45.3.2/')));
+  assert.ok(report.sources.every(url => url.includes(`/v${version}/`)));
   const item = await manager.install(preview.token, {identities: ['personal'], permissionsAccepted: true});
   assert.equal(item.identities[0].status, 'loaded');
   assert.equal(item.compatibility.status, 'limited');
@@ -454,7 +454,7 @@ test('candidate45 storage diagnostics disclose native separate sync and empty re
 test('unreviewed and absent runtimes do not inherit another release storage claims', async t => {
   const {root, fake} = await setup(t);
   const source = await fixture(root, {}, {'content.js': 'chrome.storage.sync.get(null); browser.storage.managed.get(null);'});
-  for (const version of [undefined, '45.3.2-beta.1', '99.0.0']) {
+  for (const version of [undefined, '45.3.2-beta.1', '45.5.1', '99.0.0']) {
     const {compatibility: report} = await inspectTree(source, version);
     assert.equal(report.electronVersion, version || 'not-running-in-electron');
     assert.equal(report.documentationVersion, null);
